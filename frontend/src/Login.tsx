@@ -55,7 +55,7 @@ const Login: React.FC = () => {
 
                     <h1 className="banner-heading">
                         Connecting Health Operations <br />
-                        &amp; Student Management
+                        &amp; Student Management asd
                     </h1>
                     <p className="banner-description">
                         Welcome to the unified portal. Access health assessments, educational records, and administrative services in one platform.
