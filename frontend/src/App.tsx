@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css';
 
 import Login from './Login';
+import UserDash from './pages/UserSide/UserDashboard';
 
 const App: React.FC = () => {
   return (
@@ -13,6 +14,8 @@ const App: React.FC = () => {
 
         {/* Login Route */}
         <Route path="/Login" element={<Login />} />
+        <Route path="/UserDash" element={<UserDash />} />
+
 
         {/* 404 Fallback */}
         <Route
