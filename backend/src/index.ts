@@ -52,7 +52,7 @@ app.use(express.json());
 
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-const frontendPath = path.join(__dirname, '../../Frontend/dist');
+const frontendPath = path.join(__dirname, '../../frontend/dist');
 app.use(express.static(frontendPath));
 app.get(/^((?!\/api).)*$/, (req, res) => {
     res.sendFile(path.resolve(frontendPath, "index.html"));
