@@ -19,8 +19,8 @@ const allowedOrigins = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:5174",
-    "https://baranggay-183.onrender.com",
-].filter(Boolean) as string[];
+    "https://pho-studentbased.onrender.com",
+];
 
 const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
