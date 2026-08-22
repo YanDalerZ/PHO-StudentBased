@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+
+.login-container {
+  @apply min-h-screen w-full flex bg-slate-900 text-slate-100 font-sans;
+}
+
+/* Left Hero Banner */
+.login-banner {
+  @apply hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-blue-900 via-teal-900 to-slate-900 flex-col justify-between p-12 overflow-hidden;
+}
+
+/* Pure CSS Grid Pattern replacing raw SVG */
+.banner-grid-overlay {
+  @apply absolute inset-0 pointer-events-none opacity-10;
+  background-image: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.4) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.4) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.orb-teal {
+  @apply absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none;
+}
+
+.orb-blue {
+  @apply absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl pointer-events-none;
+}
+
+.banner-brand {
+  @apply relative z-10 flex items-center space-x-3;
+}
+
+.brand-icon-box {
+  @apply p-2 bg-teal-500/20 backdrop-blur-md rounded-xl border border-teal-500/30;
+}
+
+.brand-title {
+  @apply text-xl font-bold tracking-wide text-white;
+}
+
+.banner-hero {
+  @apply relative z-10 space-y-8 my-auto;
+}
+
+.badge-wrapper {
+  @apply flex space-x-4;
+}
+
+.badge-healthcare {
+  @apply flex items-center space-x-2 px-4 py-2 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-sm font-medium;
+}
+
+.badge-education {
+  @apply flex items-center space-x-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm font-medium;
+}
+
+.banner-heading {
+  @apply text-4xl font-extrabold text-white leading-tight tracking-tight;
+}
+
+.banner-description {
+  @apply text-slate-300 text-lg max-w-lg leading-relaxed;
+}
+
+.banner-footer {
+  @apply relative z-10 text-xs text-slate-400;
+}
+
+/* Right Form Section */
+.login-form-wrapper {
+  @apply w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 bg-slate-900;
+}
+
+.login-card {
+  @apply w-full max-w-md space-y-8 bg-slate-800/50 p-8 sm:p-10 rounded-2xl border border-slate-700/50 shadow-2xl backdrop-blur-xl;
+}
+
+.form-header {
+  @apply text-center space-y-2;
+}
+
+.form-title {
+  @apply text-3xl font-bold text-white tracking-tight;
+}
+
+.form-subtitle {
+  @apply text-sm text-slate-400;
+}
+
+.login-form {
+  @apply space-y-6;
+}
+
+.input-group {
+  @apply space-y-2;
+}
+
+.input-label {
+  @apply text-sm font-medium text-slate-300 block;
+}
+
+.input-field {
+  @apply w-full px-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200;
+}
+
+.forgot-link {
+  @apply text-xs text-teal-400 hover:text-teal-300 transition-colors;
+}
+
+.submit-btn {
+  @apply w-full py-3.5 px-4 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg shadow-teal-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2;
+}
+
+.card-footer {
+  @apply pt-4 border-t border-slate-700/50 text-center text-xs text-slate-400;
+}
+
+.support-link {
+  @apply text-teal-400 hover:underline;
+}
