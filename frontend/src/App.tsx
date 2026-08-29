@@ -4,17 +4,24 @@ import './App.css';
 
 import Login from './Login';
 import UserDash from './pages/UserSide/UserDashboard';
+import RegistrationForm from './pages/RegistrationForm';
+import { Toaster } from 'react-hot-toast';
 
 const App: React.FC = () => {
   return (
-    <Router>
-      <Routes>
-        {/* Redirect root path to /Login */}
-        <Route path="/" element={<Navigate to="/Login" replace />} />
+    <>
+      <Toaster position="top-right" />
+      <Router>
+        <Routes>
+          {/* Redirect root path to /Login */}
+          <Route path="/" element={<Navigate to="/Login" replace />} />
 
-        {/* Login Route */}
-        <Route path="/Login" element={<Login />} />
-        <Route path="/UserDash" element={<UserDash />} />
+          {/* Login Route */}
+          <Route path="/Login" element={<Login />} />
+          <Route path="/UserDash" element={<UserDash />} />
+          
+          {/* Teacher Portal Routes */}
+          <Route path="/registration-form" element={<RegistrationForm />} />
 
 
         {/* 404 Fallback */}
@@ -42,6 +49,7 @@ const App: React.FC = () => {
         />
       </Routes>
     </Router>
+    </>
   );
 };
 
