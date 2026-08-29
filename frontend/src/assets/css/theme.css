@@ -1,0 +1,15 @@
+/* src/assets/css/theme.css */
+/* Light theme – primary teal palette, gradient background, glass‑morphism utilities */
+:root {
+  --color-primary-400: #38b2ac; /* teal-400 */
+  --color-primary-500: #319795; /* teal-500 */
+  --color-primary-600: #2c7a7b; /* teal-600 */
+  --color-bg-start: #e0f2fe; /* teal-100 */
+  --color-bg-end: #f1f5f9;   /* slate-100 */
+  --color-surface-glass: rgba(255,255,255,0.1);
+}
+
+/* Font family – Outfit */
+.font-outfit {
+  font-family: 'Outfit', sans-serif;
+}
