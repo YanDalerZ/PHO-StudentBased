@@ -3,7 +3,7 @@ import registerQr from './assets/images/register-qr.jpeg';
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Building2, Heart, GraduationCap, Loader2, Sun, Moon, QrCode, Download, ExternalLink } from 'lucide-react';
+import { Building2, Heart, GraduationCap, Loader2, QrCode, Download, ExternalLink, X, ShieldCheck } from 'lucide-react';
 import { cn } from './lib/utils';
 import { useAuth } from './contexts/AuthContext';
 
@@ -14,10 +14,7 @@ const Login: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [isDark, setIsDark] = useState(false); // Default to light theme
-
-    // Toggle theme
-    const toggleTheme = () => setIsDark(!isDark);
+    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
     React.useEffect(() => {
         if (isAuthenticated && user) {
@@ -49,198 +46,241 @@ const Login: React.FC = () => {
     };
 
     return (
-        <div className={cn("min-h-screen flex w-full font-outfit transition-colors duration-500", isDark && "dark")}>
-            {/* Left Panel: Deep Teal with Topographical Pattern */}
-            <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden bg-panel-light dark:bg-panel-dark transition-colors duration-500">
-                {/* Topographical Map Pattern Overlay */}
-                <div className="absolute inset-0 pointer-events-none opacity-20 dark:opacity-[0.15] transition-opacity duration-500" 
-                     style={{
-                         backgroundImage: isDark 
-                            ? `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 10 Q 25 -15 50 10 T 100 10 M0 30 Q 25 5 50 30 T 100 30 M0 50 Q 25 25 50 50 T 100 50 M0 70 Q 25 45 50 70 T 100 70 M0 90 Q 25 65 50 90 T 100 90' fill='none' stroke='%23ffffff' stroke-width='1.5' opacity='1'/%3E%3C/svg%3E")`
-                            : `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 10 Q 25 -15 50 10 T 100 10 M0 30 Q 25 5 50 30 T 100 30 M0 50 Q 25 25 50 50 T 100 50 M0 70 Q 25 45 50 70 T 100 70 M0 90 Q 25 65 50 90 T 100 90' fill='none' stroke='%23004d40' stroke-width='1.5' opacity='1'/%3E%3C/svg%3E")`,
-                         backgroundSize: '100px 100px'
-                     }}>
-                </div>
+        <div className="min-h-screen flex w-full font-outfit bg-emerald-50/40 text-slate-900">
+            {/* Left Panel: Light Mint/Emerald with Subtly Patterned Background */}
+            <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 text-white border-r border-emerald-700/30">
+                {/* Subtle Geometric Overlay */}
+                <div
+                    className="absolute inset-0 pointer-events-none opacity-10"
+                    style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                    }}
+                />
 
-                {/* Decorative Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 dark:to-black/40 pointer-events-none"></div>
+                {/* Soft Gradient Ambient Glow */}
+                <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
 
                 {/* Header Branding */}
-                <div className="relative z-10 flex items-center gap-3">
-                    <div className="p-2.5 bg-teal-600/10 dark:bg-white/10 backdrop-blur-md rounded-2xl border border-teal-600/20 dark:border-white/20 shadow-sm">
-                        <Building2 className="w-8 h-8 text-teal-700 dark:text-teal-300" />
+                <div className="relative z-10 flex items-center gap-3.5">
+                    <div className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-sm">
+                        <Building2 className="w-7 h-7 text-emerald-300" />
                     </div>
-                    <span className="text-2xl font-bold tracking-wide text-teal-900 dark:text-white drop-shadow-sm">PHO Portal</span>
+                    <div>
+                        <span className="text-2xl font-bold tracking-tight text-white block">PHO Portal</span>
+                        <span className="text-xs text-emerald-200 tracking-wider uppercase font-semibold">Provincial Health Office</span>
+                    </div>
                 </div>
 
                 {/* Hero Content */}
-                <div className="relative z-10 space-y-8 my-auto max-w-xl">
+                <div className="relative z-10 space-y-6 my-auto max-w-lg">
                     {/* Category Tags */}
-                    <div className="flex flex-wrap gap-4">
-                        <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-teal-600/10 dark:bg-white/10 backdrop-blur-md border border-teal-600/20 dark:border-white/10 text-teal-900 dark:text-white text-sm font-medium shadow-sm">
-                            <Heart className="w-4 h-4 text-teal-700 dark:text-teal-300" />
+                    <div className="flex flex-wrap gap-3">
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-white text-xs font-semibold tracking-wide">
+                            <Heart className="w-4 h-4 text-emerald-300" />
                             <span>Healthcare Services</span>
                         </div>
-                        <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-blue-600/10 dark:bg-white/10 backdrop-blur-md border border-blue-600/20 dark:border-white/10 text-teal-900 dark:text-white text-sm font-medium shadow-sm">
-                            <GraduationCap className="w-4 h-4 text-blue-700 dark:text-blue-300" />
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-white text-xs font-semibold tracking-wide">
+                            <GraduationCap className="w-4 h-4 text-teal-300" />
                             <span>Academic Integration</span>
                         </div>
                     </div>
 
-                    {/* Bold & Clean Headline */}
-                    <h1 className="text-5xl lg:text-6xl font-extrabold text-teal-950 dark:text-white leading-tight tracking-tight drop-shadow-md">
+                    {/* Headline */}
+                    <h1 className="text-4xl lg:text-5xl font-extrabold text-white leading-tight tracking-tight">
                         Connecting Health &amp; Student Operations
                     </h1>
-                    
-                    <p className="text-lg text-teal-900/90 dark:text-teal-50/80 leading-relaxed max-w-lg drop-shadow-sm">
-                        Welcome to the unified portal. Access health assessments, educational records, and administrative services seamlessly.
+
+                    <p className="text-base text-emerald-100/90 leading-relaxed font-normal">
+                        Streamlining public healthcare records, student assessments, and administrative services within one secure platform.
                     </p>
+
+                    <div className="pt-4 flex items-center gap-6 text-xs text-emerald-200/80 font-medium">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                            <span>Secure SSL Encrypted</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                            <span>System Operational</span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Footer Note */}
-                <div className="relative z-10 text-sm font-medium text-teal-800/80 dark:text-teal-100/50">
+                <div className="relative z-10 text-xs font-medium text-emerald-200/60">
                     &copy; {new Date().getFullYear()} Provincial Health Office. All rights reserved.
                 </div>
             </div>
 
-            {/* Right Panel */}
-            <div className="w-full lg:w-1/2 flex flex-col relative bg-white dark:bg-surface-dark transition-colors duration-500 overflow-y-auto">
-                {/* Theme Toggle Button */}
-                <div className="absolute top-6 right-6 z-20">
-                    <button 
-                        onClick={toggleTheme}
-                        className="p-3 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 backdrop-blur-md text-slate-700 dark:text-slate-300 shadow-sm transition-all"
-                        aria-label="Toggle Theme"
-                        title="Toggle Light/Dark Mode"
-                    >
-                        {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                    </button>
-                </div>
+            {/* Right Panel: Crisp White & Bright Mint UI */}
+            <div className="w-full lg:w-1/2 flex flex-col justify-between p-6 sm:p-12 bg-white overflow-y-auto">
 
-                <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 min-h-screen">
-                    {/* Login Card */}
-                    <div className="w-full max-w-md p-8 sm:p-10 rounded-[2rem] bg-white dark:bg-surface-card/60 backdrop-blur-xl border border-slate-100 dark:border-white/5 shadow-2xl transition-all duration-500 mb-8">
-                        
-                        <div className="text-center space-y-3 mb-8">
-                            <div className="mx-auto w-24 h-24 mb-6 relative flex items-center justify-center">
-                                <img 
-                                    src={logo} 
-                                    alt="PHO Logo" 
-                                    className="w-24 h-24 object-contain rounded-full shadow-sm dark:shadow-none mix-blend-multiply dark:mix-blend-normal bg-transparent" 
-                                />
-                            </div>
-                            
-                            <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                Welcome Back
-                            </h2>
-                            <p className="text-slate-500 dark:text-slate-400 text-sm">
-                                Enter your credentials to access your account
-                            </p>
+                {/* Login Container */}
+                <div className="w-full max-w-md mx-auto my-auto py-8">
+                    {/* Header Branding / Logo */}
+                    <div className="text-center space-y-3 mb-8">
+                        <div className="mx-auto w-30 h-30 mb-4 rounded-full flex items-center justify-center shadow-sm">
+                            <img
+                                src={logo}
+                                alt="PHO Logo"
+                                className="w-full h-full object-contain rounded-xl"
+                            />
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Email Field */}
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300" htmlFor="email">
-                                    Email Address
-                                </label>
-                                <input
-                                    id="email"
-                                    type="email"
-                                    required
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="user@example.com"
-                                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-surface-input border border-slate-200 dark:border-teal-500/30 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 transition-all"
-                                />
-                            </div>
-
-                            {/* Password Field */}
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300" htmlFor="password">
-                                        Password
-                                    </label>
-                                    <a href="#forgot" className="text-xs font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">
-                                        Forgot password?
-                                    </a>
-                                </div>
-                                <input
-                                    id="password"
-                                    type="password"
-                                    required
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-surface-input border border-slate-200 dark:border-teal-500/30 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 transition-all"
-                                />
-                            </div>
-
-                            {/* Submit Button */}
-                            <button 
-                                type="submit" 
-                                disabled={loading} 
-                                className="w-full py-3.5 px-4 rounded-xl bg-primary-action hover:bg-teal-500 dark:bg-teal-500 dark:hover:bg-teal-600 text-white font-semibold shadow-lg shadow-teal-500/20 dark:shadow-teal-900/30 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="animate-spin h-5 w-5" />
-                                        <span>Authenticating...</span>
-                                    </>
-                                ) : (
-                                    <span>Sign In</span>
-                                )}
-                            </button>
-                        </form>
-
-                        {/* Footer */}
-                        <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800/50 text-center">
-                            <p className="text-sm text-slate-500 dark:text-slate-400">
-                                Need technical support? <a href="#support" className="font-medium text-teal-600 dark:text-teal-400 hover:underline">Contact System Admin</a>
-                            </p>
-                        </div>
+                        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                            Sign In to Portal
+                        </h2>
+                        <p className="text-slate-500 text-sm">
+                            Enter your official email and password to continue
+                        </p>
                     </div>
 
-                    {/* QR Code Section */}
-                    <div className="w-full max-w-md p-6 rounded-[2rem] bg-slate-50 dark:bg-surface-card/40 border border-slate-200 dark:border-white/5 transition-all duration-500 flex flex-col items-center justify-center space-y-4">
-                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium">
-                            <QrCode className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                            <span>New Student Registration</span>
+                    {/* Form */}
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Email Field */}
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider" htmlFor="email">
+                                Email Address
+                            </label>
+                            <input
+                                id="email"
+                                type="email"
+                                required
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="name@domain.gov.ph"
+                                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-medium text-sm"
+                            />
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 text-center px-4">
-                            Scan the QR code below or use the buttons to register a new student profile.
-                        </p>
-                        
-                        <div className="flex flex-col items-center gap-4 w-full mt-2">
-                            <div className="rounded-xl border-4 border-white dark:border-slate-800 shadow-sm">
-                                <img 
-                                    src={registerQr} 
-                                    alt="Registration QR Code" 
-                                    className="w-32 h-32 object-cover"
-                                />
-                            </div>
 
-                            <div className="flex w-full gap-3 mt-2">
-                                <Link 
-                                    to="/registration-form" 
-                                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-teal-100 hover:bg-teal-200 text-teal-700 dark:bg-teal-900/50 dark:hover:bg-teal-800/60 dark:text-teal-300 text-sm font-semibold transition-colors"
-                                >
-                                    <ExternalLink className="w-4 h-4" />
-                                    Access Form
-                                </Link>
-                                <a 
-                                    href={registerQr} 
-                                    download="Registration-QR.jpeg"
-                                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 dark:bg-[#1e293b] dark:hover:bg-slate-700 dark:border-slate-700/50 dark:text-slate-300 text-slate-700 text-sm font-semibold transition-colors shadow-sm"
-                                >
-                                    <Download className="w-4 h-4" />
-                                    Download QR
+                        {/* Password Field */}
+                        <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider" htmlFor="password">
+                                    Password
+                                </label>
+                                <a href="#forgot" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition-colors">
+                                    Forgot password?
                                 </a>
                             </div>
+                            <input
+                                id="password"
+                                type="password"
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-medium text-sm"
+                            />
+                        </div>
+
+                        {/* Submit Button */}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm shadow-md shadow-emerald-600/20 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+                        >
+                            {loading ? (
+                                <>
+                                    <Loader2 className="animate-spin h-4 w-4" />
+                                    <span>Authenticating...</span>
+                                </>
+                            ) : (
+                                <span>Sign In to Account</span>
+                            )}
+                        </button>
+                    </form>
+
+                    {/* Support Link */}
+                    <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                        <p className="text-xs text-slate-500">
+                            Having trouble logging in?{' '}
+                            <a href="#support" className="font-semibold text-emerald-700 hover:underline">
+                                Contact IT Support
+                            </a>
+                        </p>
+                    </div>
+                    {/* Header Actions */}
+                    <div className="flex justify-center mt-3 items-center w-full">
+                        <button
+                            type="button"
+                            onClick={() => setIsQrModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-sm font-semibold transition-all shadow-sm group"
+                        >
+                            <QrCode className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+                            <span>Student Registration QR</span>
+                        </button>
+                    </div>
+
+                </div>
+
+                {/* Footer text for mobile layout */}
+                <div className="lg:hidden text-center pt-6 text-xs text-slate-400">
+                    &copy; {new Date().getFullYear()} Provincial Health Office.
+                </div>
+            </div>
+
+            {/* Registration QR Code Modal */}
+            {isQrModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div
+                        className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Close Button */}
+                        <button
+                            onClick={() => setIsQrModalOpen(false)}
+                            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                            aria-label="Close modal"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+
+                        {/* Modal Header */}
+                        <div className="text-center space-y-1 pr-6">
+                            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
+                                <QrCode className="w-5 h-5" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900">
+                                Student Registration
+                            </h3>
+                            <p className="text-xs text-slate-500">
+                                Scan this QR code or click below to fill out the official registration form.
+                            </p>
+                        </div>
+
+                        {/* QR Image Display */}
+                        <div className="flex justify-center p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                            <img
+                                src={registerQr}
+                                alt="Registration QR Code"
+                                className="w-48 h-48 object-cover rounded-xl shadow-xs"
+                            />
+                        </div>
+
+                        {/* Modal Actions */}
+                        <div className="flex flex-col gap-2.5 pt-1">
+                            <Link
+                                to="/registration-form"
+                                onClick={() => setIsQrModalOpen(false)}
+                                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-sm"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                                <span>Open Online Form</span>
+                            </Link>
+                            <a
+                                href={registerQr}
+                                download="Registration-QR.jpeg"
+                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold transition-colors"
+                            >
+                                <Download className="w-4 h-4 text-slate-500" />
+                                <span>Download QR Image</span>
+                            </a>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };

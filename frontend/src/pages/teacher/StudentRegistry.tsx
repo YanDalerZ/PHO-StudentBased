@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMockData } from '../../context/MockDataContext';
-import { Search, ChevronRight, UserPlus } from 'lucide-react';
+import { Search, ChevronRight, UserPlus, X } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable';
 import { FilterBar } from '../../components/common/FilterBar';
 import type { Student } from '../../types';
 
+// Import your existing registration form component
+import RegistrationForm from '../RegistrationForm'; // Adjust relative import path if needed
+
 const StudentRegistry: React.FC = () => {
     const { students } = useMockData();
     const [searchQuery, setSearchQuery] = useState('');
+    const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
-    const filteredStudents = students.filter((student: Student) => 
+    const filteredStudents = students.filter((student: Student) =>
         student.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         student.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         student.student_lrn.includes(searchQuery)
@@ -65,13 +69,17 @@ const StudentRegistry: React.FC = () => {
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Student Registry</h1>
                     <p className="text-sm text-slate-500">Manage and view all registered students.</p>
                 </div>
-                <Link to="/registration-form" className="px-4 py-2.5 bg-linear-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-medium text-sm rounded-xl shadow-md transition-all self-start md:self-auto flex items-center space-x-2">
+                <button
+                    type="button"
+                    onClick={() => setIsRegisterModalOpen(true)}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-xl shadow-xs transition-colors self-start md:self-auto flex items-center space-x-2 cursor-pointer"
+                >
                     <UserPlus className="w-4 h-4" />
                     <span>Register Student</span>
-                </Link>
+                </button>
             </div>
 
-            <FilterBar onFilterChange={() => {}} className="mb-6" />
+            <FilterBar onFilterChange={() => { }} className="mb-6" />
 
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
@@ -87,16 +95,55 @@ const StudentRegistry: React.FC = () => {
                     </div>
                 </div>
 
-                <DataTable 
+                <DataTable
                     data={filteredStudents}
                     columns={columns}
                     pagination={{
                         currentPage: 1,
                         totalPages: 1,
-                        onPageChange: () => {}
+                        onPageChange: () => { }
                     }}
                 />
             </div>
+
+            {/* Registration Form Modal */}
+            {isRegisterModalOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-6 overflow-y-auto animate-in fade-in duration-200"
+                    role="dialog"
+                    aria-modal="true"
+                >
+                    {/* Dynamic container width fits content width up to max-w-5xl */}
+                    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-2xl w-full max-w-5xl fit-content max-h-[90vh] flex flex-col relative overflow-hidden transition-all transform scale-100">
+
+                        {/* Sticky Header with Backdrop Blur */}
+                        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 sticky top-0 bg-white/95 backdrop-blur-md z-20 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="h-2 w-2 rounded-full bg-indigo-600"></div>
+                                <div>
+                                    <h2 className="text-lg font-semibold text-slate-900 tracking-tight">Register New Student</h2>
+                                    <p className="text-xs text-slate-500 mt-0.5">Fill in the student credentials and required details below.</p>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setIsRegisterModalOpen(false)}
+                                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-200"
+                                aria-label="Close Modal"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Embedded Form Body with Custom Scrollbar Support */}
+                        <div className="p-6 md:p-8 overflow-y-auto flex-1 text-slate-800">
+                            <RegistrationForm onClose={() => setIsRegisterModalOpen(false)} />
+                        </div>
+
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

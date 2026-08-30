@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { Menu } from 'lucide-react';
 
 import { MockDataProvider } from './context/MockDataContext';
 
@@ -18,7 +19,7 @@ import ImmunizationForm from './components/forms/ImmunizationForm';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
-import { DashboardLayout } from './components/common/DashboardLayout';
+import { Sidebar } from './components/common/Sidebar';
 
 import SuperUserDashboard from './pages/superuser/SuperUserDashboard';
 import PatientInfoDash from './pages/superuser/PatientInfoDash';
@@ -34,6 +35,37 @@ import ModuleManagement from './pages/admin/ModuleManagement';
 import SchoolManagement from './pages/admin/SchoolManagement';
 import SystemSettings from './pages/admin/SystemSettings';
 
+// Dashboard Layout Wrapper to manage Sidebar and Page Content
+const DashboardLayout = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  return (
+    <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Mobile Header with Hamburger Menu */}
+        <header className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
+            PHO<span className="text-teal-600 dark:text-teal-500">Student</span>
+          </h1>
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+        </header>
+
+        {/* Main Page Content */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 dark:bg-surface-dark">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <AuthProvider>
@@ -43,21 +75,19 @@ const App: React.FC = () => {
           <Routes>
             {/* Redirect root path to /Login */}
             <Route path="/" element={<Navigate to="/Login" replace />} />
-            
+
             {/* Public Routes */}
             <Route path="/Login" element={<Login />} />
-            
+
             {/* Public Registration Route for Students */}
             <Route path="/registration-form" element={<RegistrationForm />} />
-            
+
             {/* Teacher Portal Routes */}
-            <Route 
-              path="/teacher" 
+            <Route
+              path="/teacher"
               element={
                 <ProtectedRoute allowedRoles={['teacher']}>
-                  <DashboardLayout>
-                    <Outlet />
-                  </DashboardLayout>
+                  <DashboardLayout />
                 </ProtectedRoute>
               }
             >
@@ -73,13 +103,11 @@ const App: React.FC = () => {
             </Route>
 
             {/* Super User Portal Routes */}
-            <Route 
-              path="/superuser" 
+            <Route
+              path="/superuser"
               element={
                 <ProtectedRoute allowedRoles={['superuser']}>
-                  <DashboardLayout>
-                    <Outlet />
-                  </DashboardLayout>
+                  <DashboardLayout />
                 </ProtectedRoute>
               }
             >
@@ -94,13 +122,11 @@ const App: React.FC = () => {
             </Route>
 
             {/* Admin Portal Routes */}
-            <Route 
-              path="/admin" 
+            <Route
+              path="/admin"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <DashboardLayout>
-                    <Outlet />
-                  </DashboardLayout>
+                  <DashboardLayout />
                 </ProtectedRoute>
               }
             >
