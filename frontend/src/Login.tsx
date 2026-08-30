@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Building2, Heart, GraduationCap, Loader2, QrCode, Download, ExternalLink, X, ShieldCheck } from 'lucide-react';
-import { cn } from './lib/utils';
 import { useAuth } from './contexts/AuthContext';
 
 const Login: React.FC = () => {
@@ -48,7 +47,7 @@ const Login: React.FC = () => {
     return (
         <div className="min-h-screen flex w-full font-outfit bg-emerald-50/40 text-slate-900">
             {/* Left Panel: Light Mint/Emerald with Subtly Patterned Background */}
-            <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 text-white border-r border-emerald-700/30">
+            <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden bg-linear-to-br from-emerald-900 via-emerald-800 to-teal-900 text-white border-r border-emerald-700/30">
                 {/* Subtle Geometric Overlay */}
                 <div
                     className="absolute inset-0 pointer-events-none opacity-10"
