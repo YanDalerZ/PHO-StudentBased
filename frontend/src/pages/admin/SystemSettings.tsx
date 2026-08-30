@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, Save, ShieldCheck, Mail, Database } from 'lucide-react';
+import { Building2, Save, ShieldCheck, Database } from 'lucide-react';
 
 const SystemSettings: React.FC = () => {
     return (
