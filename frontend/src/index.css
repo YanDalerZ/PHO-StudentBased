@@ -1,2 +1,26 @@
 @import 'tailwindcss';
-@import './assets/css/theme.css';
+
+@theme {
+  /* ── Surface Colors ── */
+  --color-surface-dark: #0b1325;
+  --color-surface-card: oklch(from #121b2f l c h / 0.8);
+  --color-surface-input: #070d19;
+  --color-surface-glass: rgba(255, 255, 255, 0.1);
+
+  /* ── Primary Palette (Teal) ── */
+  --color-primary-400: #38b2ac;
+  --color-primary-500: #319795;
+  --color-primary-600: #2c7a7b;
+  --color-primary-action: #00c0a3;
+
+  /* ── Light-Theme BG ── */
+  --color-bg-light-start: #e0f2fe;
+  --color-bg-light-end: #f1f5f9;
+
+  /* ── Left Panel (Login hero) ── */
+  --color-panel-light: #e0f7fa;
+  --color-panel-dark: #0d4747;
+
+  /* ── Font Family ── */
+  --font-outfit: 'Outfit', sans-serif;
+}
