@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
     User, MapPin, GraduationCap, ChevronRight, ChevronLeft,
-    CheckCircle2, Loader2, Save, Building2, X
+    CheckCircle2, Loader2, Save, Building2, X, AlertCircle
 } from 'lucide-react';
 import { getMunicipalities, getBarangays, getSchools } from '../services/api';
 import { useMockData } from '../context/MockDataContext';
@@ -39,6 +39,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
     const navigate = useNavigate();
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState<Student>(INITIAL_STATE);
+    const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(false);
     const { registerStudent } = useMockData();
 
@@ -74,9 +75,80 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         }));
     };
 
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name } = e.target;
+        setTouchedFields(prev => ({ ...prev, [name]: true }));
+    };
+
+    const isFieldInvalid = (name: keyof Student, isRequired = true): boolean => {
+        if (!isRequired) return false;
+        if (!touchedFields[name]) return false;
+
+        const value = formData[name];
+        if (typeof value === 'number') return value === 0;
+        return !value || String(value).trim() === '';
+    };
+
+    const markStepFieldsTouched = (currentStep: number) => {
+        const fieldsToTouch: Record<string, boolean> = {};
+        if (currentStep === 1) {
+            fieldsToTouch.student_lrn = true;
+            fieldsToTouch.first_name = true;
+            fieldsToTouch.last_name = true;
+            fieldsToTouch.date_of_birth = true;
+        } else if (currentStep === 2) {
+            fieldsToTouch.municipality = true;
+            fieldsToTouch.barangay = true;
+        } else if (currentStep === 3) {
+            fieldsToTouch.school_id = true;
+            fieldsToTouch.grade_level = true;
+        }
+        setTouchedFields(prev => ({ ...prev, ...fieldsToTouch }));
+    };
+
+    const validateStep = (currentStep: number): boolean => {
+        markStepFieldsTouched(currentStep);
+
+        if (currentStep === 1) {
+            if (!formData.student_lrn.trim()) {
+                toast.error('Please enter the Learner Reference Number (LRN).');
+                return false;
+            }
+            if (!formData.first_name.trim() || !formData.last_name.trim()) {
+                toast.error('First Name and Last Name are required.');
+                return false;
+            }
+            if (!formData.date_of_birth) {
+                toast.error('Please enter the Date of Birth.');
+                return false;
+            }
+        } else if (currentStep === 2) {
+            if (!formData.municipality) {
+                toast.error('Please select a Municipality.');
+                return false;
+            }
+            if (!formData.barangay) {
+                toast.error('Please select a Barangay.');
+                return false;
+            }
+        } else if (currentStep === 3) {
+            if (!formData.school_id) {
+                toast.error('Please select a School.');
+                return false;
+            }
+            if (!formData.grade_level) {
+                toast.error('Please select a Grade Level.');
+                return false;
+            }
+        }
+        return true;
+    };
+
     const handleNext = (e: React.MouseEvent) => {
         e.preventDefault();
-        setStep(prev => Math.min(prev + 1, 3));
+        if (validateStep(step)) {
+            setStep(prev => Math.min(prev + 1, 3));
+        }
     };
 
     const handlePrev = (e: React.MouseEvent) => {
@@ -94,6 +166,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!validateStep(3)) return;
+
         setLoading(true);
         try {
             registerStudent(formData);
@@ -120,12 +194,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         }
     };
 
-    // UI Helpers
     const StepIndicator = () => (
-        <div className="flex items-center justify-between mb-10 relative px-4 sm:px-8">
-            <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-emerald-100 -z-0 transform -translate-y-1/2"></div>
+        <div className="flex items-center justify-between mb-8 relative px-2 sm:px-6">
+            <div className="absolute top-1/2 left-6 right-6 h-0.5 bg-emerald-100 -z-0 transform -translate-y-1/2"></div>
             <div
-                className="absolute top-1/2 left-8 h-0.5 bg-emerald-600 -z-0 transform -translate-y-1/2 transition-all duration-500"
+                className="absolute top-1/2 left-6 h-0.5 bg-emerald-600 -z-0 transform -translate-y-1/2 transition-all duration-300"
                 style={{ width: `calc(${((step - 1) / 2) * 100}% - 1rem)` }}
             ></div>
 
@@ -136,11 +209,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
             ].map((s) => (
                 <div key={s.num} className="flex flex-col items-center relative z-10">
                     <div className={cn(
-                        "w-11 h-11 rounded-full flex items-center justify-center border-2 transition-all duration-300 font-semibold",
+                        "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-200 font-semibold",
                         step > s.num
-                            ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                            ? "bg-emerald-600 border-emerald-600 text-white"
                             : step === s.num
-                                ? "bg-white border-emerald-600 text-emerald-600 ring-4 ring-emerald-50 shadow-sm"
+                                ? "bg-white border-emerald-600 text-emerald-600 ring-4 ring-emerald-50"
                                 : "bg-white border-slate-200 text-slate-400"
                     )}>
                         {step > s.num ? <CheckCircle2 className="w-5 h-5" /> : <s.icon className="w-5 h-5" />}
@@ -156,13 +229,22 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         </div>
     );
 
-    // Light Theme Specific Classes
-    const inputClasses = "w-full px-3.5 py-2.5 rounded-lg bg-white border border-slate-300 text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-sm shadow-sm";
-    const selectClasses = cn(inputClasses, "appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23131313%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:9px_9px] bg-[right_14px_center] bg-no-repeat pr-10");
-    const labelClasses = "block text-xs font-semibold text-black uppercase tracking-wider mb-1.5";
+    const getInputClasses = (fieldName: keyof Student, isRequired = true) => cn(
+        "w-full px-3.5 py-2.5 rounded-lg bg-white border text-black placeholder-slate-400 focus:outline-none focus:ring-2 transition-colors text-sm",
+        isFieldInvalid(fieldName, isRequired)
+            ? "border-red-500 bg-red-50/20 text-red-900 focus:ring-red-500 focus:border-red-500"
+            : "border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+    );
+
+    const getSelectClasses = (fieldName: keyof Student, isRequired = true) => cn(
+        getInputClasses(fieldName, isRequired),
+        "appearance-none bg-no-repeat pr-10"
+    );
+
+    const labelClasses = "block text-xs font-semibold text-black uppercase tracking-wider mb-1.5 flex items-center justify-between";
 
     return (
-        <div className="min-h-screen bg-emerald-50/40 text-black font-sans py-10 px-4 sm:px-6 lg:px-8 relative">
+        <div className="min-h-screen bg-white text-black font-sans py-6 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
             {/* Background Watermark */}
             <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden opacity-[0.03]">
                 <img
@@ -174,9 +256,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
 
             <div className="max-w-3xl mx-auto relative z-10">
                 {/* Header */}
-                <div className="text-center mb-8 relative">
+                <div className="text-center mb-6 relative">
                     {onClose && (
                         <button
+                            type="button"
                             onClick={onClose}
                             className="absolute right-0 top-0 p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg transition-colors"
                             aria-label="Close modal"
@@ -191,8 +274,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                     <p className="text-sm font-medium text-slate-600">Please complete the required details below to register a student profile.</p>
                 </div>
 
-                {/* Main Form Card */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-10 shadow-sm">
+                {/* Main Form Container optimized for smooth modal rendering */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm max-h-[85vh] overflow-y-auto transform-gpu">
                     <StepIndicator />
 
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -206,24 +289,40 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                     <div className="sm:col-span-2">
-                                        <label className={labelClasses}>Learner Reference Number (LRN) *</label>
+                                        <label className={labelClasses}>
+                                            <span>Learner Reference Number (LRN) *</span>
+                                            {isFieldInvalid('student_lrn') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
                                         <input
                                             required
                                             name="student_lrn"
                                             value={formData.student_lrn}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('student_lrn')}
                                             placeholder="12-digit LRN"
                                         />
                                     </div>
                                     <div>
-                                        <label className={labelClasses}>First Name *</label>
+                                        <label className={labelClasses}>
+                                            <span>First Name *</span>
+                                            {isFieldInvalid('first_name') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
                                         <input
                                             required
                                             name="first_name"
                                             value={formData.first_name}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('first_name')}
                                         />
                                     </div>
                                     <div>
@@ -232,17 +331,26 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             name="middle_name"
                                             value={formData.middle_name}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('middle_name', false)}
                                         />
                                     </div>
                                     <div>
-                                        <label className={labelClasses}>Last Name *</label>
+                                        <label className={labelClasses}>
+                                            <span>Last Name *</span>
+                                            {isFieldInvalid('last_name') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
                                         <input
                                             required
                                             name="last_name"
                                             value={formData.last_name}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('last_name')}
                                         />
                                     </div>
                                     <div>
@@ -251,18 +359,27 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             name="suffix"
                                             value={formData.suffix}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('suffix', false)}
                                         />
                                     </div>
                                     <div>
-                                        <label className={labelClasses}>Date of Birth *</label>
+                                        <label className={labelClasses}>
+                                            <span>Date of Birth *</span>
+                                            {isFieldInvalid('date_of_birth') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
                                         <input
                                             required
                                             type="date"
                                             name="date_of_birth"
                                             value={formData.date_of_birth}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('date_of_birth')}
                                         />
                                     </div>
                                     <div>
@@ -272,7 +389,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             name="sex"
                                             value={formData.sex}
                                             onChange={handleChange}
-                                            className={selectClasses}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('sex')}
                                         >
                                             <option value="Male">Male</option>
                                             <option value="Female">Female</option>
@@ -300,13 +418,21 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                         />
                                     </div>
                                     <div>
-                                        <label className={labelClasses}>Municipality *</label>
+                                        <label className={labelClasses}>
+                                            <span>Municipality *</span>
+                                            {isFieldInvalid('municipality') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
                                         <select
                                             required
                                             name="municipality"
                                             value={formData.municipality}
                                             onChange={handleChange}
-                                            className={selectClasses}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('municipality')}
                                         >
                                             <option value="">Select Municipality</option>
                                             {municipalities.map(m => (
@@ -315,14 +441,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className={labelClasses}>Barangay *</label>
+                                        <label className={labelClasses}>
+                                            <span>Barangay *</span>
+                                            {isFieldInvalid('barangay') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
                                         <select
                                             required
                                             name="barangay"
                                             value={formData.barangay}
                                             onChange={handleChange}
+                                            onBlur={handleBlur}
                                             disabled={!formData.municipality}
-                                            className={cn(selectClasses, "disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed")}
+                                            className={cn(
+                                                getSelectClasses('barangay'),
+                                                "disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed"
+                                            )}
                                         >
                                             <option value="">Select Barangay</option>
                                             {barangays.map(b => (
@@ -336,7 +473,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             name="address"
                                             value={formData.address}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('address', false)}
                                             placeholder="House No., Street Name"
                                         />
                                     </div>
@@ -351,7 +489,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             name="parent_guardian_name"
                                             value={formData.parent_guardian_name}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('parent_guardian_name', false)}
                                         />
                                     </div>
                                     <div>
@@ -360,7 +499,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             name="parent_guardian_contact"
                                             value={formData.parent_guardian_contact}
                                             onChange={handleChange}
-                                            className={inputClasses}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('parent_guardian_contact', false)}
                                             placeholder="09..."
                                         />
                                     </div>
@@ -378,14 +518,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
 
                                 <div className="grid grid-cols-1 gap-5">
                                     <div>
-                                        <label className={labelClasses}>School *</label>
+                                        <label className={labelClasses}>
+                                            <span>School *</span>
+                                            {isFieldInvalid('school_id') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
                                         <select
                                             required
                                             name="school_id"
                                             value={formData.school_id}
                                             onChange={handleChange}
+                                            onBlur={handleBlur}
                                             disabled={!formData.barangay}
-                                            className={cn(selectClasses, "disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed")}
+                                            className={cn(
+                                                getSelectClasses('school_id'),
+                                                "disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed"
+                                            )}
                                         >
                                             <option value={0}>Select School</option>
                                             {schools.map(s => (
@@ -399,13 +550,21 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                         <div>
-                                            <label className={labelClasses}>Grade Level *</label>
+                                            <label className={labelClasses}>
+                                                <span>Grade Level *</span>
+                                                {isFieldInvalid('grade_level') && (
+                                                    <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                        <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                    </span>
+                                                )}
+                                            </label>
                                             <select
                                                 required
                                                 name="grade_level"
                                                 value={formData.grade_level}
                                                 onChange={handleChange}
-                                                className={selectClasses}
+                                                onBlur={handleBlur}
+                                                className={getSelectClasses('grade_level')}
                                             >
                                                 <option value="">Select Grade</option>
                                                 <option value="Kindergarten">Kindergarten</option>
@@ -429,7 +588,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                                 name="section"
                                                 value={formData.section}
                                                 onChange={handleChange}
-                                                className={inputClasses}
+                                                onBlur={handleBlur}
+                                                className={getInputClasses('section', false)}
                                                 placeholder="e.g., Section A"
                                             />
                                         </div>
@@ -465,11 +625,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                 >
                                     {loading ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...
                                         </>
                                     ) : (
                                         <>
-                                            <Save className="w-4 h-4 mr-2" /> Complete Registration
+                                            <Save className="w-4 h-4 mr-2" /> Save Registration
                                         </>
                                     )}
                                 </button>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useMockData } from '../../context/MockDataContext';
-import { ArrowLeft, Save, CheckCircle2, User, Stethoscope, Brain, PawPrint } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, User, Brain } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const PatientInfoForm: React.FC = () => {
@@ -9,8 +9,8 @@ const PatientInfoForm: React.FC = () => {
     const navigate = useNavigate();
     const { students, moduleStatuses, updateModuleStatus } = useMockData();
     const [isSaving, setIsSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<'basic' | 'consultation' | 'mental' | 'animal'>('basic');
-    
+    const [activeTab, setActiveTab] = useState<'basic' | 'mental'>('basic');
+
     const student = students.find(s => s.id === Number(id));
     const status = moduleStatuses[Number(id)]?.patientInfo;
 
@@ -33,9 +33,9 @@ const PatientInfoForm: React.FC = () => {
 
     const tabs = [
         { id: 'basic', label: 'Basic Info', icon: User },
-        { id: 'consultation', label: 'Consultation', icon: Stethoscope },
+        //{ id: 'consultation', label: 'Consultation', icon: Stethoscope },
         { id: 'mental', label: 'Mental Health', icon: Brain },
-        { id: 'animal', label: 'Animal Bite', icon: PawPrint },
+        // { id: 'animal', label: 'Animal Bite', icon: PawPrint },
     ] as const;
 
     return (
@@ -66,8 +66,8 @@ const PatientInfoForm: React.FC = () => {
                         onClick={() => setActiveTab(tab.id as typeof activeTab)}
                         className={cn(
                             "flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
-                            activeTab === tab.id 
-                                ? "bg-teal-50 text-teal-700 shadow-sm" 
+                            activeTab === tab.id
+                                ? "bg-teal-50 text-teal-700 shadow-sm"
                                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                         )}
                     >
@@ -81,12 +81,12 @@ const PatientInfoForm: React.FC = () => {
             </div>
 
             <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm">
-                
+
                 {/* TAB 1: BASIC INFO */}
                 {activeTab === 'basic' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                         <h2 className={sectionTitleClasses}>Socio-Demographic Profile</h2>
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className={labelClasses}>Civil Status</label>
@@ -101,7 +101,7 @@ const PatientInfoForm: React.FC = () => {
                                 <label className={labelClasses}>Blood Type</label>
                                 <select className={inputClasses}>
                                     <option value="">Select...</option>
-                                    {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(b => <option key={b} value={b}>{b}</option>)}
+                                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(b => <option key={b} value={b}>{b}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -109,14 +109,10 @@ const PatientInfoForm: React.FC = () => {
                                 <input type="text" className={inputClasses} placeholder="Current grade level..." />
                             </div>
                             <div>
-                                <label className={labelClasses}>Employment Status</label>
-                                <input type="text" className={inputClasses} placeholder="e.g. Student" defaultValue="Student" />
-                            </div>
-                            <div>
                                 <label className={labelClasses}>Religion</label>
                                 <input type="text" className={inputClasses} />
                             </div>
-                            <div className="flex flex-col space-y-2 p-3 border border-slate-200 rounded-lg bg-slate-50">
+                            <div className="flex flex-col space-y-2 p-3 border border-slate-200 rounded-lg bg-slate-50 md:col-span-2">
                                 <div className="flex items-center space-x-3">
                                     <input type="checkbox" id="is_indigenous" className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
                                     <label htmlFor="is_indigenous" className="text-sm font-medium text-slate-700">Indigenous Person</label>
@@ -150,12 +146,9 @@ const PatientInfoForm: React.FC = () => {
                         <div className={sectionClasses}>
                             <h2 className={sectionTitleClasses}>Other Information</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="flex flex-col space-y-2 p-3 border border-slate-200 rounded-lg bg-slate-50">
-                                    <div className="flex items-center space-x-3">
-                                        <input type="checkbox" id="is_4ps" className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
-                                        <label htmlFor="is_4ps" className="text-sm font-medium text-slate-700">4Ps Member</label>
-                                    </div>
-                                    <input type="text" placeholder="Household Number..." className={inputClasses} />
+                                <div className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg bg-slate-50">
+                                    <input type="checkbox" id="is_4ps" className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
+                                    <label htmlFor="is_4ps" className="text-sm font-medium text-slate-700">4Ps Member</label>
                                 </div>
                                 <div className="flex flex-col space-y-2 p-3 border border-slate-200 rounded-lg bg-slate-50">
                                     <div className="flex items-center space-x-3">
@@ -167,12 +160,8 @@ const PatientInfoForm: React.FC = () => {
                                         <input type="text" placeholder="PWD ID..." className={inputClasses} />
                                     </div>
                                 </div>
-                                <div>
+                                <div className="md:col-span-2">
                                     <label className={labelClasses}>PSA National ID</label>
-                                    <input type="text" className={inputClasses} />
-                                </div>
-                                <div>
-                                    <label className={labelClasses}>Tax Identification No. (TIN)</label>
                                     <input type="text" className={inputClasses} />
                                 </div>
                             </div>
@@ -214,7 +203,7 @@ const PatientInfoForm: React.FC = () => {
                     </div>
                 )}
 
-                {/* TAB 2: CONSULTATION */}
+                {/* TAB 2: CONSULTATION
                 {activeTab === 'consultation' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                         <h2 className={sectionTitleClasses}>Vital Signs & Consultation</h2>
@@ -291,7 +280,7 @@ const PatientInfoForm: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                )}
+                )} */}
 
                 {/* TAB 3: MENTAL HEALTH */}
                 {activeTab === 'mental' && (
@@ -306,9 +295,9 @@ const PatientInfoForm: React.FC = () => {
                             <label className={labelClasses}>Identified Conditions</label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                                 {[
-                                    'Depression', 'Psychosis', 'Epilepsy/Seizures', 
-                                    'Developmental Disorders', 'Behavioral Disorder', 
-                                    'Dementia', 'Alcohol Use Disorder', 'Drug Use Disorder', 
+                                    'Depression', 'Psychosis', 'Epilepsy/Seizures',
+                                    'Developmental Disorders', 'Behavioral Disorder',
+                                    'Dementia', 'Alcohol Use Disorder', 'Drug Use Disorder',
                                     'Self-Harm / Suicide'
                                 ].map(condition => (
                                     <label key={condition} className="flex items-center space-x-2 p-3 border border-slate-100 rounded-lg bg-white shadow-sm hover:border-teal-200 transition-colors cursor-pointer">
@@ -339,11 +328,11 @@ const PatientInfoForm: React.FC = () => {
                     </div>
                 )}
 
-                {/* TAB 4: ANIMAL BITE */}
+                {/* TAB 4: ANIMAL BITE
                 {activeTab === 'animal' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                         <h2 className={sectionTitleClasses}>Animal Bite / Rabies Exposure</h2>
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className={labelClasses}>Date of Exposure</label>
@@ -425,12 +414,12 @@ const PatientInfoForm: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                )}
+                )} */}
 
                 <div className="pt-8 flex justify-between items-center border-t border-slate-100 mt-8">
                     <p className="text-xs text-slate-400 max-w-sm">Saving will mark the entire Patient Info module as Completed for this student.</p>
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         disabled={isSaving}
                         className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all flex items-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
                     >

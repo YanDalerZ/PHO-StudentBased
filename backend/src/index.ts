@@ -1,11 +1,12 @@
 import 'dotenv/config';
 import express, { type Application } from 'express';
 import cors from 'cors';
-//import cookieParser from 'cookie-parser';
+
 import path from 'path';
 import { fileURLToPath } from 'url';
-//import pool from './database/db.js';
-//import * as AllRoutes from './routes/AllRoutes.js';
+import pool from './database/db.js';
+
+import AllRoutes from './routes/AllRoutes.js';
 
 const app: Application = express();
 
@@ -13,7 +14,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
-
 
 const allowedOrigins = [
     "http://localhost:3000",
@@ -35,37 +35,27 @@ const corsOptions: cors.CorsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
-//app.use(cookieParser());
 
-// app.use('/api/login', AllRoutes.LoginRoute);
-// app.use('/api/user', AllRoutes.UserRoute);
-// app.use('/api/benefits', AllRoutes.BenefitsRoute);
-// app.use('/api/events', AllRoutes.EventsRoute);
-// app.use('/api/notifications', AllRoutes.NotificationsRoute);
-// app.use('/api/serviceguide', AllRoutes.ServiceGuideRoute);
-// app.use('/api/appointments', AllRoutes.AppointmentRoute);
-// app.use('/api/applications', AllRoutes.ApplicationsRoute);
-// app.use('/api/risk', AllRoutes.RiskMapRoute);
-// app.use('/api/superadmin', AllRoutes.SuperAdminRoute);
-// app.use('/api/config', AllRoutes.GlobalConfigurationRoute);
-// app.use('/api/database', AllRoutes.DatabaseRoute);
+app.use('/api/users', AllRoutes.UserRoutes);
 
+// Serving static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Serving frontend static files
 const frontendPath = path.join(__dirname, '../../frontend/dist');
 app.use(express.static(frontendPath));
+
 app.get(/^((?!\/api).)*$/, (req, res) => {
     res.sendFile(path.resolve(frontendPath, "index.html"));
 });
+
+// Start Server and Verify Aiven Postgres Connection
 app.listen(PORT, '0.0.0.0', async () => {
     try {
-        //const conn = await pool.getConnection();
-        console.log(`✅ Server running on port ${PORT} & Connected to Aiven.`);
-        //const [rows] = await pool.execute('SELECT NOW() as currentTime, @@session.time_zone as tz');
-        // console.log(rows);
-
-
-        // conn.release();
+        // Test query to confirm Aiven PostgreSQL connection
+        const result = await pool.query('SELECT NOW() as current_time, current_setting(\'TIMEZONE\') as tz');
+        console.log(`✅ Server running on port ${PORT}`);
+        console.log('✅ Connected to Aiven PostgreSQL:', result.rows[0]);
     } catch (err) {
         console.error('❌ Database connection failed.');
         console.error(err);
