@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useMockData } from '../../context/MockDataContext';
 import { StatCard } from '../../components/common/StatCard';
@@ -13,29 +13,41 @@ import {
 } from 'lucide-react';
 
 // Import your existing registration form component
-import RegistrationForm from '../RegistrationForm'; // Adjust relative import path if needed
+import RegistrationForm from '../RegistrationForm';
 
 const TeacherDashboard: React.FC = () => {
-    const { students, moduleStatuses } = useMockData();
+    const { students = [], moduleStatuses = {} } = useMockData();
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
 
-    // Calculate metrics
-    const totalStudents = students.length;
+    // Memoize metric calculations so they only run when students/moduleStatuses change
+    const { totalStudents, totalModulesCompleted, pendingModules } = useMemo(() => {
+        let completed = 0;
+        let pending = 0;
 
-    let totalModulesCompleted = 0;
-    let pendingModules = 0;
+        students.forEach(student => {
+            const status = moduleStatuses[student.id || 0];
+            if (status) {
+                Object.values(status).forEach(modStatus => {
+                    if (modStatus === 'Completed') completed++;
+                    if (modStatus === 'Pending') pending++;
+                });
+            }
+        });
 
-    students.forEach(student => {
-        const status = moduleStatuses[student.id || 0];
-        if (status) {
-            Object.values(status).forEach(modStatus => {
-                if (modStatus === 'Completed') totalModulesCompleted++;
-                if (modStatus === 'Pending') pendingModules++;
-            });
-        }
-    });
+        return {
+            totalStudents: students.length,
+            totalModulesCompleted: completed,
+            pendingModules: pending
+        };
+    }, [students, moduleStatuses]);
 
-    const stats = [
+    // Memoize recent students slicing
+    const recentStudents = useMemo(() => {
+        return [...students].reverse().slice(0, 4);
+    }, [students]);
+
+    // Memoize stats object array creation
+    const stats = useMemo(() => [
         {
             id: 1,
             label: 'Total Students',
@@ -66,10 +78,7 @@ const TeacherDashboard: React.FC = () => {
             iconColor: 'text-amber-700',
             iconBg: 'bg-amber-50 border-amber-100'
         }
-    ];
-
-    // Recent students (last 4)
-    const recentStudents = [...students].reverse().slice(0, 4);
+    ], [totalStudents, totalModulesCompleted, pendingModules]);
 
     return (
         <div className="space-y-6 bg-slate-50/50 min-h-screen p-2 md:p-4">
@@ -188,15 +197,13 @@ const TeacherDashboard: React.FC = () => {
             {/* Registration Form Modal */}
             {isRegisterModalOpen && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-6 overflow-y-auto animate-in fade-in duration-200"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 md:p-6 overflow-y-auto"
                     role="dialog"
                     aria-modal="true"
                 >
-                    {/* Dynamic container width fits content width up to max-w-5xl */}
-                    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-2xl w-full max-w-5xl fit-content max-h-[90vh] flex flex-col relative overflow-hidden transition-all transform scale-100">
-
-                        {/* Sticky Header with Backdrop Blur */}
-                        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 sticky top-0 bg-white/95 backdrop-blur-md z-20 shrink-0">
+                    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col relative overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 sticky top-0 bg-white z-20 shrink-0">
                             <div className="flex items-center gap-3">
                                 <div className="h-2 w-2 rounded-full bg-indigo-600"></div>
                                 <div>
@@ -208,18 +215,17 @@ const TeacherDashboard: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setIsRegisterModalOpen(false)}
-                                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-200"
+                                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-200"
                                 aria-label="Close Modal"
                             >
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        {/* Embedded Form Body with Custom Scrollbar Support */}
+                        {/* Form Body */}
                         <div className="p-6 md:p-8 overflow-y-auto flex-1 text-slate-800">
                             <RegistrationForm onClose={() => setIsRegisterModalOpen(false)} />
                         </div>
-
                     </div>
                 </div>
             )}
