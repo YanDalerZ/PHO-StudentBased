@@ -3,7 +3,7 @@ import registerQr from './assets/images/register-qr.jpeg';
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Building2, Heart, GraduationCap, Loader2, QrCode, Download, ExternalLink, X, ShieldCheck } from 'lucide-react';
+import { Building2, Heart, GraduationCap, Loader2, QrCode, Download, ExternalLink, X, ShieldCheck, EyeOff, Eye } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 
 const Login: React.FC = () => {
@@ -43,7 +43,11 @@ const Login: React.FC = () => {
             setLoading(false);
         }
     };
+    const [showPassword, setShowPassword] = useState(false);
 
+    const togglePasswordVisibility = () => {
+        setShowPassword((prev) => !prev);
+    };
     return (
         <div className="min-h-screen flex w-full font-outfit bg-emerald-50/40 text-slate-900">
             {/* Left Panel: Light Mint/Emerald with Subtly Patterned Background */}
@@ -165,13 +169,25 @@ const Login: React.FC = () => {
                             </div>
                             <input
                                 id="password"
-                                type="password"
+                                type={showPassword ? 'text' : 'password'}
                                 required
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="••••••••"
-                                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-medium text-sm"
+                                className="w-full px-4 py-3 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-medium text-sm"
                             />
+                            <button
+                                type="button"
+                                onClick={togglePasswordVisibility}
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 focus:text-emerald-600 focus:outline-none transition-colors"
+                            >
+                                {showPassword ? (
+                                    <EyeOff className="w-5 h-5" />
+                                ) : (
+                                    <Eye className="w-5 h-5" />
+                                )}
+                            </button>
                         </div>
 
                         {/* Submit Button */}
