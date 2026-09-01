@@ -3,8 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
     User, MapPin, GraduationCap, ChevronRight, ChevronLeft,
-    CheckCircle2, Loader2, Save, Building2, X, AlertCircle
+    CheckCircle2, Loader2, Save, Building2, X, AlertCircle, Camera
 } from 'lucide-react';
+import { 
+    PREFIX_OPTIONS, SUFFIX_OPTIONS, CIVIL_STATUS_OPTIONS,
+    EDUCATIONAL_ATTAINMENT_OPTIONS, EMPLOYMENT_STATUS_OPTIONS,
+    BLOOD_TYPE_OPTIONS, RELIGION_OPTIONS,
+    INDIGENOUS_GROUP_OPTIONS, PWD_TYPE_OPTIONS,
+    PHILHEALTH_STATUS_OPTIONS, PHILHEALTH_CATEGORY_OPTIONS
+} from '../utils/constants';
 import { getMunicipalities, getBarangays, getSchools } from '../services/api';
 import { useMockData } from '../context/MockDataContext';
 import type { Student, Municipality, Barangay, School } from '../types';
@@ -16,6 +23,8 @@ interface RegistrationFormProps {
 }
 
 const INITIAL_STATE: Student = {
+    photo_base64: '',
+    prefix: '',
     student_lrn: '',
     first_name: '',
     middle_name: '',
@@ -23,6 +32,11 @@ const INITIAL_STATE: Student = {
     suffix: '',
     date_of_birth: '',
     sex: 'Male',
+    birth_place: '',
+    mother_first_name: '',
+    mother_last_name: '',
+    mother_middle_name: '',
+    mother_birth_date: '',
     address: '',
     barangay: '',
     municipality: '',
@@ -32,7 +46,38 @@ const INITIAL_STATE: Student = {
     parent_guardian_contact: '',
     school_id: 0,
     grade_level: '',
-    section: ''
+    section: '',
+    
+    // Patient Info (Part II)
+    civil_status: '',
+    educational_attainment: '',
+    employment_status: '',
+    tin_no: '',
+    religion: '',
+    indigenous: undefined,
+    indigenous_group: '',
+    blood_type: '',
+
+    // Address and Contact Info (Part III)
+    country: 'Philippines',
+    region: 'Region VI',
+    zip_code: '',
+    email: '',
+    landline_no: '',
+    psa_national_id: '',
+
+    // Other Info (Part IV - 4Ps & PWD)
+    dswd_4ps: undefined,
+    dswd_4ps_no: '',
+    is_pwd: undefined,
+    pwd_type: '',
+    pwd_id_no: '',
+
+    // Philhealth Info (Part V)
+    philhealth_member: undefined,
+    philhealth_id: '',
+    philhealth_status_type: '',
+    philhealth_category: ''
 };
 
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
@@ -67,6 +112,17 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         }
     }, [formData.barangay]);
 
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setFormData(prev => ({ ...prev, photo_base64: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({
@@ -93,7 +149,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         const fieldsToTouch: Record<string, boolean> = {};
         if (currentStep === 1) {
             fieldsToTouch.student_lrn = true;
+            fieldsToTouch.prefix = true;
             fieldsToTouch.first_name = true;
+            fieldsToTouch.middle_name = true;
             fieldsToTouch.last_name = true;
             fieldsToTouch.date_of_birth = true;
         } else if (currentStep === 2) {
@@ -114,8 +172,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                 toast.error('Please enter the Learner Reference Number (LRN).');
                 return false;
             }
-            if (!formData.first_name.trim() || !formData.last_name.trim()) {
-                toast.error('First Name and Last Name are required.');
+            if (!formData.prefix) {
+                toast.error('Please select a Prefix.');
+                return false;
+            }
+            if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.middle_name.trim()) {
+                toast.error('First Name, Middle Name, and Last Name are required.');
                 return false;
             }
             if (!formData.date_of_birth) {
@@ -130,6 +192,28 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
             if (!formData.barangay) {
                 toast.error('Please select a Barangay.');
                 return false;
+            }
+            if (!formData.dswd_4ps) {
+                toast.error('Please specify if the student is a DSWD 4Ps member.');
+                return false;
+            }
+            if (!formData.is_pwd) {
+                toast.error('Please specify if the student is a Person With Disability.');
+                return false;
+            }
+            if (formData.is_pwd === 'Yes' && !formData.pwd_type) {
+                toast.error('Please select a PWD Type.');
+                return false;
+            }
+            if (!formData.philhealth_member) {
+                toast.error('Please specify Philhealth membership.');
+                return false;
+            }
+            if (formData.philhealth_member === 'Yes') {
+                if (!formData.philhealth_id || !formData.philhealth_status_type || !formData.philhealth_category) {
+                    toast.error('Please complete all Philhealth details.');
+                    return false;
+                }
             }
         } else if (currentStep === 3) {
             if (!formData.school_id) {
@@ -287,11 +371,89 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                     <p className="text-xs text-slate-500">Provide the basic identifying information of the student.</p>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    <div className="sm:col-span-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                                    <div className="sm:col-span-2 space-y-5">
+                                        <div>
+                                            <label className={labelClasses}>
+                                                <span>Learner Reference Number (LRN) *</span>
+                                                {isFieldInvalid('student_lrn') && (
+                                                    <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                        <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                    </span>
+                                                )}
+                                            </label>
+                                            <input
+                                                required
+                                                name="student_lrn"
+                                                value={formData.student_lrn}
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={getInputClasses('student_lrn')}
+                                                placeholder="12-digit LRN"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-5">
+                                            <div>
+                                                <label className={labelClasses}>
+                                                    <span>Prefix *</span>
+                                                    {isFieldInvalid('prefix') && (
+                                                        <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                            <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                        </span>
+                                                    )}
+                                                </label>
+                                                <select
+                                                    required
+                                                    name="prefix"
+                                                    value={formData.prefix}
+                                                    onChange={handleChange}
+                                                    onBlur={handleBlur}
+                                                    className={getSelectClasses('prefix')}
+                                                >
+                                                    <option value="">Select Prefix</option>
+                                                    {PREFIX_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className={labelClasses}>
+                                                    <span>First Name *</span>
+                                                    {isFieldInvalid('first_name') && (
+                                                        <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                            <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                        </span>
+                                                    )}
+                                                </label>
+                                                <input
+                                                    required
+                                                    name="first_name"
+                                                    value={formData.first_name}
+                                                    onChange={handleChange}
+                                                    onBlur={handleBlur}
+                                                    className={getInputClasses('first_name')}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="sm:col-span-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 relative overflow-hidden group">
+                                        {formData.photo_base64 ? (
+                                            <img src={formData.photo_base64} alt="Student" className="absolute inset-0 w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="text-center">
+                                                <Camera className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                                                <p className="text-xs font-semibold text-slate-500">Upload Photo</p>
+                                            </div>
+                                        )}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handlePhotoUpload}
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-1">
                                         <label className={labelClasses}>
-                                            <span>Learner Reference Number (LRN) *</span>
-                                            {isFieldInvalid('student_lrn') && (
+                                            <span>Middle Name *</span>
+                                            {isFieldInvalid('middle_name') && (
                                                 <span className="text-red-600 text-xs flex items-center font-normal lowercase">
                                                     <AlertCircle className="w-3 h-3 mr-1" /> required
                                                 </span>
@@ -299,40 +461,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                         </label>
                                         <input
                                             required
-                                            name="student_lrn"
-                                            value={formData.student_lrn}
-                                            onChange={handleChange}
-                                            onBlur={handleBlur}
-                                            className={getInputClasses('student_lrn')}
-                                            placeholder="12-digit LRN"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className={labelClasses}>
-                                            <span>First Name *</span>
-                                            {isFieldInvalid('first_name') && (
-                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
-                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
-                                                </span>
-                                            )}
-                                        </label>
-                                        <input
-                                            required
-                                            name="first_name"
-                                            value={formData.first_name}
-                                            onChange={handleChange}
-                                            onBlur={handleBlur}
-                                            className={getInputClasses('first_name')}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className={labelClasses}>Middle Name</label>
-                                        <input
                                             name="middle_name"
                                             value={formData.middle_name}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('middle_name', false)}
+                                            className={getInputClasses('middle_name')}
                                         />
                                     </div>
                                     <div>
@@ -355,13 +488,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                     </div>
                                     <div>
                                         <label className={labelClasses}>Suffix (e.g., Jr., III)</label>
-                                        <input
+                                        <select
                                             name="suffix"
                                             value={formData.suffix}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('suffix', false)}
-                                        />
+                                            className={getSelectClasses('suffix', false)}
+                                        >
+                                            <option value="">Select Suffix</option>
+                                            {SUFFIX_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
                                     </div>
                                     <div>
                                         <label className={labelClasses}>
@@ -396,6 +532,167 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             <option value="Female">Female</option>
                                         </select>
                                     </div>
+                                    <div className="sm:col-span-2 pt-3">
+                                        <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-1 mb-4">Other Personal Information</h3>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <label className={labelClasses}>Birth Place</label>
+                                        <input
+                                            name="birth_place"
+                                            value={formData.birth_place}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('birth_place', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Civil Status</label>
+                                        <select
+                                            name="civil_status"
+                                            value={formData.civil_status}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('civil_status', false)}
+                                        >
+                                            <option value="">Select Civil Status</option>
+                                            {CIVIL_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Educational Attainment</label>
+                                        <select
+                                            name="educational_attainment"
+                                            value={formData.educational_attainment}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('educational_attainment', false)}
+                                        >
+                                            <option value="">Select Attainment</option>
+                                            {EDUCATIONAL_ATTAINMENT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Employment Status</label>
+                                        <select
+                                            name="employment_status"
+                                            value={formData.employment_status}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('employment_status', false)}
+                                        >
+                                            <option value="">Select Employment</option>
+                                            {EMPLOYMENT_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>TIN No.</label>
+                                        <input
+                                            name="tin_no"
+                                            value={formData.tin_no}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('tin_no', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Religion</label>
+                                        <select
+                                            name="religion"
+                                            value={formData.religion}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('religion', false)}
+                                        >
+                                            <option value="">Select Religion</option>
+                                            {RELIGION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Indigenous People?</label>
+                                        <select
+                                            name="indigenous"
+                                            value={formData.indigenous || ''}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('indigenous', false)}
+                                        >
+                                            <option value="">Select Yes/No</option>
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    {formData.indigenous === 'Yes' && (
+                                        <div className="col-span-1 sm:col-span-2">
+                                            <label className={labelClasses}>Indigenous (Ethnic Group)</label>
+                                            <select
+                                                name="indigenous_group"
+                                                value={formData.indigenous_group || ''}
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={getSelectClasses('indigenous_group', false)}
+                                            >
+                                                <option value="">Select Ethnic Group</option>
+                                                {INDIGENOUS_GROUP_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className={labelClasses}>Blood Type</label>
+                                        <select
+                                            name="blood_type"
+                                            value={formData.blood_type}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('blood_type', false)}
+                                        >
+                                            <option value="">Select Blood Type</option>
+                                            {BLOOD_TYPE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="sm:col-span-2 pt-3">
+                                        <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-1 mb-4">Mother's Maiden Name</h3>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Mother's First Name</label>
+                                        <input
+                                            name="mother_first_name"
+                                            value={formData.mother_first_name}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('mother_first_name', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Mother's Middle Name</label>
+                                        <input
+                                            name="mother_middle_name"
+                                            value={formData.mother_middle_name}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('mother_middle_name', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Mother's Last Name</label>
+                                        <input
+                                            name="mother_last_name"
+                                            value={formData.mother_last_name}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('mother_last_name', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Mother's Date of Birth</label>
+                                        <input
+                                            type="date"
+                                            name="mother_birth_date"
+                                            value={formData.mother_birth_date}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('mother_birth_date', false)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -409,17 +706,36 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                    <div className="sm:col-span-2">
+                                        <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-1 mb-4">Address and Contact Info</h3>
+                                    </div>
                                     <div>
-                                        <label className={labelClasses}>Province *</label>
+                                        <label className={labelClasses}>Country</label>
                                         <input
                                             readOnly
-                                            value="Aklan"
+                                            value={formData.country}
+                                            className="w-full px-3.5 py-2.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 font-medium cursor-not-allowed text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Region</label>
+                                        <input
+                                            readOnly
+                                            value={formData.region}
+                                            className="w-full px-3.5 py-2.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 font-medium cursor-not-allowed text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Province</label>
+                                        <input
+                                            readOnly
+                                            value={formData.province}
                                             className="w-full px-3.5 py-2.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 font-medium cursor-not-allowed text-sm"
                                         />
                                     </div>
                                     <div>
                                         <label className={labelClasses}>
-                                            <span>Municipality *</span>
+                                            <span>City/Municipality *</span>
                                             {isFieldInvalid('municipality') && (
                                                 <span className="text-red-600 text-xs flex items-center font-normal lowercase">
                                                     <AlertCircle className="w-3 h-3 mr-1" /> required
@@ -468,7 +784,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className={labelClasses}>Street Address</label>
+                                        <label className={labelClasses}>Number/Street Name/Purok</label>
                                         <input
                                             name="address"
                                             value={formData.address}
@@ -478,11 +794,51 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             placeholder="House No., Street Name"
                                         />
                                     </div>
+                                    <div>
+                                        <label className={labelClasses}>Zip Code</label>
+                                        <input
+                                            name="zip_code"
+                                            value={formData.zip_code}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('zip_code', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Email</label>
+                                        <input
+                                            type="email"
+                                            name="email"
+                                            value={formData.email}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('email', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Mobile</label>
+                                        <input
+                                            name="contact_no"
+                                            value={formData.contact_no}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('contact_no', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Landline</label>
+                                        <input
+                                            name="landline_no"
+                                            value={formData.landline_no}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('landline_no', false)}
+                                        />
+                                    </div>
 
                                     <div className="sm:col-span-2 pt-3">
                                         <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-1 mb-4">Guardian Details</h3>
                                     </div>
-
                                     <div>
                                         <label className={labelClasses}>Parent / Guardian Name</label>
                                         <input
@@ -503,6 +859,159 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                             className={getInputClasses('parent_guardian_contact', false)}
                                             placeholder="09..."
                                         />
+                                    </div>
+
+                                    <div className="sm:col-span-2 pt-3">
+                                        <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-1 mb-4">Other Info</h3>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>
+                                            <span>DSWD 4Ps member *</span>
+                                            {isFieldInvalid('dswd_4ps') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
+                                        <select
+                                            required
+                                            name="dswd_4ps"
+                                            value={formData.dswd_4ps || ''}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('dswd_4ps')}
+                                        >
+                                            <option value="">Select Yes/No</option>
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>4Ps Household Number</label>
+                                        <input
+                                            name="dswd_4ps_no"
+                                            value={formData.dswd_4ps_no}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('dswd_4ps_no', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>
+                                            <span>Person With Disability? *</span>
+                                            {isFieldInvalid('is_pwd') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
+                                        <select
+                                            required
+                                            name="is_pwd"
+                                            value={formData.is_pwd || ''}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('is_pwd')}
+                                        >
+                                            <option value="">Select Yes/No</option>
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>PWD TYPE {formData.is_pwd === 'Yes' && '*'}</label>
+                                        <select
+                                            name="pwd_type"
+                                            value={formData.pwd_type}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('pwd_type', formData.is_pwd === 'Yes' && !formData.pwd_type)}
+                                        >
+                                            <option value="">Select PWD Type</option>
+                                            {PWD_TYPE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>PWD ID</label>
+                                        <input
+                                            name="pwd_id_no"
+                                            value={formData.pwd_id_no}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('pwd_id_no', false)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>PSA NATIONAL ID #</label>
+                                        <input
+                                            name="psa_national_id"
+                                            value={formData.psa_national_id}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('psa_national_id', false)}
+                                        />
+                                    </div>
+
+                                    <div className="sm:col-span-2 pt-3">
+                                        <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-1 mb-4">Philhealth Info</h3>
+                                    </div>
+                                    <div className="sm:col-span-2 sm:w-1/2 pr-0 sm:pr-2.5">
+                                        <label className={labelClasses}>
+                                            <span>Philhealth Member? *</span>
+                                            {isFieldInvalid('philhealth_member') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
+                                        <select
+                                            required
+                                            name="philhealth_member"
+                                            value={formData.philhealth_member || ''}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('philhealth_member')}
+                                        >
+                                            <option value="">Select Yes/No</option>
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Philhealth Number {formData.philhealth_member === 'Yes' && '*'}</label>
+                                        <input
+                                            name="philhealth_id"
+                                            value={formData.philhealth_id}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getInputClasses('philhealth_id', formData.philhealth_member === 'Yes' && !formData.philhealth_id)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClasses}>Philhealth Status Type {formData.philhealth_member === 'Yes' && '*'}</label>
+                                        <select
+                                            name="philhealth_status_type"
+                                            value={formData.philhealth_status_type}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('philhealth_status_type', formData.philhealth_member === 'Yes' && !formData.philhealth_status_type)}
+                                        >
+                                            <option value="">Select Status</option>
+                                            {PHILHEALTH_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <label className={labelClasses}>Philhealth Category {formData.philhealth_member === 'Yes' && '*'}</label>
+                                        <select
+                                            name="philhealth_category"
+                                            value={formData.philhealth_category}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            className={getSelectClasses('philhealth_category', formData.philhealth_member === 'Yes' && !formData.philhealth_category)}
+                                        >
+                                            <option value="">Select Category</option>
+                                            {PHILHEALTH_CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
                                     </div>
                                 </div>
                             </div>

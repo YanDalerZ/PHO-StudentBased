@@ -14,8 +14,8 @@ const initialModules: PHOModule[] = [
     { id: 1, slug: 'patient-info', name: 'Patient Information', description: 'Core demographics and medical history', is_active: true },
     { id: 2, slug: 'oral-health', name: 'Oral Health', description: 'Dental examination and DMFT indexing', is_active: true },
     { id: 3, slug: 'deworming', name: 'Deworming', description: 'Mass drug administration records', is_active: true },
-    { id: 4, slug: 'headss', name: 'HEADSS Assessment', description: 'Adolescent psychosocial health screening', is_active: true },
-    { id: 5, slug: 'immunization', name: 'Immunization', description: 'School-based vaccination program', is_active: true },
+    { id: 4, slug: 'immunization', name: 'Immunization', description: 'School-based vaccination program', is_active: true },
+    { id: 5, slug: 'vital-signs', name: 'Vital Signs', description: 'Basic health screening and vital signs', is_active: true },
 ];
 
 const ModuleManagement: React.FC = () => {

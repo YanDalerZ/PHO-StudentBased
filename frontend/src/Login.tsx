@@ -1,5 +1,6 @@
 import logo from './assets/images/logo.jpg';
 import registerQr from './assets/images/register-qr.jpeg';
+import sealOfAklan from './assets/images/seal_of_aklan.png';
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -124,11 +125,17 @@ const Login: React.FC = () => {
                 <div className="w-full max-w-md mx-auto my-auto py-8">
                     {/* Header Branding / Logo */}
                     <div className="text-center space-y-3 mb-8">
-                        <div className="mx-auto w-30 h-30 mb-4 rounded-full flex items-center justify-center shadow-sm">
+                        <div className="mx-auto flex items-center justify-center gap-5 p-4 mb-6 rounded-3xl bg-emerald-50/50 backdrop-blur-xl border border-emerald-100/50 shadow-[0_8px_30px_rgb(0,0,0,0.06)] w-fit transition-all duration-300 hover:shadow-[0_8px_30px_rgb(16,185,129,0.12)]">
+                            <img
+                                src={sealOfAklan}
+                                alt="Seal of Aklan"
+                                className="w-20 h-20 object-contain drop-shadow-md hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="w-px h-16 bg-emerald-200/60 rounded-full" />
                             <img
                                 src={logo}
                                 alt="PHO Logo"
-                                className="w-full h-full object-contain rounded-xl"
+                                className="w-20 h-20 object-contain rounded-full drop-shadow-md hover:scale-105 transition-transform duration-300"
                             />
                         </div>
 

@@ -14,8 +14,8 @@ import StudentProfile from './pages/teacher/StudentProfile';
 import PatientInfoForm from './components/forms/PatientInfoForm';
 import OralHealthForm from './components/forms/OralHealthForm';
 import DewormingForm from './components/forms/DewormingForm';
-import HeadssForm from './components/forms/HeadssForm';
 import ImmunizationForm from './components/forms/ImmunizationForm';
+import VitalSignsForm from './components/forms/VitalSignsForm';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
@@ -25,8 +25,8 @@ import SuperUserDashboard from './pages/superuser/SuperUserDashboard';
 import PatientInfoDash from './pages/superuser/PatientInfoDash';
 import OralHealthDash from './pages/superuser/OralHealthDash';
 import DewormingDash from './pages/superuser/DewormingDash';
-import HeadssDash from './pages/superuser/HeadssDash';
 import ImmunizationDash from './pages/superuser/ImmunizationDash';
+import VitalSignsDash from './pages/superuser/VitalSignsDash';
 import StudentLookupDash from './pages/superuser/StudentLookupDash';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -98,8 +98,8 @@ const App: React.FC = () => {
               <Route path="students/:id/patient-info" element={<PatientInfoForm />} />
               <Route path="students/:id/oral-health" element={<OralHealthForm />} />
               <Route path="students/:id/deworming" element={<DewormingForm />} />
-              <Route path="students/:id/headss" element={<HeadssForm />} />
               <Route path="students/:id/immunization" element={<ImmunizationForm />} />
+              <Route path="students/:id/vital-signs" element={<VitalSignsForm />} />
             </Route>
 
             {/* Super User Portal Routes */}
@@ -116,8 +116,8 @@ const App: React.FC = () => {
               <Route path="patient-info" element={<PatientInfoDash />} />
               <Route path="oral-health" element={<OralHealthDash />} />
               <Route path="deworming" element={<DewormingDash />} />
-              <Route path="headss" element={<HeadssDash />} />
               <Route path="immunization" element={<ImmunizationDash />} />
+              <Route path="vital-signs" element={<VitalSignsDash />} />
               <Route path="students" element={<StudentLookupDash />} />
             </Route>
 

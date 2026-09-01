@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useMockData } from '../../context/MockDataContext';
-import { ArrowLeft, Save, CheckCircle2, User, Brain } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, User } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const PatientInfoForm: React.FC = () => {
@@ -9,7 +9,7 @@ const PatientInfoForm: React.FC = () => {
     const navigate = useNavigate();
     const { students, moduleStatuses, updateModuleStatus } = useMockData();
     const [isSaving, setIsSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<'basic' | 'mental'>('basic');
+    const [activeTab, setActiveTab] = useState<'basic'>('basic');
 
     const student = students.find(s => s.id === Number(id));
     const status = moduleStatuses[Number(id)]?.patientInfo;
@@ -33,9 +33,6 @@ const PatientInfoForm: React.FC = () => {
 
     const tabs = [
         { id: 'basic', label: 'Basic Info', icon: User },
-        //{ id: 'consultation', label: 'Consultation', icon: Stethoscope },
-        { id: 'mental', label: 'Mental Health', icon: Brain },
-        // { id: 'animal', label: 'Animal Bite', icon: PawPrint },
     ] as const;
 
     return (
@@ -203,130 +200,7 @@ const PatientInfoForm: React.FC = () => {
                     </div>
                 )}
 
-                {/* TAB 2: CONSULTATION
-                {activeTab === 'consultation' && (
-                    <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                        <h2 className={sectionTitleClasses}>Vital Signs & Consultation</h2>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            <div>
-                                <label className={labelClasses}>BP Systolic</label>
-                                <input type="number" className={inputClasses} placeholder="mmHg" />
-                            </div>
-                            <div>
-                                <label className={labelClasses}>BP Diastolic</label>
-                                <input type="number" className={inputClasses} placeholder="mmHg" />
-                            </div>
-                            <div>
-                                <label className={labelClasses}>Heart Rate</label>
-                                <input type="number" className={inputClasses} placeholder="bpm" />
-                            </div>
-                            <div>
-                                <label className={labelClasses}>Pulse Rate</label>
-                                <input type="number" className={inputClasses} placeholder="bpm" />
-                            </div>
-                            <div>
-                                <label className={labelClasses}>Respiratory Rate</label>
-                                <input type="text" className={inputClasses} placeholder="cpm" />
-                            </div>
-                            <div>
-                                <label className={labelClasses}>Body Temp</label>
-                                <input type="number" step="0.1" className={inputClasses} placeholder="°C" />
-                            </div>
-                            <div>
-                                <label className={labelClasses}>Oxygen Sat</label>
-                                <input type="number" step="0.1" className={inputClasses} placeholder="%" />
-                            </div>
-                        </div>
 
-                        <div className={sectionClasses}>
-                            <h2 className={sectionTitleClasses}>Doctor's Order (Laboratory & Imaging)</h2>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {['Blood Chemistry', 'CBC', 'Fecalysis', 'Hematology', 'Immunology', 'Serology', 'Urinalysis', 'X-Ray', 'ECG', 'Ultrasound'].map(lab => (
-                                    <label key={lab} className="flex items-center space-x-2">
-                                        <input type="checkbox" className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
-                                        <span className="text-sm text-slate-600">{lab}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className={sectionClasses}>
-                            <h2 className={sectionTitleClasses}>Diagnosis & Prescription</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className={labelClasses}>Diagnosis Type</label>
-                                    <select className={inputClasses}>
-                                        <option value="WORKING DIAGNOSIS">Working Diagnosis</option>
-                                        <option value="FINAL DIAGNOSIS">Final Diagnosis</option>
-                                        <option value="ADMITTING DIAGNOSIS">Admitting Diagnosis</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className={labelClasses}>Diagnosis Specify</label>
-                                    <input type="text" className={inputClasses} placeholder="Specific diagnosis..." />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClasses}>Treatment Plan</label>
-                                    <textarea rows={2} className={inputClasses}></textarea>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClasses}>Prescription</label>
-                                    <textarea rows={2} className={inputClasses}></textarea>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClasses}>Remarks</label>
-                                    <textarea rows={2} className={inputClasses}></textarea>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )} */}
-
-                {/* TAB 3: MENTAL HEALTH */}
-                {activeTab === 'mental' && (
-                    <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                        <h2 className={sectionTitleClasses}>Mental Health (mhGAP)</h2>
-                        <div className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg bg-slate-50 mb-6">
-                            <input type="checkbox" id="mhgap_screened" className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
-                            <label htmlFor="mhgap_screened" className="text-sm font-medium text-slate-700">Patient has been mhGAP screened</label>
-                        </div>
-
-                        <div className="space-y-4">
-                            <label className={labelClasses}>Identified Conditions</label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                                {[
-                                    'Depression', 'Psychosis', 'Epilepsy/Seizures',
-                                    'Developmental Disorders', 'Behavioral Disorder',
-                                    'Dementia', 'Alcohol Use Disorder', 'Drug Use Disorder',
-                                    'Self-Harm / Suicide'
-                                ].map(condition => (
-                                    <label key={condition} className="flex items-center space-x-2 p-3 border border-slate-100 rounded-lg bg-white shadow-sm hover:border-teal-200 transition-colors cursor-pointer">
-                                        <input type="checkbox" className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
-                                        <span className="text-sm text-slate-600">{condition}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className={sectionClasses}>
-                            <h2 className={sectionTitleClasses}>Follow-up & Notes</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className={labelClasses}>Follow-up Date</label>
-                                    <input type="date" className={inputClasses} />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClasses}>Prescription</label>
-                                    <textarea rows={2} className={inputClasses}></textarea>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClasses}>Remarks</label>
-                                    <textarea rows={2} className={inputClasses}></textarea>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {/* TAB 4: ANIMAL BITE
                 {activeTab === 'animal' && (
