@@ -1,13 +1,3 @@
-export const PREFIX_OPTIONS = [
-    "NOT APPLICABLE",
-    "ATTORNEY",
-    "DOCTOR",
-    "ENGINEER",
-    "MISS",
-    "MR.",
-    "MRS."
-];
-
 export const SUFFIX_OPTIONS = [
     "NOT APPLICABLE",
     "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI",

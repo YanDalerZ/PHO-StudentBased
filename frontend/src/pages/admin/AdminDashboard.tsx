@@ -1,6 +1,8 @@
 import React from 'react';
 import { StatCard } from '../../components/common/StatCard';
-import { Settings, Users, Building2, ShieldCheck } from 'lucide-react';
+import { Settings, Users, Building2, ShieldCheck, History } from 'lucide-react';
+import { ActivityFeed } from '../../components/common/ActivityFeed';
+import { mockActivityFeed } from '../../utils/mockAdminData';
 
 const AdminDashboard: React.FC = () => {
     return (
@@ -43,8 +45,19 @@ const AdminDashboard: React.FC = () => {
                 />
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm min-h-[400px] flex items-center justify-center">
-                <p className="text-slate-500 font-medium">System activity feed will be implemented in Phase 4 Backend.</p>
+            <div className="bg-white dark:bg-surface-card border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm mt-8">
+                <div className="flex items-center space-x-2 mb-8 border-b border-slate-100 dark:border-slate-800 pb-4">
+                    <History className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">System Activity Feed</h2>
+                </div>
+                
+                <ActivityFeed activities={mockActivityFeed} />
+
+                <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
+                    <button className="text-sm font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">
+                        View Full Audit Log &rarr;
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -6,7 +6,7 @@ import {
     CheckCircle2, Loader2, Save, Building2, X, AlertCircle, Camera
 } from 'lucide-react';
 import { 
-    PREFIX_OPTIONS, SUFFIX_OPTIONS, CIVIL_STATUS_OPTIONS,
+    SUFFIX_OPTIONS, CIVIL_STATUS_OPTIONS,
     EDUCATIONAL_ATTAINMENT_OPTIONS, EMPLOYMENT_STATUS_OPTIONS,
     BLOOD_TYPE_OPTIONS, RELIGION_OPTIONS,
     INDIGENOUS_GROUP_OPTIONS, PWD_TYPE_OPTIONS,
@@ -24,7 +24,6 @@ interface RegistrationFormProps {
 
 const INITIAL_STATE: Student = {
     photo_base64: '',
-    prefix: '',
     student_lrn: '',
     first_name: '',
     middle_name: '',
@@ -149,7 +148,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         const fieldsToTouch: Record<string, boolean> = {};
         if (currentStep === 1) {
             fieldsToTouch.student_lrn = true;
-            fieldsToTouch.prefix = true;
             fieldsToTouch.first_name = true;
             fieldsToTouch.middle_name = true;
             fieldsToTouch.last_name = true;
@@ -170,10 +168,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         if (currentStep === 1) {
             if (!formData.student_lrn.trim()) {
                 toast.error('Please enter the Learner Reference Number (LRN).');
-                return false;
-            }
-            if (!formData.prefix) {
-                toast.error('Please select a Prefix.');
                 return false;
             }
             if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.middle_name.trim()) {
@@ -328,7 +322,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
     const labelClasses = "block text-xs font-semibold text-black uppercase tracking-wider mb-1.5 flex items-center justify-between";
 
     return (
-        <div className="min-h-screen bg-white text-black font-sans py-6 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+        <div className={cn(
+            "bg-white text-black font-sans relative",
+            !onClose ? "min-h-screen py-6 px-4 sm:px-6 lg:px-8" : ""
+        )}>
             {/* Background Watermark */}
             <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden opacity-[0.03]">
                 <img
@@ -359,7 +356,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                 </div>
 
                 {/* Main Form Container optimized for smooth modal rendering */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm max-h-[85vh] overflow-y-auto transform-gpu">
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm transform-gpu">
                     <StepIndicator />
 
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -392,46 +389,23 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                                 placeholder="12-digit LRN"
                                             />
                                         </div>
-                                        <div className="grid grid-cols-2 gap-5">
-                                            <div>
-                                                <label className={labelClasses}>
-                                                    <span>Prefix *</span>
-                                                    {isFieldInvalid('prefix') && (
-                                                        <span className="text-red-600 text-xs flex items-center font-normal lowercase">
-                                                            <AlertCircle className="w-3 h-3 mr-1" /> required
-                                                        </span>
-                                                    )}
-                                                </label>
-                                                <select
-                                                    required
-                                                    name="prefix"
-                                                    value={formData.prefix}
-                                                    onChange={handleChange}
-                                                    onBlur={handleBlur}
-                                                    className={getSelectClasses('prefix')}
-                                                >
-                                                    <option value="">Select Prefix</option>
-                                                    {PREFIX_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className={labelClasses}>
-                                                    <span>First Name *</span>
-                                                    {isFieldInvalid('first_name') && (
-                                                        <span className="text-red-600 text-xs flex items-center font-normal lowercase">
-                                                            <AlertCircle className="w-3 h-3 mr-1" /> required
-                                                        </span>
-                                                    )}
-                                                </label>
-                                                <input
-                                                    required
-                                                    name="first_name"
-                                                    value={formData.first_name}
-                                                    onChange={handleChange}
-                                                    onBlur={handleBlur}
-                                                    className={getInputClasses('first_name')}
-                                                />
-                                            </div>
+                                        <div>
+                                            <label className={labelClasses}>
+                                                <span>First Name *</span>
+                                                {isFieldInvalid('first_name') && (
+                                                    <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                        <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                    </span>
+                                                )}
+                                            </label>
+                                            <input
+                                                required
+                                                name="first_name"
+                                                value={formData.first_name}
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={getInputClasses('first_name')}
+                                            />
                                         </div>
                                     </div>
                                     <div className="sm:col-span-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 relative overflow-hidden group">

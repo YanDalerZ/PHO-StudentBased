@@ -27,7 +27,6 @@ import OralHealthDash from './pages/superuser/OralHealthDash';
 import DewormingDash from './pages/superuser/DewormingDash';
 import ImmunizationDash from './pages/superuser/ImmunizationDash';
 import VitalSignsDash from './pages/superuser/VitalSignsDash';
-import StudentLookupDash from './pages/superuser/StudentLookupDash';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UserManagement from './pages/admin/UserManagement';
@@ -118,7 +117,6 @@ const App: React.FC = () => {
               <Route path="deworming" element={<DewormingDash />} />
               <Route path="immunization" element={<ImmunizationDash />} />
               <Route path="vital-signs" element={<VitalSignsDash />} />
-              <Route path="students" element={<StudentLookupDash />} />
             </Route>
 
             {/* Admin Portal Routes */}

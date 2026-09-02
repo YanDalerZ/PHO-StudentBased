@@ -5,7 +5,6 @@ import { z } from 'zod';
 const createStudentSchema = z.object({
     // Student Info
     photo_base64: z.string().optional(),
-    prefix: z.string().min(1, 'Prefix is required'),
     last_name: z.string().min(2, 'Last name is required'),
     first_name: z.string().min(2, 'First name is required'),
     middle_name: z.string().min(1, 'Middle name is required'),
@@ -72,9 +71,9 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
             const studentQuery = `
                 INSERT INTO students (
                     student_lrn, first_name, middle_name, last_name, suffix, date_of_birth, sex, grade_level,
-                    photo_base64, prefix, birth_place, mother_first_name, mother_last_name, mother_middle_name, mother_birth_date,
+                    photo_base64, birth_place, mother_first_name, mother_last_name, mother_middle_name, mother_birth_date,
                     country, region, zip_code, email, landline_no, psa_national_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
                 RETURNING id
             `;
             const studentResult = await client.query(studentQuery, [
@@ -87,7 +86,6 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
                 validatedData.sex,
                 validatedData.grade_level,
                 validatedData.photo_base64,
-                validatedData.prefix,
                 validatedData.birth_place,
                 validatedData.mother_first_name,
                 validatedData.mother_last_name,
