@@ -3,7 +3,6 @@
 export interface Student {
   id?: number;
   photo_base64?: string;
-  prefix: string;
   student_lrn: string;
   first_name: string;
   middle_name: string;

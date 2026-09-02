@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Pencil, Trash2, X } from 'lucide-react';
+import { API_BASE_URL } from '../../interface';
 
 interface User {
     id: number;
@@ -26,8 +27,7 @@ const UserManagement: React.FC = () => {
         role: 'user',
         status: 'active',
     });
-
-    const API_URL = 'http://localhost:3000/api/users';
+    const API_URL = `${API_BASE_URL}/api/users`;
 
     // FETCH USERS
     const fetchUsers = async () => {
@@ -166,8 +166,8 @@ const UserManagement: React.FC = () => {
                                         <td className="px-6 py-4">
                                             <span
                                                 className={`capitalize px-2.5 py-1 rounded-full text-xs font-semibold ${user.status === 'active'
-                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
                                                     }`}
                                             >
                                                 {user.status}

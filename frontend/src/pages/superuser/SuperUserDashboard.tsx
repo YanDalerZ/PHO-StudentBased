@@ -2,6 +2,9 @@ import React from 'react';
 import { FilterBar } from '../../components/common/FilterBar';
 import { StatCard } from '../../components/common/StatCard';
 import { Users, FileText, CheckCircle2, TrendingUp } from 'lucide-react';
+import { LineChart } from '../../components/charts/LineChart';
+import { BarChart } from '../../components/charts/BarChart';
+import { mockMonthlyRegistrations, mockRegistrationByMunicipality } from '../../utils/mockChartData';
 
 const SuperUserDashboard: React.FC = () => {
     return (
@@ -46,8 +49,17 @@ const SuperUserDashboard: React.FC = () => {
                 />
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm min-h-[400px] flex items-center justify-center">
-                <p className="text-slate-500 font-medium">Charts and advanced KPI widgets will be implemented in Phase 3 Backend.</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <LineChart 
+                    title="Monthly Student Registrations" 
+                    data={mockMonthlyRegistrations} 
+                    dataKey="count" 
+                />
+                <BarChart 
+                    title="Registrations by Municipality" 
+                    data={mockRegistrationByMunicipality} 
+                    dataKey="students" 
+                />
             </div>
         </div>
     );

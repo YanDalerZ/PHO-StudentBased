@@ -27,7 +27,6 @@ const defaultModuleStatus: ModuleStatus = {
 const mockStudents: Student[] = [
   {
     id: 1,
-    prefix: 'MR.',
     student_lrn: '123456789012',
     first_name: 'Juan',
     middle_name: 'Dela',
@@ -40,7 +39,6 @@ const mockStudents: Student[] = [
   },
   {
     id: 2,
-    prefix: 'MISS',
     student_lrn: '987654321098',
     first_name: 'Maria',
     middle_name: '',
