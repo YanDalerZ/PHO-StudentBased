@@ -37,6 +37,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 app.use('/api/users', AllRoutes.UserRoutes);
+app.use('/api/students', AllRoutes.StudentRoutes);
 
 // Serving static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

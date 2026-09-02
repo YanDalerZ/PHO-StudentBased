@@ -12,8 +12,8 @@ import {
     FileText,
     Activity,
     Baby,
-    BrainCircuit,
     Syringe,
+    HeartPulse,
     ArrowLeft
 } from 'lucide-react';
 
@@ -61,14 +61,7 @@ const StudentProfile: React.FC = () => {
             icon: Baby,
             color: 'emerald'
         },
-        {
-            id: 'headss',
-            name: 'HEADSS Profiling',
-            description: 'Adolescent health screening',
-            status: statuses.headss,
-            icon: BrainCircuit,
-            color: 'indigo'
-        },
+
         {
             id: 'immunization',
             name: 'Immunization',
@@ -76,6 +69,14 @@ const StudentProfile: React.FC = () => {
             status: statuses.immunization,
             icon: Syringe,
             color: 'rose'
+        },
+        {
+            id: 'vital-signs',
+            name: 'Vital Signs',
+            description: 'Basic health screening and vital signs',
+            status: statuses.vitalSigns,
+            icon: HeartPulse,
+            color: 'indigo'
         }
     ];
 

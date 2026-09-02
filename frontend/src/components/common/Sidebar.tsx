@@ -6,8 +6,8 @@ import {
   Settings,
   Heart,
   Droplets,
-  Brain,
   Syringe,
+  Activity,
   School,
   Building2,
   X,
@@ -46,8 +46,8 @@ export const Sidebar = ({ isOpen = false, onClose }: SidebarProps) => {
           { name: 'Patient Info', path: '/superuser/patient-info', icon: FileText },
           { name: 'Oral Health', path: '/superuser/oral-health', icon: Heart },
           { name: 'Deworming', path: '/superuser/deworming', icon: Droplets },
-          { name: 'HEADSS', path: '/superuser/headss', icon: Brain },
           { name: 'Immunization', path: '/superuser/immunization', icon: Syringe },
+          { name: 'Vital Signs', path: '/superuser/vital-signs', icon: Activity },
           { name: 'Student Lookup', path: '/superuser/students', icon: Users },
         ];
       case 'admin':

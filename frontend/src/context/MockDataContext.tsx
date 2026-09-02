@@ -5,8 +5,8 @@ export interface ModuleStatus {
   patientInfo: 'Pending' | 'Completed';
   oralHealth: 'Pending' | 'Completed';
   deworming: 'Pending' | 'Completed';
-  headss: 'Pending' | 'Completed';
   immunization: 'Pending' | 'Completed';
+  vitalSigns: 'Pending' | 'Completed';
 }
 
 interface MockDataContextType {
@@ -20,13 +20,14 @@ const defaultModuleStatus: ModuleStatus = {
   patientInfo: 'Pending',
   oralHealth: 'Pending',
   deworming: 'Pending',
-  headss: 'Pending',
   immunization: 'Pending',
+  vitalSigns: 'Pending',
 };
 
 const mockStudents: Student[] = [
   {
     id: 1,
+    prefix: 'MR.',
     student_lrn: '123456789012',
     first_name: 'Juan',
     middle_name: 'Dela',
@@ -39,8 +40,10 @@ const mockStudents: Student[] = [
   },
   {
     id: 2,
+    prefix: 'MISS',
     student_lrn: '987654321098',
     first_name: 'Maria',
+    middle_name: '',
     last_name: 'Clara',
     date_of_birth: '2011-08-20',
     sex: 'Female',
@@ -55,8 +58,8 @@ const mockModuleStatuses: Record<number, ModuleStatus> = {
     patientInfo: 'Completed',
     oralHealth: 'Completed',
     deworming: 'Pending',
-    headss: 'Pending',
     immunization: 'Completed',
+    vitalSigns: 'Completed',
   },
   2: { ...defaultModuleStatus },
 };
