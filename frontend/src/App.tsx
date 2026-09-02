@@ -113,6 +113,13 @@ const App: React.FC = () => {
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<SuperUserDashboard />} />
               <Route path="patient-info" element={<PatientInfoDash />} />
+              <Route path="students/:id" element={<StudentProfile />} />
+              <Route path="students/:id/patient-info" element={<PatientInfoForm />} />
+              <Route path="students/:id/oral-health" element={<OralHealthForm />} />
+              <Route path="students/:id/deworming" element={<DewormingForm />} />
+              <Route path="students/:id/immunization" element={<ImmunizationForm />} />
+              <Route path="students/:id/vital-signs" element={<VitalSignsForm />} />
+
               <Route path="oral-health" element={<OralHealthDash />} />
               <Route path="deworming" element={<DewormingDash />} />
               <Route path="immunization" element={<ImmunizationDash />} />
