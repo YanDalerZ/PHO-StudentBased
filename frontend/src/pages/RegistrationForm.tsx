@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
     User, MapPin, GraduationCap, ChevronRight, ChevronLeft,
     CheckCircle2, Loader2, Save, Building2, X, AlertCircle, Camera
 } from 'lucide-react';
-import { 
+import {
     SUFFIX_OPTIONS, CIVIL_STATUS_OPTIONS,
     EDUCATIONAL_ATTAINMENT_OPTIONS, EMPLOYMENT_STATUS_OPTIONS,
     BLOOD_TYPE_OPTIONS, RELIGION_OPTIONS,
@@ -46,7 +46,7 @@ const INITIAL_STATE: Student = {
     school_id: 0,
     grade_level: '',
     section: '',
-    
+
     // Patient Info (Part II)
     civil_status: '',
     educational_attainment: '',
@@ -78,6 +78,51 @@ const INITIAL_STATE: Student = {
     philhealth_status_type: '',
     philhealth_category: ''
 };
+
+const labelClasses = "block text-xs font-semibold text-black uppercase tracking-wider mb-1.5 flex items-center justify-between";
+
+// Step Indicator Component
+const StepIndicator = memo(({ step }: { step: number }) => {
+    const steps = useMemo(() => [
+        { num: 1, icon: User, label: "Personal" },
+        { num: 2, icon: MapPin, label: "Contact" },
+        { num: 3, icon: GraduationCap, label: "Academic" }
+    ], []);
+
+    const progressWidth = useMemo(() => `calc(${((step - 1) / 2) * 100}% - 1rem)`, [step]);
+
+    return (
+        <div className="flex items-center justify-between mb-8 relative px-2 sm:px-6">
+            <div className="absolute top-1/2 left-6 right-6 h-0.5 bg-emerald-100 -z-0 transform -translate-y-1/2"></div>
+            <div
+                className="absolute top-1/2 left-6 h-0.5 bg-emerald-600 -z-0 transform -translate-y-1/2 transition-all duration-300"
+                style={{ width: progressWidth }}
+            ></div>
+
+            {steps.map((s) => (
+                <div key={s.num} className="flex flex-col items-center relative z-10">
+                    <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-200 font-semibold",
+                        step > s.num
+                            ? "bg-emerald-600 border-emerald-600 text-white"
+                            : step === s.num
+                                ? "bg-white border-emerald-600 text-emerald-600 ring-4 ring-emerald-50"
+                                : "bg-white border-slate-200 text-slate-400"
+                    )}>
+                        {step > s.num ? <CheckCircle2 className="w-5 h-5" /> : <s.icon className="w-5 h-5" />}
+                    </div>
+                    <span className={cn(
+                        "mt-2 text-xs font-semibold tracking-wide uppercase",
+                        step >= s.num ? "text-emerald-900" : "text-slate-400"
+                    )}>
+                        {s.label}
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+});
+StepIndicator.displayName = 'StepIndicator';
 
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
     const navigate = useNavigate();
@@ -111,7 +156,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         }
     }, [formData.barangay]);
 
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
@@ -120,31 +165,43 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
             };
             reader.readAsDataURL(file);
         }
-    };
+    }, []);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
             [name]: name === 'school_id' ? parseInt(value) || 0 : value
         }));
-    };
+    }, []);
 
-    const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name } = e.target;
         setTouchedFields(prev => ({ ...prev, [name]: true }));
-    };
+    }, []);
 
-    const isFieldInvalid = (name: keyof Student, isRequired = true): boolean => {
+    const isFieldInvalid = useCallback((name: keyof Student, isRequired = true): boolean => {
         if (!isRequired) return false;
         if (!touchedFields[name]) return false;
 
         const value = formData[name];
         if (typeof value === 'number') return value === 0;
         return !value || String(value).trim() === '';
-    };
+    }, [formData, touchedFields]);
 
-    const markStepFieldsTouched = (currentStep: number) => {
+    const getInputClasses = useCallback((fieldName: keyof Student, isRequired = true) => cn(
+        "w-full px-3.5 py-2.5 rounded-lg bg-white border text-black placeholder-slate-400 focus:outline-none focus:ring-2 transition-colors text-sm",
+        isFieldInvalid(fieldName, isRequired)
+            ? "border-red-500 bg-red-50/20 text-red-900 focus:ring-red-500 focus:border-red-500"
+            : "border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+    ), [isFieldInvalid]);
+
+    const getSelectClasses = useCallback((fieldName: keyof Student, isRequired = true) => cn(
+        getInputClasses(fieldName, isRequired),
+        "appearance-none bg-no-repeat pr-10"
+    ), [getInputClasses]);
+
+    const markStepFieldsTouched = useCallback((currentStep: number) => {
         const fieldsToTouch: Record<string, boolean> = {};
         if (currentStep === 1) {
             fieldsToTouch.student_lrn = true;
@@ -160,9 +217,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
             fieldsToTouch.grade_level = true;
         }
         setTouchedFields(prev => ({ ...prev, ...fieldsToTouch }));
-    };
+    }, []);
 
-    const validateStep = (currentStep: number): boolean => {
+    const validateStep = useCallback((currentStep: number): boolean => {
         markStepFieldsTouched(currentStep);
 
         if (currentStep === 1) {
@@ -220,16 +277,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
             }
         }
         return true;
-    };
+    }, [formData, markStepFieldsTouched]);
 
-    const handleNext = (e: React.MouseEvent) => {
+    const handleNext = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
         if (validateStep(step)) {
             setStep(prev => Math.min(prev + 1, 3));
         }
-    };
+    }, [step, validateStep]);
 
-    const handlePrev = (e: React.MouseEvent) => {
+    const handlePrev = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
         if (step === 1) {
             if (onClose) {
@@ -240,9 +297,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         } else {
             setStep(prev => Math.max(prev - 1, 1));
         }
-    };
+    }, [step, onClose, navigate]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
         if (!validateStep(3)) return;
 
@@ -270,56 +327,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         } finally {
             setLoading(false);
         }
-    };
-
-    const StepIndicator = () => (
-        <div className="flex items-center justify-between mb-8 relative px-2 sm:px-6">
-            <div className="absolute top-1/2 left-6 right-6 h-0.5 bg-emerald-100 -z-0 transform -translate-y-1/2"></div>
-            <div
-                className="absolute top-1/2 left-6 h-0.5 bg-emerald-600 -z-0 transform -translate-y-1/2 transition-all duration-300"
-                style={{ width: `calc(${((step - 1) / 2) * 100}% - 1rem)` }}
-            ></div>
-
-            {[
-                { num: 1, icon: User, label: "Personal" },
-                { num: 2, icon: MapPin, label: "Contact" },
-                { num: 3, icon: GraduationCap, label: "Academic" }
-            ].map((s) => (
-                <div key={s.num} className="flex flex-col items-center relative z-10">
-                    <div className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-200 font-semibold",
-                        step > s.num
-                            ? "bg-emerald-600 border-emerald-600 text-white"
-                            : step === s.num
-                                ? "bg-white border-emerald-600 text-emerald-600 ring-4 ring-emerald-50"
-                                : "bg-white border-slate-200 text-slate-400"
-                    )}>
-                        {step > s.num ? <CheckCircle2 className="w-5 h-5" /> : <s.icon className="w-5 h-5" />}
-                    </div>
-                    <span className={cn(
-                        "mt-2 text-xs font-semibold tracking-wide uppercase",
-                        step >= s.num ? "text-emerald-900" : "text-slate-400"
-                    )}>
-                        {s.label}
-                    </span>
-                </div>
-            ))}
-        </div>
-    );
-
-    const getInputClasses = (fieldName: keyof Student, isRequired = true) => cn(
-        "w-full px-3.5 py-2.5 rounded-lg bg-white border text-black placeholder-slate-400 focus:outline-none focus:ring-2 transition-colors text-sm",
-        isFieldInvalid(fieldName, isRequired)
-            ? "border-red-500 bg-red-50/20 text-red-900 focus:ring-red-500 focus:border-red-500"
-            : "border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-    );
-
-    const getSelectClasses = (fieldName: keyof Student, isRequired = true) => cn(
-        getInputClasses(fieldName, isRequired),
-        "appearance-none bg-no-repeat pr-10"
-    );
-
-    const labelClasses = "block text-xs font-semibold text-black uppercase tracking-wider mb-1.5 flex items-center justify-between";
+    }, [validateStep, registerStudent, formData, onClose, navigate]);
 
     return (
         <div className={cn(
@@ -342,7 +350,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="absolute right-0 top-0 p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg transition-colors"
+                            className="absolute right-0 top-0 p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             aria-label="Close modal"
                         >
                             <X className="w-5 h-5" />
@@ -355,9 +363,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                     <p className="text-sm font-medium text-slate-600">Please complete the required details below to register a student profile.</p>
                 </div>
 
-                {/* Main Form Container optimized for smooth modal rendering */}
+                {/* Main Form Container */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm transform-gpu">
-                    <StepIndicator />
+                    <StepIndicator step={step} />
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* STEP 1: Personal Information */}
@@ -1087,7 +1095,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                 type="button"
                                 onClick={handlePrev}
                                 disabled={loading}
-                                className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold text-black bg-white border border-slate-300 hover:bg-slate-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold text-black bg-white border border-slate-300 hover:bg-slate-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                             >
                                 <ChevronLeft className="w-4 h-4 mr-1 text-black" /> {step === 1 ? 'Cancel' : 'Back'}
                             </button>
@@ -1096,7 +1104,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                 <button
                                     type="button"
                                     onClick={handleNext}
-                                    className="inline-flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all"
+                                    className="inline-flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all cursor-pointer"
                                 >
                                     Next <ChevronRight className="w-4 h-4 ml-1" />
                                 </button>
@@ -1104,7 +1112,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="inline-flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="inline-flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                 >
                                     {loading ? (
                                         <>
@@ -1125,4 +1133,4 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
     );
 };
 
-export default RegistrationForm;
+export default memo(RegistrationForm);

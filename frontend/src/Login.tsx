@@ -1,7 +1,7 @@
 import logo from './assets/images/logo.jpg';
 import registerQr from './assets/images/register-qr.jpeg';
 import sealOfAklan from './assets/images/seal_of_aklan.png';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Building2, Heart, GraduationCap, Loader2, QrCode, Download, ExternalLink, X, ShieldCheck, EyeOff, Eye } from 'lucide-react';
@@ -11,13 +11,30 @@ const Login: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { login, isAuthenticated, user } = useAuth();
+
+    // Remember Me States
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [rememberMe, setRememberMe] = useState(false);
+
     const [loading, setLoading] = useState(false);
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
-    React.useEffect(() => {
+    // Load saved email, password, and remember state from localStorage on mount
+    useEffect(() => {
+        const savedEmail = localStorage.getItem('remembered_email');
+        const savedPassword = localStorage.getItem('remembered_password');
+        const savedRememberMe = localStorage.getItem('remember_me') === 'true';
+
+        if (savedRememberMe) {
+            if (savedEmail) setEmail(savedEmail);
+            if (savedPassword) setPassword(savedPassword);
+            setRememberMe(true);
+        }
+    }, []);
+
+    useEffect(() => {
         if (isAuthenticated && user) {
             const from = location.state?.from;
             if (from) {
@@ -38,6 +55,18 @@ const Login: React.FC = () => {
 
         try {
             await login(email, password);
+
+            // Handle Remember Me logic in LocalStorage (saving both email & password)
+            if (rememberMe) {
+                localStorage.setItem('remembered_email', email);
+                localStorage.setItem('remembered_password', password);
+                localStorage.setItem('remember_me', 'true');
+            } else {
+                localStorage.removeItem('remembered_email');
+                localStorage.removeItem('remembered_password');
+                localStorage.removeItem('remember_me');
+            }
+
             toast.success('Login successful!');
         } catch (err) {
             toast.error('Invalid email or password.');
@@ -202,11 +231,24 @@ const Login: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Remember Me Checkbox */}
+                        <div className="flex items-center justify-between">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/20 focus:ring-2 accent-emerald-600 cursor-pointer"
+                                />
+                                <span className="text-xs font-medium text-slate-600">Remember me</span>
+                            </label>
+                        </div>
+
                         {/* Submit Button */}
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm shadow-md shadow-emerald-600/20 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+                            className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm shadow-md shadow-emerald-600/20 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed mt-2 cursor-pointer"
                         >
                             {loading ? (
                                 <>
@@ -228,12 +270,13 @@ const Login: React.FC = () => {
                             </a>
                         </p>
                     </div>
+
                     {/* Header Actions */}
                     <div className="flex justify-center mt-3 items-center w-full">
                         <button
                             type="button"
                             onClick={() => setIsQrModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-sm font-semibold transition-all shadow-sm group"
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-sm font-semibold transition-all shadow-sm group cursor-pointer"
                         >
                             <QrCode className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
                             <span>Student Registration QR</span>
@@ -258,7 +301,7 @@ const Login: React.FC = () => {
                         {/* Close Button */}
                         <button
                             onClick={() => setIsQrModalOpen(false)}
-                            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                             aria-label="Close modal"
                         >
                             <X className="w-5 h-5" />
