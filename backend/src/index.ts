@@ -38,6 +38,8 @@ app.use(express.json());
 
 app.use('/api/users', AllRoutes.UserRoutes);
 app.use('/api/students', AllRoutes.StudentRoutes);
+app.use('/api/auth', AllRoutes.AuthRoutes);
+app.use('/api/lookup', AllRoutes.LookupRoutes);
 
 // Serving static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

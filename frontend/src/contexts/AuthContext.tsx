@@ -1,12 +1,7 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-
-// Provide basic typing until types/index.ts is fully implemented
-export interface User {
-  id: string;
-  email: string;
-  role: 'teacher' | 'superuser' | 'admin' | string;
-}
+import api from '../services/api';
+import type { User, AuthResponse } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -23,45 +18,55 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const login = async (email: string, password: string) => {
-    setLoading(true);
-    
-    return new Promise<void>((resolve, reject) => {
-      setTimeout(() => {
-        setLoading(false);
-        if (password === 'password123') {
-          if (email === 'teacher@pho.gov.ph') {
-            setUser({ id: '1', email, role: 'teacher' });
-            setToken('mock-jwt-token-teacher');
-            resolve();
-          } else if (email === 'super@pho.gov.ph') {
-            setUser({ id: '2', email, role: 'superuser' });
-            setToken('mock-jwt-token-super');
-            resolve();
-          } else if (email === 'admin@pho.gov.ph') {
-            setUser({ id: '3', email, role: 'admin' });
-            setToken('mock-jwt-token-admin');
-            resolve();
-          } else {
-            reject(new Error('Invalid credentials'));
-          }
-        } else {
-          reject(new Error('Invalid credentials'));
-        }
-      }, 800);
-    });
+    try {
+      const response = await api.post<AuthResponse>('/auth/login', { email, password });
+      const { token: newToken, user: newUser } = response.data;
+      
+      setUser(newUser);
+      setToken(newToken);
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('user', JSON.stringify(newUser));
+    } catch (error) {
+      throw error;
+    }
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/Login';
   };
 
   const checkAuth = async () => {
-    // Placeholder for checking token validity
+    try {
+      const storedToken = localStorage.getItem('token');
+      if (!storedToken) {
+        setLoading(false);
+        return;
+      }
+      
+      setToken(storedToken);
+      
+      // Verify token with backend
+      const response = await api.get<User>('/auth/me');
+      setUser(response.data);
+      localStorage.setItem('user', JSON.stringify(response.data));
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      logout();
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, token, isAuthenticated: !!user, loading, login, logout, checkAuth }}>
