@@ -15,7 +15,7 @@ export interface AuthResponse {
 
 export interface Student {
   id?: number;
-  photo_base64?: string;
+  photo_url?: string;
   student_lrn: string;
   first_name: string;
   middle_name: string;
@@ -27,7 +27,7 @@ export interface Student {
   mother_first_name?: string;
   mother_last_name?: string;
   mother_middle_name?: string;
-  mother_birth_date?: string;
+  mother_birthdate?: string;
   address?: string;
   barangay?: string;
   municipality?: string;
@@ -54,7 +54,7 @@ export interface Student {
   region?: string;
   zip_code?: string;
   email?: string;
-  landline_no?: string;
+  landline?: string;
   psa_national_id?: string;
 
   // Other Info (Part IV - 4Ps & PWD)

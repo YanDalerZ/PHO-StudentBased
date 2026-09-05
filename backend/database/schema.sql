@@ -89,7 +89,7 @@ CREATE TABLE STUDENTS (
     suffix VARCHAR(20) DEFAULT 'NOT APPLICABLE',
     sex gender_enum NOT NULL,
     date_of_birth DATE NOT NULL,
-    photo_url VARCHAR(500),
+    photo_url TEXT,
 
     -- II. OTHER PERSONAL INFORMATION
     birth_place VARCHAR(200),

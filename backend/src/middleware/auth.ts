@@ -22,7 +22,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
             return res.status(401).json({ message: 'Authentication required' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as any;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
         req.user = decoded;
         next();
     } catch (error) {

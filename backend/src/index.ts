@@ -10,6 +10,11 @@ import AllRoutes from './routes/AllRoutes.js';
 
 const app: Application = express();
 
+if (!process.env.JWT_SECRET) {
+    console.error('FATAL ERROR: JWT_SECRET is not defined in environment variables.');
+    process.exit(1);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -34,7 +39,7 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/users', AllRoutes.UserRoutes);
 app.use('/api/students', AllRoutes.StudentRoutes);
