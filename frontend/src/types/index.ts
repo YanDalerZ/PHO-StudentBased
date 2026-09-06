@@ -15,61 +15,121 @@ export interface AuthResponse {
 
 export interface Student {
   id?: number;
-  photo_url?: string;
+  prefix?: string;
+  photo_url?: string | null;
   student_lrn: string;
   first_name: string;
-  middle_name: string;
+  middle_name?: string | null;
   last_name: string;
-  suffix?: string;
+  suffix?: string | null;
   date_of_birth: string;
   sex: 'Male' | 'Female';
-  birth_place?: string;
-  mother_first_name?: string;
-  mother_last_name?: string;
-  mother_middle_name?: string;
-  mother_birthdate?: string;
-  address?: string;
-  barangay?: string;
-  municipality?: string;
-  province?: string;
-  contact_no?: string;
-  parent_guardian_name?: string;
-  parent_guardian_contact?: string;
+  birth_place?: string | null;
+  mother_first_name?: string | null;
+  mother_last_name?: string | null;
+  mother_middle_name?: string | null;
+  mother_birthdate?: string | null;
+  address?: string | null;
+  street_address?: string | null;
+  barangay?: string | number | null;
+  barangay_id?: number | null;
+  barangay_name?: string | null;
+  municipality?: string | number | null;
+  municipality_id?: number | null;
+  municipality_name?: string | null;
+  province?: string | null;
+  contact_no?: string | null;
+  mobile?: string | null;
+  parent_guardian_name?: string | null;
+  parent_guardian_contact?: string | null;
   school_id: number;
+  school_name?: string | null;
   grade_level: string;
-  section?: string;
+  section?: string | null;
   
   // Patient Info (Part II)
-  civil_status?: string;
-  educational_attainment?: string;
-  employment_status?: string;
-  tin_no?: string;
-  religion?: string;
-  indigenous?: 'Yes' | 'No';
-  indigenous_group?: string;
-  blood_type?: string;
+  civil_status?: string | null;
+  educational_attainment?: string | null;
+  employment_status?: string | null;
+  tin_no?: string | null;
+  tax_id_no?: string | null;
+  religion?: string | null;
+  indigenous?: 'Yes' | 'No' | boolean | string | null;
+  is_indigenous?: boolean;
+  indigenous_group?: string | null;
+  blood_type?: string | null;
 
   // Address and Contact Info (Part III)
-  country?: string;
-  region?: string;
-  zip_code?: string;
-  email?: string;
-  landline?: string;
-  psa_national_id?: string;
+  country?: string | null;
+  region?: string | null;
+  zip_code?: string | null;
+  email?: string | null;
+  landline?: string | null;
+  psa_national_id?: string | null;
 
   // Other Info (Part IV - 4Ps & PWD)
-  dswd_4ps?: 'Yes' | 'No';
-  dswd_4ps_no?: string;
-  is_pwd?: 'Yes' | 'No';
-  pwd_type?: string;
-  pwd_id_no?: string;
+  dswd_4ps?: 'Yes' | 'No' | boolean | string | null;
+  is_4ps_member?: boolean;
+  dswd_4ps_no?: string | null;
+  fourps_household_no?: string | null;
+  is_pwd?: 'Yes' | 'No' | boolean | string | null;
+  pwd_type?: string | null;
+  pwd_id_no?: string | null;
+  pwd_id?: string | null;
 
   // Philhealth Info (Part V)
-  philhealth_member?: 'Yes' | 'No';
-  philhealth_id?: string;
-  philhealth_status_type?: string;
-  philhealth_category?: string;
+  philhealth_member?: 'Yes' | 'No' | boolean | string | null;
+  is_philhealth_member?: boolean;
+
+  philhealth_id?: string | null;
+  philhealth_no?: string | null;
+  philhealth_status_type?: string | null;
+  philhealth_category?: string | null;
+
+  registered_by?: number;
+  created_at?: string;
+  updated_at?: string;
+  modules?: {
+    patient_info?: boolean;
+    oral_health?: boolean;
+    deworming?: boolean;
+    immunization?: boolean;
+    vital_signs?: boolean;
+    [key: string]: boolean | undefined;
+  };
 }
+
+export interface StudentListResponse {
+  data: Student[];
+  total: number;
+}
+
+export interface StudentDetailResponse {
+  data: Student;
+}
+
+export interface StudentProfileResponse {
+  data: {
+    student: Student;
+    modules: {
+      patient_info: PatientInfo[];
+      animal_bites?: Record<string, unknown>[];
+      oral_health: OralHealth[];
+      deworming: Deworming[];
+      immunization: Immunization[];
+      vital_signs: VitalSigns[];
+    };
+    module_summary: {
+      patient_info: boolean;
+      oral_health: boolean;
+      deworming: boolean;
+      immunization: boolean;
+      vital_signs: boolean;
+    };
+  };
+}
+
+
 
 export interface Municipality {
   id: string | number;

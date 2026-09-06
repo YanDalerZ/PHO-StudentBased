@@ -1,8 +1,14 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
+interface ProgressRingItem {
+    name: string;
+    value: number;
+    [key: string]: unknown;
+}
+
 interface ProgressRingProps {
-    data: any[]; // Expects an array like [{ name: 'Completed', value: 75 }, { name: 'Remaining', value: 25 }]
+    data: ProgressRingItem[]; // Expects an array like [{ name: 'Completed', value: 75 }, { name: 'Remaining', value: 25 }]
     title: string;
     completedColor?: string;
     remainingColor?: string;

@@ -253,12 +253,12 @@ const OralHealthDash: React.FC = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
                             {filteredStudents.length > 0 ? (
-                                filteredStudents.map((student) => {
+                                filteredStudents.map((student, idx) => {
                                     const studentId = student.id;
                                     const isCompleted = studentId !== undefined && moduleStatuses[studentId]?.oralHealth === 'Completed';
 
                                     return (
-                                        <tr key={studentId ?? Math.random()} className="hover:bg-slate-50/80 transition-colors">
+                                        <tr key={studentId ?? `student-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                                             <td className="px-6 py-4 font-medium text-slate-900">
                                                 {student.first_name} {student.last_name}
                                             </td>

@@ -2,7 +2,7 @@ import React from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface DonutChartProps {
-    data: any[];
+    data: Record<string, unknown>[];
     title: string;
     colors?: string[];
 }

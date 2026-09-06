@@ -78,8 +78,15 @@ const App: React.FC = () => {
             {/* Public Routes */}
             <Route path="/Login" element={<Login />} />
 
-            {/* Public Registration Route for Students */}
-            <Route path="/registration-form" element={<RegistrationForm />} />
+            {/* Student Registration Route (Teacher / SuperUser Staff Only) */}
+            <Route
+              path="/registration-form"
+              element={
+                <ProtectedRoute allowedRoles={['teacher', 'superuser']}>
+                  <RegistrationForm />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Teacher Portal Routes */}
             <Route
@@ -113,6 +120,7 @@ const App: React.FC = () => {
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<SuperUserDashboard />} />
               <Route path="patient-info" element={<PatientInfoDash />} />
+              <Route path="students" element={<StudentRegistry />} />
               <Route path="students/:id" element={<StudentProfile />} />
               <Route path="students/:id/patient-info" element={<PatientInfoForm />} />
               <Route path="students/:id/oral-health" element={<OralHealthForm />} />

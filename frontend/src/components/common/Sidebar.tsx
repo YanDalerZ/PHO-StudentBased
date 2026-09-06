@@ -45,6 +45,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
       case 'superuser':
         return [
           { name: 'Overview', path: '/superuser/dashboard', icon: LayoutDashboard },
+          { name: 'Students', path: '/superuser/students', icon: Users },
           { name: 'Patients', path: '/superuser/patient-info', icon: FileText },
           { name: 'Oral Health', path: '/superuser/oral-health', icon: Heart },
           { name: 'Deworming', path: '/superuser/deworming', icon: Droplets },

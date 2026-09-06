@@ -11,10 +11,17 @@ const __dirname = path.dirname(__filename);
 
 // Helper to resolve ca.pem: checks local folder first, then Render secrets
 const getCaCert = (): string => {
-    // 1. Check in the same directory (development / local build output)
-    const localPath = path.join(__dirname, 'ca.pem');
-    if (fs.existsSync(localPath)) {
-        return fs.readFileSync(localPath, 'utf8');
+    // 1. Check in the same directory, source directory, or process cwd
+    const candidatePaths = [
+        path.join(__dirname, 'ca.pem'),
+        path.join(__dirname, '../src/database/ca.pem'),
+        path.join(process.cwd(), 'src/database/ca.pem'),
+        path.join(process.cwd(), 'backend/src/database/ca.pem'),
+    ];
+    for (const candidate of candidatePaths) {
+        if (fs.existsSync(candidate)) {
+            return fs.readFileSync(candidate, 'utf8');
+        }
     }
 
     // 2. Fallback to Render's secret mount path (/etc/secrets/ca.pem)

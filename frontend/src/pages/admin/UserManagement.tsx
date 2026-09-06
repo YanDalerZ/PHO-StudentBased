@@ -44,8 +44,23 @@ const UserManagement: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchUsers();
-    }, []);
+        let isMounted = true;
+        fetch(API_URL)
+            .then(res => res.json())
+            .then(result => {
+                if (isMounted && result.success) setUsers(result.data);
+            })
+            .catch(error => {
+                console.error('Failed to fetch users:', error);
+            })
+            .finally(() => {
+                if (isMounted) setIsLoading(false);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [API_URL]);
 
     // HANDLE FORM SUBMIT (CREATE / EDIT)
     const handleSubmit = async (e: React.FormEvent) => {

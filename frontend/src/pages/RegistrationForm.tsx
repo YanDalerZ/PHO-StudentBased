@@ -12,16 +12,82 @@ import {
     INDIGENOUS_GROUP_OPTIONS, PWD_TYPE_OPTIONS,
     PHILHEALTH_STATUS_OPTIONS, PHILHEALTH_CATEGORY_OPTIONS
 } from '../utils/constants';
-import { getMunicipalities, getBarangays, getSchools, createStudent } from '../services/api';
+import { getMunicipalities, getBarangays, getSchools, createStudent, updateStudent } from '../services/api';
 import type { Student, Municipality, Barangay, School } from '../types';
 import { cn } from '../lib/utils';
 import logo from '../assets/images/logo.jpg';
 
 interface RegistrationFormProps {
     onClose?: () => void;
+    onSuccess?: (student?: Student) => void;
+    initialData?: Student | null;
+    mode?: 'create' | 'edit';
+    studentId?: number;
 }
 
-const INITIAL_STATE: Student = {
+
+interface StudentFormData {
+    id?: number;
+    photo_url: string;
+    student_lrn: string;
+    first_name: string;
+    middle_name: string;
+    last_name: string;
+    suffix: string;
+    date_of_birth: string;
+    sex: 'Male' | 'Female';
+    birth_place: string;
+    mother_first_name: string;
+    mother_last_name: string;
+    mother_middle_name: string;
+    mother_birthdate: string;
+    address: string;
+    street_address?: string;
+    barangay: string;
+    barangay_id?: number | null;
+    municipality: string;
+    municipality_id?: number | null;
+    province: string;
+    contact_no: string;
+    mobile?: string;
+    parent_guardian_name: string;
+    parent_guardian_contact: string;
+    school_id: number;
+    grade_level: string;
+    section: string;
+    civil_status: string;
+    educational_attainment: string;
+    employment_status: string;
+    tin_no: string;
+    tax_id_no?: string;
+    religion: string;
+    indigenous: string;
+    is_indigenous?: boolean;
+    indigenous_group: string;
+    blood_type: string;
+    country: string;
+    region: string;
+    zip_code: string;
+    email: string;
+    landline: string;
+    psa_national_id: string;
+    dswd_4ps: string;
+    is_4ps_member?: boolean;
+    dswd_4ps_no: string;
+    fourps_household_no?: string;
+    is_pwd: string;
+    pwd_type: string;
+    pwd_id_no: string;
+    pwd_id?: string;
+    philhealth_member: string;
+    is_philhealth_member?: boolean;
+    philhealth_id: string;
+    philhealth_no?: string;
+    philhealth_status_type: string;
+    philhealth_category: string;
+}
+
+const INITIAL_STATE: StudentFormData = {
     photo_url: '',
     student_lrn: '',
     first_name: '',
@@ -52,7 +118,7 @@ const INITIAL_STATE: Student = {
     employment_status: '',
     tin_no: '',
     religion: '',
-    indigenous: undefined,
+    indigenous: '',
     indigenous_group: '',
     blood_type: '',
 
@@ -65,17 +131,76 @@ const INITIAL_STATE: Student = {
     psa_national_id: '',
 
     // Other Info (Part IV - 4Ps & PWD)
-    dswd_4ps: undefined,
+    dswd_4ps: '',
     dswd_4ps_no: '',
-    is_pwd: undefined,
+    is_pwd: '',
     pwd_type: '',
     pwd_id_no: '',
 
     // Philhealth Info (Part V)
-    philhealth_member: undefined,
+    philhealth_member: '',
     philhealth_id: '',
     philhealth_status_type: '',
     philhealth_category: ''
+};
+
+const normalizeStudentData = (data?: Student | null): StudentFormData => {
+    if (!data) return INITIAL_STATE;
+    return {
+        ...INITIAL_STATE,
+        id: data.id,
+        photo_url: data.photo_url ?? '',
+        student_lrn: data.student_lrn ?? '',
+        first_name: data.first_name ?? '',
+        middle_name: data.middle_name ?? '',
+        last_name: data.last_name ?? '',
+        suffix: data.suffix ?? '',
+        date_of_birth: data.date_of_birth ?? '',
+        sex: data.sex ?? 'Male',
+        birth_place: data.birth_place ?? '',
+        mother_first_name: data.mother_first_name ?? '',
+        mother_last_name: data.mother_last_name ?? '',
+        mother_middle_name: data.mother_middle_name ?? '',
+        mother_birthdate: data.mother_birthdate ?? '',
+        address: data.address ?? data.street_address ?? '',
+        street_address: data.street_address ?? data.address ?? '',
+        barangay: data.barangay_id ? String(data.barangay_id) : (data.barangay ? String(data.barangay) : ''),
+        barangay_id: data.barangay_id,
+        municipality: data.municipality_id ? String(data.municipality_id) : (data.municipality ? String(data.municipality) : ''),
+        municipality_id: data.municipality_id,
+        province: data.province ?? 'Aklan',
+        contact_no: data.contact_no ?? data.mobile ?? '',
+        mobile: data.mobile ?? data.contact_no ?? '',
+        parent_guardian_name: data.parent_guardian_name ?? '',
+        parent_guardian_contact: data.parent_guardian_contact ?? '',
+        school_id: data.school_id ?? 0,
+        grade_level: data.grade_level ?? '',
+        section: data.section ?? '',
+        civil_status: data.civil_status ?? '',
+        educational_attainment: data.educational_attainment ?? '',
+        employment_status: data.employment_status ?? '',
+        tin_no: data.tin_no ?? data.tax_id_no ?? '',
+        tax_id_no: data.tax_id_no ?? data.tin_no ?? '',
+        religion: data.religion ?? '',
+        indigenous: data.is_indigenous ? 'Yes' : (typeof data.indigenous === 'string' ? data.indigenous : (data.indigenous ? 'Yes' : 'No')),
+        indigenous_group: data.indigenous_group ?? '',
+        blood_type: data.blood_type ?? '',
+        country: data.country ?? 'Philippines',
+        region: data.region ?? 'Region VI',
+        zip_code: data.zip_code ?? '',
+        email: data.email ?? '',
+        landline: data.landline ?? '',
+        psa_national_id: data.psa_national_id ?? '',
+        dswd_4ps: data.is_4ps_member ? 'Yes' : (typeof data.dswd_4ps === 'string' ? data.dswd_4ps : (data.dswd_4ps ? 'Yes' : 'No')),
+        dswd_4ps_no: data.dswd_4ps_no ?? data.fourps_household_no ?? '',
+        is_pwd: data.is_pwd === true ? 'Yes' : (typeof data.is_pwd === 'string' ? data.is_pwd : (data.is_pwd ? 'Yes' : 'No')),
+        pwd_type: data.pwd_type ?? '',
+        pwd_id_no: data.pwd_id_no ?? data.pwd_id ?? '',
+        philhealth_member: data.is_philhealth_member ? 'Yes' : (typeof data.philhealth_member === 'string' ? data.philhealth_member : (data.philhealth_member ? 'Yes' : 'No')),
+        philhealth_id: data.philhealth_id ?? data.philhealth_no ?? '',
+        philhealth_status_type: data.philhealth_status_type ?? '',
+        philhealth_category: data.philhealth_category ?? '',
+    };
 };
 
 const labelClasses = "block text-xs font-semibold text-black uppercase tracking-wider mb-1.5 flex items-center justify-between";
@@ -123,37 +248,61 @@ const StepIndicator = memo(({ step }: { step: number }) => {
 });
 StepIndicator.displayName = 'StepIndicator';
 
-const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
+const RegistrationForm: React.FC<RegistrationFormProps> = ({
+    onClose,
+    onSuccess,
+    initialData,
+    mode = 'create',
+    studentId
+}) => {
     const navigate = useNavigate();
     const [step, setStep] = useState(1);
-    const [formData, setFormData] = useState<Student>(INITIAL_STATE);
+    const [formData, setFormData] = useState<StudentFormData>(() => normalizeStudentData(initialData));
     const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(false);
-    // Removed useMockData for registration, we will use the real API
 
     // Cascading Dropdown States
     const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
     const [barangays, setBarangays] = useState<Barangay[]>([]);
     const [schools, setSchools] = useState<School[]>([]);
 
-    useEffect(() => {
-        getMunicipalities().then(setMunicipalities);
-    }, []);
+    const [prevInitialData, setPrevInitialData] = useState(initialData);
+    if (initialData !== prevInitialData) {
+        setPrevInitialData(initialData);
+        setFormData(normalizeStudentData(initialData));
+    }
 
     useEffect(() => {
+        let isCurrent = true;
+        getMunicipalities().then(data => {
+            if (isCurrent) setMunicipalities(data);
+        });
+        return () => { isCurrent = false; };
+    }, []);
+
+
+
+
+    useEffect(() => {
+        let isCurrent = true;
         if (formData.municipality) {
-            getBarangays(formData.municipality).then(setBarangays);
-            setFormData(prev => ({ ...prev, barangay: '', school_id: 0 }));
-            setSchools([]);
+            getBarangays(formData.municipality).then(data => {
+                if (isCurrent) setBarangays(data);
+            });
         }
+        return () => { isCurrent = false; };
     }, [formData.municipality]);
 
     useEffect(() => {
+        let isCurrent = true;
         if (formData.barangay) {
-            getSchools(formData.barangay).then(setSchools);
-            setFormData(prev => ({ ...prev, school_id: 0 }));
+            getSchools(formData.barangay).then(data => {
+                if (isCurrent) setSchools(data);
+            });
         }
+        return () => { isCurrent = false; };
     }, [formData.barangay]);
+
 
     const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -168,10 +317,21 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
 
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: name === 'school_id' ? parseInt(value) || 0 : value
-        }));
+        setFormData(prev => {
+            if (name === 'municipality') {
+                return { ...prev, municipality: value, barangay: '', school_id: 0 };
+            }
+            if (name === 'barangay') {
+                return { ...prev, barangay: value, school_id: 0 };
+            }
+            return {
+                ...prev,
+                [name]: name === 'school_id' ? parseInt(value) || 0 : value
+            };
+        });
+        if (name === 'municipality') {
+            setSchools([]);
+        }
     }, []);
 
     const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -179,7 +339,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         setTouchedFields(prev => ({ ...prev, [name]: true }));
     }, []);
 
-    const isFieldInvalid = useCallback((name: keyof Student, isRequired = true): boolean => {
+    const isFieldInvalid = useCallback((name: keyof StudentFormData, isRequired = true): boolean => {
         if (!isRequired) return false;
         if (!touchedFields[name]) return false;
 
@@ -188,17 +348,18 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         return !value || String(value).trim() === '';
     }, [formData, touchedFields]);
 
-    const getInputClasses = useCallback((fieldName: keyof Student, isRequired = true) => cn(
+    const getInputClasses = useCallback((fieldName: keyof StudentFormData, isRequired = true) => cn(
         "w-full px-3.5 py-2.5 rounded-lg bg-white border text-black placeholder-slate-400 focus:outline-none focus:ring-2 transition-colors text-sm",
         isFieldInvalid(fieldName, isRequired)
             ? "border-red-500 bg-red-50/20 text-red-900 focus:ring-red-500 focus:border-red-500"
             : "border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
     ), [isFieldInvalid]);
 
-    const getSelectClasses = useCallback((fieldName: keyof Student, isRequired = true) => cn(
+    const getSelectClasses = useCallback((fieldName: keyof StudentFormData, isRequired = true) => cn(
         getInputClasses(fieldName, isRequired),
         "appearance-none bg-no-repeat pr-10"
     ), [getInputClasses]);
+
 
     const markStepFieldsTouched = useCallback((currentStep: number) => {
         const fieldsToTouch: Record<string, boolean> = {};
@@ -304,29 +465,51 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
 
         setLoading(true);
         try {
-            await createStudent(formData);
-            toast.success('Registration successful! Redirecting...', {
-                style: {
-                    background: '#f0fdf4',
-                    color: '#14532d',
-                    border: '1px solid #bbf7d0'
-                },
-                iconTheme: { primary: '#16a34a', secondary: '#fff' }
-            });
-            setTimeout(() => {
+            const targetId = studentId || formData.id || initialData?.id;
+            if (mode === 'edit' && targetId) {
+                const res = await updateStudent(targetId, formData);
+                toast.success('Student updated successfully!', {
+                    style: {
+                        background: '#f0fdf4',
+                        color: '#14532d',
+                        border: '1px solid #bbf7d0'
+                    },
+                    iconTheme: { primary: '#16a34a', secondary: '#fff' }
+                });
+                if (onSuccess) {
+                    onSuccess(res.data);
+                }
                 if (onClose) {
                     onClose();
-                } else {
-                    navigate('/teacher/students');
                 }
-            }, 2000);
+            } else {
+                const res = await createStudent(formData);
+                toast.success('Registration successful! Redirecting...', {
+                    style: {
+                        background: '#f0fdf4',
+                        color: '#14532d',
+                        border: '1px solid #bbf7d0'
+                    },
+                    iconTheme: { primary: '#16a34a', secondary: '#fff' }
+                });
+                if (onSuccess) {
+                    onSuccess({ ...formData, id: res.id });
+                }
+                setTimeout(() => {
+                    if (onClose) {
+                        onClose();
+                    } else {
+                        navigate('/teacher/students');
+                    }
+                }, 1000);
+            }
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to register student';
+            const message = err instanceof Error ? err.message : 'Failed to save student';
             toast.error(message);
         } finally {
             setLoading(false);
         }
-    }, [validateStep, formData, onClose, navigate]);
+    }, [validateStep, mode, studentId, formData, initialData, onSuccess, onClose, navigate]);
 
     return (
         <div className={cn(
@@ -358,13 +541,20 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                     <div className="inline-flex items-center justify-center p-3 bg-white border border-emerald-100 rounded-xl shadow-sm mb-3">
                         <Building2 className="w-7 h-7 text-emerald-600" />
                     </div>
-                    <h1 className="text-3xl font-extrabold text-black tracking-tight mb-2">Student Registration</h1>
-                    <p className="text-sm font-medium text-slate-600">Please complete the required details below to register a student profile.</p>
+                    <h1 className="text-3xl font-extrabold text-black tracking-tight mb-2">
+                        {mode === 'edit' ? 'Edit Student Profile' : 'Student Registration'}
+                    </h1>
+                    <p className="text-sm font-medium text-slate-600">
+                        {mode === 'edit'
+                            ? 'Update the student information and credentials below.'
+                            : 'Please complete the required details below to register a student profile.'}
+                    </p>
                 </div>
 
                 {/* Main Form Container */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm transform-gpu">
                     <StepIndicator step={step} />
+
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* STEP 1: Personal Information */}
@@ -1119,9 +1309,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                         </>
                                     ) : (
                                         <>
-                                            <Save className="w-4 h-4 mr-2" /> Save Registration
+                                            <Save className="w-4 h-4 mr-2" /> {mode === 'edit' ? 'Save Changes' : 'Save Registration'}
                                         </>
                                     )}
+
                                 </button>
                             )}
                         </div>
