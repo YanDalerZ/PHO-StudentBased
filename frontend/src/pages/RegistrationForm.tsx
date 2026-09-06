@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
     User, MapPin, GraduationCap, ChevronRight, ChevronLeft,
-    CheckCircle2, Loader2, Save, Building2, X, AlertCircle, Camera
+    CheckCircle2, Loader2, Save, Building2, X, AlertCircle, Camera,
+    Trash2, RefreshCw
 } from 'lucide-react';
+import { uploadStudentPhoto, validatePhotoFile } from '../services/cloudinary';
 import {
     SUFFIX_OPTIONS, CIVIL_STATUS_OPTIONS,
     EDUCATIONAL_ATTAINMENT_OPTIONS, EMPLOYMENT_STATUS_OPTIONS,
@@ -304,15 +306,54 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
     }, [formData.barangay]);
 
 
-    const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+
+    const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, photo_url: reader.result as string }));
-            };
-            reader.readAsDataURL(file);
+        if (!file) return;
+
+        const inputElem = e.target;
+        const validation = validatePhotoFile(file);
+        if (!validation.valid) {
+            toast.error(validation.error || 'Invalid photo file.');
+            inputElem.value = '';
+            return;
         }
+
+        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+        const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+        if (!cloudName || !uploadPreset) {
+            toast.error('Cloudinary configuration missing. Please verify VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in frontend/.env.');
+            inputElem.value = '';
+            return;
+        }
+
+        setIsUploadingPhoto(true);
+        setUploadProgress(0);
+
+        try {
+            const secureUrl = await uploadStudentPhoto(file, (percent) => {
+                setUploadProgress(percent);
+            });
+            setFormData(prev => ({ ...prev, photo_url: secureUrl }));
+            toast.success('Student photo uploaded successfully to Cloudinary!');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Photo upload failed. Please try again.';
+            toast.error(message);
+        } finally {
+            setIsUploadingPhoto(false);
+            setUploadProgress(0);
+            inputElem.value = '';
+        }
+    }, []);
+
+    const handleRemovePhoto = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setFormData(prev => ({ ...prev, photo_url: '' }));
+        toast.success('Photo removed');
     }, []);
 
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -605,21 +646,72 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             />
                                         </div>
                                     </div>
-                                    <div className="sm:col-span-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 relative overflow-hidden group">
-                                        {formData.photo_url ? (
-                                            <img src={formData.photo_url} alt="Student" className="absolute inset-0 w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="text-center">
-                                                <Camera className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                                                <p className="text-xs font-semibold text-slate-500">Upload Photo</p>
-                                            </div>
-                                        )}
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handlePhotoUpload}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                        />
+                                    <div className="sm:col-span-1 flex flex-col">
+                                        <label className={labelClasses}>
+                                            <span>Student Photo</span>
+                                            <span className="text-[10px] text-slate-400 font-normal lowercase">(optional)</span>
+                                        </label>
+                                        <div className="relative flex-1 min-h-[160px] flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl overflow-hidden bg-slate-50/70 hover:bg-slate-50 transition-colors group">
+                                            {isUploadingPhoto ? (
+                                                <div className="flex flex-col items-center justify-center p-4 text-center">
+                                                    <Loader2 className="w-7 h-7 text-emerald-600 animate-spin mb-2" />
+                                                    <span className="text-xs font-semibold text-slate-700">Uploading to Cloudinary...</span>
+                                                    <span className="text-[11px] text-slate-500 font-mono mt-0.5">{uploadProgress}%</span>
+                                                    <div className="w-24 bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                                                        <div
+                                                            className="bg-emerald-600 h-full transition-all duration-200"
+                                                            style={{ width: `${uploadProgress}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : formData.photo_url ? (
+                                                <div className="relative w-full h-full min-h-[160px]">
+                                                    <img
+                                                        src={formData.photo_url}
+                                                        alt="Student Profile"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                                                        <label
+                                                            className="p-2 bg-white/90 hover:bg-white text-slate-700 hover:text-emerald-700 rounded-lg shadow-xs cursor-pointer transition-colors"
+                                                            title="Change Photo"
+                                                        >
+                                                            <RefreshCw className="w-4 h-4" />
+                                                            <input
+                                                                type="file"
+                                                                accept="image/jpeg,image/png,image/webp"
+                                                                onChange={handlePhotoUpload}
+                                                                className="hidden"
+                                                                disabled={isUploadingPhoto}
+                                                            />
+                                                        </label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleRemovePhoto}
+                                                            className="p-2 bg-white/90 hover:bg-white text-slate-700 hover:text-rose-600 rounded-lg shadow-xs cursor-pointer transition-colors"
+                                                            title="Remove Photo"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <label className="flex flex-col items-center justify-center w-full h-full p-4 cursor-pointer text-center">
+                                                    <div className="p-2.5 bg-white rounded-full border border-slate-200 shadow-xs mb-2 group-hover:border-emerald-200 group-hover:text-emerald-600 text-slate-400 transition-colors">
+                                                        <Camera className="w-6 h-6" />
+                                                    </div>
+                                                    <p className="text-xs font-semibold text-slate-700 group-hover:text-emerald-700 transition-colors">Upload Photo</p>
+                                                    <p className="text-[10px] text-slate-400 mt-0.5">JPG, PNG, WebP up to 5MB</p>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/jpeg,image/png,image/webp"
+                                                        onChange={handlePhotoUpload}
+                                                        className="hidden"
+                                                        disabled={isUploadingPhoto}
+                                                    />
+                                                </label>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="sm:col-span-1">
                                         <label className={labelClasses}>

@@ -4,7 +4,14 @@ import { z } from 'zod';
 
 const studentPayloadSchema = z.object({
     // I. Personal Information
-    photo_url: z.string().optional().nullable(),
+    photo_url: z
+        .string()
+        .refine(
+            (val) => !val || !val.startsWith('data:'),
+            'Direct base64 photo upload is prohibited. Photo must be uploaded via Cloudinary.'
+        )
+        .optional()
+        .nullable(),
     first_name: z.string().min(1, 'First name is required'),
     middle_name: z.string().optional().nullable(),
     last_name: z.string().min(1, 'Last name is required'),
@@ -766,7 +773,7 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
             validatedData.suffix !== undefined ? validatedData.suffix : existing.suffix,
             validatedData.sex ?? existing.sex,
             dobStr,
-            validatedData.photo_url !== undefined ? validatedData.photo_url : existing.photo_url,
+            validatedData.photo_url !== undefined ? (validatedData.photo_url || null) : existing.photo_url,
             validatedData.birth_place !== undefined ? validatedData.birth_place : existing.birth_place,
             validatedData.civil_status !== undefined ? validatedData.civil_status : existing.civil_status,
             validatedData.educational_attainment !== undefined ? validatedData.educational_attainment : existing.educational_attainment,
