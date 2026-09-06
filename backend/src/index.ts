@@ -45,6 +45,12 @@ app.use('/api/users', AllRoutes.UserRoutes);
 app.use('/api/students', AllRoutes.StudentRoutes);
 app.use('/api/auth', AllRoutes.AuthRoutes);
 app.use('/api/lookup', AllRoutes.LookupRoutes);
+app.use('/api/modules/patient-info', AllRoutes.PatientInfoRoutes);
+app.use('/api/modules/oral-health', AllRoutes.OralHealthRoutes);
+app.use('/api/modules/deworming', AllRoutes.DewormingRoutes);
+app.use('/api/modules/immunization', AllRoutes.ImmunizationRoutes);
+app.use('/api/modules/vital-signs', AllRoutes.VitalSignsRoutes);
+
 
 // Serving static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
