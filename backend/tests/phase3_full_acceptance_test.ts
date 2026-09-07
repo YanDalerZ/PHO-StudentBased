@@ -704,6 +704,7 @@ async function runAcceptanceTests() {
   if (failed > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runAcceptanceTests().catch((err) => {

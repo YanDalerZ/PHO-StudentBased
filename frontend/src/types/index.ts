@@ -737,3 +737,158 @@ export interface ImmunizationDashboardResponse {
   };
 }
 
+export interface AdminUserSummary {
+  id: number;
+  email: string;
+  role: 'teacher' | 'superuser' | 'admin';
+  first_name: string;
+  last_name: string;
+  contact_no: string | null;
+  is_active: boolean;
+  failed_login_attempts: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminDashboardStats {
+  users_by_role: {
+    teacher: number;
+    superuser: number;
+    admin: number;
+    total: number;
+  };
+  total_students: number;
+  active_modules: number;
+  recent_users: AdminUserSummary[];
+}
+
+export interface GetAdminUsersParams {
+  search?: string;
+  role?: 'teacher' | 'superuser' | 'admin';
+  page?: number;
+  limit?: number;
+}
+
+export interface AdminUserListResponse {
+  data: AdminUserSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export type CreatableAdminUserRole = 'teacher' | 'superuser';
+
+export interface CreateAdminUserPayload {
+  email: string;
+  password: string;
+  role: CreatableAdminUserRole;
+  first_name: string;
+  last_name: string;
+  contact_no?: string | null;
+}
+
+export interface UpdateAdminUserPayload {
+  email?: string;
+  password?: string;
+  role?: CreatableAdminUserRole;
+  first_name?: string;
+  last_name?: string;
+  contact_no?: string | null;
+  is_active?: boolean;
+}
+
+export interface UpdateAdminUserStatusPayload {
+  is_active?: boolean;
+  action?: 'activate' | 'deactivate' | 'unlock' | 'toggle';
+  unlock?: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN MODULE MANAGEMENT TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ApprovedModuleSlug =
+  | 'patient-info'
+  | 'oral-health'
+  | 'deworming'
+  | 'immunization'
+  | 'vital-signs';
+
+export interface AdminModule {
+  id: number;
+  name: string;
+  slug: ApprovedModuleSlug;
+  description: string | null;
+  icon: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateAdminModulePayload {
+  name: string;
+  slug: ApprovedModuleSlug;
+  description?: string | null;
+  icon?: string | null;
+  is_active?: boolean;
+  sort_order?: number;
+}
+
+export interface UpdateAdminModulePayload {
+  name?: string;
+  slug?: ApprovedModuleSlug;
+  description?: string | null;
+  icon?: string | null;
+  is_active?: boolean;
+  sort_order?: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN SCHOOL MANAGEMENT TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AdminSchool {
+  id: number;
+  name: string;
+  address: string | null;
+  barangay_id: number | null;
+  district: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  barangay_name: string | null;
+  municipality_id: number | null;
+  municipality_name: string | null;
+}
+
+export interface GetAdminSchoolsParams {
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface AdminSchoolListResponse {
+  data: AdminSchool[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface CreateAdminSchoolPayload {
+  name: string;
+  address?: string | null;
+  barangay_id: number;
+  municipality_id?: number | null;
+  district?: string | null;
+  is_active?: boolean;
+}
+
+export interface UpdateAdminSchoolPayload {
+  name?: string;
+  address?: string | null;
+  barangay_id?: number;
+  municipality_id?: number | null;
+  district?: string | null;
+  is_active?: boolean;
+}
