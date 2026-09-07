@@ -30,6 +30,14 @@ import type {
     CreateVitalSignsPayload,
     UpdateVitalSignsPayload,
     VitalSignsByStudentResponse,
+    DashboardFilters,
+    DashboardOverviewResponse,
+    PatientInfoDashboardResponse,
+    OralHealthDashboardResponse,
+    DewormingDashboardResponse,
+    DewormingReportResponse,
+    VitalSignsDashboardResponse,
+    ImmunizationDashboardResponse,
 } from '../types';
 
 
@@ -201,6 +209,119 @@ export const createVitalSigns = async (payload: CreateVitalSignsPayload): Promis
 export const updateVitalSigns = async (id: number | string, payload: UpdateVitalSignsPayload): Promise<{ message: string; data: VitalSigns }> => {
     const response = await api.put<{ message: string; data: VitalSigns }>(`/modules/vital-signs/${id}`, payload);
     return response.data;
+};
+
+// Dashboard
+export const getDashboardOverview = async (
+    filters?: DashboardFilters
+): Promise<DashboardOverviewResponse> => {
+    const params: Record<string, string | number> = {};
+    if (filters?.municipality_id) params.municipality_id = filters.municipality_id;
+    if (filters?.barangay_id) params.barangay_id = filters.barangay_id;
+    if (filters?.school_id) params.school_id = filters.school_id;
+    if (filters?.date_from) params.date_from = filters.date_from;
+    if (filters?.date_to) params.date_to = filters.date_to;
+
+    const response = await api.get<{ data: DashboardOverviewResponse }>(
+        '/dashboard/overview',
+        { params }
+    );
+    return response.data.data;
+};
+
+export const getPatientInfoDashboard = async (
+    filters?: DashboardFilters
+): Promise<PatientInfoDashboardResponse> => {
+    const params: Record<string, string | number> = {};
+    if (filters?.municipality_id) params.municipality_id = filters.municipality_id;
+    if (filters?.barangay_id) params.barangay_id = filters.barangay_id;
+    if (filters?.school_id) params.school_id = filters.school_id;
+    if (filters?.date_from) params.date_from = filters.date_from;
+    if (filters?.date_to) params.date_to = filters.date_to;
+
+    const response = await api.get<{ data: PatientInfoDashboardResponse }>(
+        '/modules/patient-info/dashboard',
+        { params }
+    );
+    return response.data.data;
+};
+
+export const getOralHealthDashboard = async (
+    filters?: DashboardFilters
+): Promise<OralHealthDashboardResponse> => {
+    const params: Record<string, string | number> = {};
+    if (filters?.municipality_id) params.municipality_id = filters.municipality_id;
+    if (filters?.barangay_id) params.barangay_id = filters.barangay_id;
+    if (filters?.school_id) params.school_id = filters.school_id;
+    if (filters?.date_from) params.date_from = filters.date_from;
+    if (filters?.date_to) params.date_to = filters.date_to;
+
+    const response = await api.get<{ data: OralHealthDashboardResponse }>(
+        '/modules/oral-health/dashboard',
+        { params }
+    );
+    return response.data.data;
+};
+
+export const getDewormingDashboard = async (
+    filters?: DashboardFilters
+): Promise<DewormingDashboardResponse> => {
+    const params: Record<string, string | number> = {};
+    if (filters?.municipality_id) params.municipality_id = filters.municipality_id;
+    if (filters?.barangay_id) params.barangay_id = filters.barangay_id;
+    if (filters?.school_id) params.school_id = filters.school_id;
+    if (filters?.date_from) params.date_from = filters.date_from;
+    if (filters?.date_to) params.date_to = filters.date_to;
+
+    const response = await api.get<{ data: DewormingDashboardResponse }>(
+        '/modules/deworming/dashboard',
+        { params }
+    );
+    return response.data.data;
+};
+
+export const getDewormingReport = async (
+    period: string
+): Promise<DewormingReportResponse> => {
+    const response = await api.get<{ data: DewormingReportResponse }>(
+        '/modules/deworming/report',
+        { params: { period } }
+    );
+    return response.data.data;
+};
+
+export const getVitalSignsDashboard = async (
+    filters?: DashboardFilters
+): Promise<VitalSignsDashboardResponse> => {
+    const params: Record<string, string | number> = {};
+    if (filters?.municipality_id) params.municipality_id = filters.municipality_id;
+    if (filters?.barangay_id) params.barangay_id = filters.barangay_id;
+    if (filters?.school_id) params.school_id = filters.school_id;
+    if (filters?.date_from) params.date_from = filters.date_from;
+    if (filters?.date_to) params.date_to = filters.date_to;
+
+    const response = await api.get<{ data: VitalSignsDashboardResponse }>(
+        '/modules/vital-signs/dashboard',
+        { params }
+    );
+    return response.data.data;
+};
+
+export const getImmunizationDashboard = async (
+    filters?: DashboardFilters
+): Promise<ImmunizationDashboardResponse> => {
+    const params: Record<string, string | number> = {};
+    if (filters?.municipality_id) params.municipality_id = filters.municipality_id;
+    if (filters?.barangay_id) params.barangay_id = filters.barangay_id;
+    if (filters?.school_id) params.school_id = filters.school_id;
+    if (filters?.date_from) params.date_from = filters.date_from;
+    if (filters?.date_to) params.date_to = filters.date_to;
+
+    const response = await api.get<{ data: ImmunizationDashboardResponse }>(
+        '/modules/immunization/dashboard',
+        { params }
+    );
+    return response.data.data;
 };
 
 export default api;

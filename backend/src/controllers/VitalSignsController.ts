@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import {
+    dashboardFiltersSchema,
+    validateGeographyHierarchy,
+    getVitalSignsDashboard as fetchVitalSignsDashboard,
+} from '../services/dashboard.service.js';
 
 // Strict typing for Vital Signs DB row
 export interface VitalSignsDbRow {
@@ -418,5 +423,44 @@ export const updateVitalSigns = async (req: Request, res: Response): Promise<voi
         }
         console.error('Error updating vital signs record:', error);
         res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+/**
+ * GET /api/modules/vital-signs/dashboard
+ * Aggregated KPIs for Vital Signs module (with Clinical-Threshold Safeguard).
+ * Access: superuser, admin
+ */
+export const getVitalSignsDashboard = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const parseResult = dashboardFiltersSchema.safeParse(req.query);
+        if (!parseResult.success) {
+            res.status(400).json({
+                message: 'Invalid filter parameters',
+                errors: parseResult.error.flatten(),
+            });
+            return;
+        }
+
+        const filters = parseResult.data;
+
+        const geoValidation = await validateGeographyHierarchy(filters);
+        if (!geoValidation.valid) {
+            res.status(400).json({
+                message: 'Invalid geography hierarchy',
+                error: geoValidation.error,
+            });
+            return;
+        }
+
+        const dashboardData = await fetchVitalSignsDashboard(filters);
+
+        res.status(200).json({
+            message: 'Vital Signs dashboard overview fetched successfully',
+            data: dashboardData,
+        });
+    } catch (error) {
+        console.error('Vital Signs dashboard error:', error);
+        res.status(500).json({ message: 'Internal server error while generating dashboard data' });
     }
 };

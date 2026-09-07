@@ -469,9 +469,271 @@ export interface VitalSignsByStudentResponse {
 }
 
 export interface DashboardFilters {
-  municipalityId?: number;
-  barangayId?: number;
-  schoolId?: number;
-  startDate?: string;
-  endDate?: string;
+  municipality_id?: number;
+  barangay_id?: number;
+  school_id?: number;
+  date_from?: string;
+  date_to?: string;
 }
+
+export interface MunicipalityCount {
+  municipality_name: string;
+  count: number;
+}
+
+export interface ModuleCompletion {
+  module: string;
+  count: number;
+  rate: number;
+}
+
+export interface RecentStudent {
+  id: number;
+  first_name: string;
+  last_name: string;
+  school_name: string;
+  municipality_name: string;
+  grade_level: string;
+  created_at: string;
+}
+
+export interface DashboardOverviewResponse {
+  total_students: number;
+  students_by_municipality: MunicipalityCount[];
+  gender_distribution: { male: number; female: number };
+  module_completion: ModuleCompletion[];
+  recent_registrations: RecentStudent[];
+}
+
+export interface PatientInfoRegistrationByMunicipality {
+  municipality_id: number;
+  municipality_name: string;
+  count: number;
+}
+
+export interface PatientInfoRegistrationTrend {
+  month: string;
+  count: number;
+}
+
+export interface PatientInfoAgeGroup {
+  age_group: string;
+  count: number;
+}
+
+export interface PatientInfoPwdDistribution {
+  pwd_type: string;
+  count: number;
+}
+
+export interface PatientInfoPhilHealthCategory {
+  category: string;
+  count: number;
+}
+
+export interface PatientInfoBloodType {
+  blood_type: string;
+  count: number;
+}
+
+export interface PatientInfoDashboardResponse {
+  total_students: number;
+  registration_trend: PatientInfoRegistrationTrend[];
+  registration_by_municipality: PatientInfoRegistrationByMunicipality[];
+  gender_distribution: { male: number; female: number };
+  age_group_distribution: PatientInfoAgeGroup[];
+  four_ps_count: number;
+  pwd_total: number;
+  pwd_distribution: PatientInfoPwdDistribution[];
+  philhealth_coverage: { covered: number; not_covered: number; coverage_rate: number };
+  philhealth_category_breakdown: PatientInfoPhilHealthCategory[];
+  indigenous_count: number;
+  blood_type_distribution: PatientInfoBloodType[];
+  animal_bites_active_cases: number;
+}
+
+export interface OralHealthFacilityDistribution {
+  location: string;
+  count: number;
+}
+
+export interface OralHealthVisitTypeDistribution {
+  visit_type: string;
+  count: number;
+}
+
+export interface OralHealthSchoolCoverage {
+  school_id: number;
+  school_name: string;
+  count: number;
+}
+
+export interface OralHealthMonthlyTrend {
+  month: string;
+  count: number;
+}
+
+export interface OralHealthDashboardResponse {
+  total_students_examined: number;
+  total_examinations: number;
+  rpoc_completion: {
+    completed: number;
+    incomplete: number;
+    completion_rate: number;
+  };
+  rpoc_steps: {
+    screening: number;
+    risk_assessment: number;
+    prophylaxis: number;
+    counseling: number;
+    fluoride_varnish: number;
+  };
+  facility_distribution: OralHealthFacilityDistribution[];
+  visit_type_distribution: OralHealthVisitTypeDistribution[];
+  coverage_by_school: OralHealthSchoolCoverage[];
+  monthly_trend: OralHealthMonthlyTrend[];
+}
+
+export interface DewormingMunicipalitySummary {
+  municipality_id: number;
+  municipality_name: string;
+  target: number;
+  male_accomplished: number;
+  female_accomplished: number;
+  total_accomplished: number;
+  accomplishment_rate: number;
+}
+
+export interface DewormingDashboardResponse {
+  total_dewormed: number;
+  deworming_by_age_group: Array<{ age_group: string; count: number }>;
+  public_vs_private: Array<{ school_type: string; count: number }>;
+  in_school_vs_out_of_school: { in_school: number; out_of_school: number };
+  monthly_trend: Array<{ month: string; count: number }>;
+  municipality_summary: DewormingMunicipalitySummary[];
+  province_total: {
+    target: number;
+    total_accomplished: number;
+    accomplishment_rate: number;
+  };
+}
+
+export interface DewormingReportMunicipalityRow {
+  municipality_id: number;
+  municipality_name: string;
+  target: number;
+  male_accomplished: number;
+  female_accomplished: number;
+  total_accomplished: number;
+  accomplishment_rate: number;
+}
+
+export interface DewormingReportResponse {
+  period: string;
+  municipalities: DewormingReportMunicipalityRow[];
+  province_totals: {
+    target: number;
+    male_accomplished: number;
+    female_accomplished: number;
+    total_accomplished: number;
+    accomplishment_rate: number;
+  };
+}
+
+export interface VitalSignsMeasurementCoverage {
+  bp_recorded: number;
+  bmi_recorded: number;
+  temperature_recorded: number;
+  pulse_recorded: number;
+  respiratory_recorded: number;
+}
+
+export interface VitalSignsDistributionItem {
+  interval: string;
+  count: number;
+}
+
+export interface VitalSignsSchoolCoverage {
+  school_id: number;
+  school_name: string;
+  count: number;
+}
+
+export interface VitalSignsMonthlyTrend {
+  month: string;
+  count: number;
+}
+
+export interface VitalSignsDashboardResponse {
+  total_screened: number;
+  total_screenings: number;
+  measurement_coverage: VitalSignsMeasurementCoverage;
+  bmi_distribution: VitalSignsDistributionItem[];
+  blood_pressure_systolic_distribution: VitalSignsDistributionItem[];
+  blood_pressure_diastolic_distribution: VitalSignsDistributionItem[];
+  temperature_distribution: VitalSignsDistributionItem[];
+  elevated_temperature_count: number;
+  coverage_by_school: VitalSignsSchoolCoverage[];
+  monthly_trend: VitalSignsMonthlyTrend[];
+  metadata: {
+    clinical_thresholds_status: string;
+    threshold_version: string;
+    notice: string;
+  };
+}
+
+export interface VaccineAntigenMetric {
+  antigen: 'td1' | 'mr1' | 'hpv1' | 'hpv2' | 'td2' | 'mr2';
+  label: string;
+  doses: number;
+  students: number;
+}
+
+export interface ImmunizationConsentDistribution {
+  consented_students: number;
+  refused_students: number;
+  deferred_students: number;
+  refusal_rate: number;
+  deferral_rate: number;
+}
+
+export interface ImmunizationRefusalReason {
+  code: string;
+  label: string;
+  count: number;
+}
+
+export interface ImmunizationEducationalLevel {
+  educational_level: string;
+  vaccinated_students: number;
+  total_evaluated: number;
+}
+
+export interface ImmunizationSchoolCoverage {
+  school_id: number;
+  school_name: string;
+  count: number;
+}
+
+export interface ImmunizationMonthlyTrend {
+  month: string;
+  count: number;
+}
+
+export interface ImmunizationDashboardResponse {
+  total_students_vaccinated: number;
+  total_evaluated_students: number;
+  total_doses_administered: number;
+  vaccine_antigens: VaccineAntigenMetric[];
+  consent_distribution: ImmunizationConsentDistribution;
+  refusal_reasons: ImmunizationRefusalReason[];
+  vaccination_by_educational_level: ImmunizationEducationalLevel[];
+  coverage_by_school: ImmunizationSchoolCoverage[];
+  monthly_trend: ImmunizationMonthlyTrend[];
+  contract_definitions: {
+    vaccinated: string;
+    coverage: string;
+    vaccine_flags: string;
+  };
+}
+

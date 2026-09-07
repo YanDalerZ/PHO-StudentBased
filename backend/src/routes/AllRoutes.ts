@@ -7,6 +7,7 @@ import OralHealthRoutes from './OralHealthRoutes.js';
 import DewormingRoutes from './DewormingRoutes.js';
 import ImmunizationRoutes from './ImmunizationRoutes.js';
 import VitalSignsRoutes from './VitalSignsRoutes.js';
+import DashboardRoutes from './DashboardRoutes.js';
 
 export default {
     UserRoutes,
@@ -18,5 +19,6 @@ export default {
     DewormingRoutes,
     ImmunizationRoutes,
     VitalSignsRoutes,
+    DashboardRoutes,
 };
 

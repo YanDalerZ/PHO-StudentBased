@@ -5,11 +5,15 @@ import {
     updatePatientInfo,
     createAnimalBite,
     updateAnimalBite,
+    getPatientInfoDashboard,
 } from '../controllers/PatientInfoController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
 const router = Router();
+
+// GET /api/modules/patient-info/dashboard — Patient Info Dashboard KPIs [Superuser, Admin]
+router.get('/dashboard', authenticate, requireRole('superuser', 'admin'), getPatientInfoDashboard);
 
 // POST /api/modules/patient-info — Create Patient Info (& optional Animal Bite) [Teacher, Superuser]
 router.post('/', authenticate, requireRole('teacher', 'superuser'), createPatientInfo);
