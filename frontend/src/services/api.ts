@@ -1,39 +1,53 @@
+import axios from 'axios';
 import type { Student, Municipality, Barangay, School } from '../types';
 
-import { MOCK_MUNICIPALITIES, MOCK_BARANGAYS } from '../utils/mockLocations';
+const api = axios.create({
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+});
 
-const MOCK_SCHOOLS: School[] = [
-    { id: 1, name: 'Kalibo Elementary School', barangay_id: '7-013' },
-    { id: 2, name: 'Aklan National High School', barangay_id: '7-001' },
-    { id: 3, name: 'Malay National High School', barangay_id: '12-002' },
-    { id: 4, name: 'Banga National High School', barangay_id: '3-019' }
-];
+// Request interceptor to attach JWT token
+api.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token && config.headers) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+// Response interceptor to handle 401s
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/Login';
+        }
+        return Promise.reject(error);
+    }
+);
 
 export const getMunicipalities = async (): Promise<Municipality[]> => {
-    return new Promise(resolve => setTimeout(() => resolve(MOCK_MUNICIPALITIES), 400));
+    const response = await api.get('/lookup/municipalities');
+    return response.data;
 };
 
-export const getBarangays = async (municipalityId: string): Promise<Barangay[]> => {
-    return new Promise(resolve => 
-        setTimeout(() => resolve(MOCK_BARANGAYS.filter(b => b.municipality_id === municipalityId)), 400)
-    );
+export const getBarangays = async (municipalityId: string | number): Promise<Barangay[]> => {
+    const response = await api.get(`/lookup/barangays/${municipalityId}`);
+    return response.data;
 };
 
-export const getSchools = async (barangayId: string): Promise<School[]> => {
-    return new Promise(resolve => 
-        setTimeout(() => resolve(MOCK_SCHOOLS.filter(s => s.barangay_id === barangayId)), 400)
-    );
+export const getSchools = async (barangayId: string | number): Promise<School[]> => {
+    const response = await api.get(`/lookup/schools/${barangayId}`);
+    return response.data;
 };
 
 export const createStudent = async (studentData: Student): Promise<{ message: string, id: number }> => {
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            // Simulate random failure for robust testing, or just succeed
-            if (!studentData.student_lrn) {
-                reject(new Error("LRN is required"));
-            } else {
-                resolve({ message: "Student registered successfully", id: Math.floor(Math.random() * 1000) });
-            }
-        }, 1200);
-    });
+    const response = await api.post('/students', studentData);
+    return response.data;
 };
+
+export default api;

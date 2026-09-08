@@ -12,8 +12,7 @@ import {
     INDIGENOUS_GROUP_OPTIONS, PWD_TYPE_OPTIONS,
     PHILHEALTH_STATUS_OPTIONS, PHILHEALTH_CATEGORY_OPTIONS
 } from '../utils/constants';
-import { getMunicipalities, getBarangays, getSchools } from '../services/api';
-import { useMockData } from '../context/MockDataContext';
+import { getMunicipalities, getBarangays, getSchools, createStudent } from '../services/api';
 import type { Student, Municipality, Barangay, School } from '../types';
 import { cn } from '../lib/utils';
 import logo from '../assets/images/logo.jpg';
@@ -23,7 +22,7 @@ interface RegistrationFormProps {
 }
 
 const INITIAL_STATE: Student = {
-    photo_base64: '',
+    photo_url: '',
     student_lrn: '',
     first_name: '',
     middle_name: '',
@@ -35,7 +34,7 @@ const INITIAL_STATE: Student = {
     mother_first_name: '',
     mother_last_name: '',
     mother_middle_name: '',
-    mother_birth_date: '',
+    mother_birthdate: '',
     address: '',
     barangay: '',
     municipality: '',
@@ -62,7 +61,7 @@ const INITIAL_STATE: Student = {
     region: 'Region VI',
     zip_code: '',
     email: '',
-    landline_no: '',
+    landline: '',
     psa_national_id: '',
 
     // Other Info (Part IV - 4Ps & PWD)
@@ -130,7 +129,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
     const [formData, setFormData] = useState<Student>(INITIAL_STATE);
     const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(false);
-    const { registerStudent } = useMockData();
+    // Removed useMockData for registration, we will use the real API
 
     // Cascading Dropdown States
     const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
@@ -161,7 +160,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, photo_base64: reader.result as string }));
+                setFormData(prev => ({ ...prev, photo_url: reader.result as string }));
             };
             reader.readAsDataURL(file);
         }
@@ -305,7 +304,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
 
         setLoading(true);
         try {
-            registerStudent(formData);
+            await createStudent(formData);
             toast.success('Registration successful! Redirecting...', {
                 style: {
                     background: '#f0fdf4',
@@ -327,7 +326,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
         } finally {
             setLoading(false);
         }
-    }, [validateStep, registerStudent, formData, onClose, navigate]);
+    }, [validateStep, formData, onClose, navigate]);
 
     return (
         <div className={cn(
@@ -417,8 +416,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                         </div>
                                     </div>
                                     <div className="sm:col-span-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 relative overflow-hidden group">
-                                        {formData.photo_base64 ? (
-                                            <img src={formData.photo_base64} alt="Student" className="absolute inset-0 w-full h-full object-cover" />
+                                        {formData.photo_url ? (
+                                            <img src={formData.photo_url} alt="Student" className="absolute inset-0 w-full h-full object-cover" />
                                         ) : (
                                             <div className="text-center">
                                                 <Camera className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -668,11 +667,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                         <label className={labelClasses}>Mother's Date of Birth</label>
                                         <input
                                             type="date"
-                                            name="mother_birth_date"
-                                            value={formData.mother_birth_date}
+                                            name="mother_birthdate"
+                                            value={formData.mother_birthdate}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('mother_birth_date', false)}
+                                            className={getInputClasses('mother_birthdate', false)}
                                         />
                                     </div>
                                 </div>
@@ -810,11 +809,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onClose }) => {
                                     <div>
                                         <label className={labelClasses}>Landline</label>
                                         <input
-                                            name="landline_no"
-                                            value={formData.landline_no}
+                                            name="landline"
+                                            value={formData.landline}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('landline_no', false)}
+                                            className={getInputClasses('landline', false)}
                                         />
                                     </div>
 

@@ -68,8 +68,9 @@ const Login: React.FC = () => {
             }
 
             toast.success('Login successful!');
-        } catch (err) {
-            toast.error('Invalid email or password.');
+        } catch (err: any) {
+            const message = err.response?.data?.message || 'Login failed. Please try again.';
+            toast.error(message);
         } finally {
             setLoading(false);
         }
