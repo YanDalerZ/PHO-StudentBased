@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useMockData } from '../../context/MockDataContext';
 import { StatCard } from '../../components/common/StatCard';
 import {
     Users,
@@ -9,28 +8,71 @@ import {
     AlertCircle,
     ChevronRight,
     UserPlus,
-    X
+    X,
+    Loader2
 } from 'lucide-react';
-
-// Import your existing registration form component
+import { getStudents } from '../../services/api';
+import type { Student } from '../../types';
 import RegistrationForm from '../RegistrationForm';
 
 const TeacherDashboard: React.FC = () => {
-    const { students = [], moduleStatuses = {} } = useMockData();
+    const [students, setStudents] = useState<Student[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [error, setError] = useState<string | null>(null);
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
 
-    // Memoize metric calculations so they only run when students/moduleStatuses change
+    const fetchDashboardData = useCallback(async () => {
+        try {
+            const res = await getStudents();
+            setStudents(res.data || []);
+            setError(null);
+        } catch (err: unknown) {
+            console.error('Failed to load teacher dashboard students:', err);
+            setError('Unable to load student data. Please check your connection.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+        getStudents()
+            .then((res) => {
+                if (isMounted) {
+                    setStudents(res.data || []);
+                    setError(null);
+                    setLoading(false);
+                }
+            })
+            .catch((err: unknown) => {
+                if (isMounted) {
+                    console.error('Failed to load teacher dashboard students:', err);
+                    setError('Unable to load student data. Please check your connection.');
+                    setLoading(false);
+                }
+            });
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+
+    // Metric calculations from real student data
     const { totalStudents, totalModulesCompleted, pendingModules } = useMemo(() => {
         let completed = 0;
         let pending = 0;
 
         students.forEach(student => {
-            const status = moduleStatuses[student.id || 0];
-            if (status) {
-                Object.values(status).forEach(modStatus => {
-                    if (modStatus === 'Completed') completed++;
-                    if (modStatus === 'Pending') pending++;
+            const mods = student.modules;
+            if (mods) {
+                const keys = ['patient_info', 'oral_health', 'deworming', 'immunization', 'vital_signs'];
+                keys.forEach(k => {
+                    if (mods[k]) completed++;
+                    else pending++;
                 });
+            } else {
+                // By default 5 health modules are pending until recorded
+                pending += 5;
             }
         });
 
@@ -39,20 +81,19 @@ const TeacherDashboard: React.FC = () => {
             totalModulesCompleted: completed,
             pendingModules: pending
         };
-    }, [students, moduleStatuses]);
-
-    // Memoize recent students slicing
-    const recentStudents = useMemo(() => {
-        return [...students].reverse().slice(0, 4);
     }, [students]);
 
-    // Memoize stats object array creation
+    // 4 most recent students
+    const recentStudents = useMemo(() => {
+        return students.slice(0, 4);
+    }, [students]);
+
     const stats = useMemo(() => [
         {
             id: 1,
             label: 'Total Students',
             value: totalStudents.toString(),
-            change: '+2 this month',
+            change: `${totalStudents} registered`,
             isPositive: true,
             icon: Users,
             iconColor: 'text-emerald-700',
@@ -98,6 +139,18 @@ const TeacherDashboard: React.FC = () => {
                 </button>
             </div>
 
+            {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm flex items-center justify-between">
+                    <span>{error}</span>
+                    <button
+                        onClick={fetchDashboardData}
+                        className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-900 rounded-lg text-xs font-semibold cursor-pointer"
+                    >
+                        Retry
+                    </button>
+                </div>
+            )}
+
             {/* Quick Metrics Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {stats.map((stat) => (
@@ -130,41 +183,50 @@ const TeacherDashboard: React.FC = () => {
                     </div>
 
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr>
-                                    <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Name</th>
-                                    <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">LRN</th>
-                                    <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Grade</th>
-                                    <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {recentStudents.length > 0 ? recentStudents.map((student) => (
-                                    <tr key={student.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
-                                        <td className="py-3.5 px-4 text-sm font-semibold text-black">
-                                            {student.first_name} {student.last_name}
-                                        </td>
-                                        <td className="py-3.5 px-4 text-sm text-slate-800 font-mono">{student.student_lrn}</td>
-                                        <td className="py-3.5 px-4 text-sm text-slate-800">{student.grade_level} - {student.section}</td>
-                                        <td className="py-3.5 px-4 text-sm">
-                                            <Link
-                                                to={`/teacher/students/${student.id}`}
-                                                className="text-emerald-800 hover:text-emerald-900 font-medium text-xs border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors inline-block"
-                                            >
-                                                View Profile
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                )) : (
+                        {loading ? (
+                            <div className="py-12 flex flex-col items-center justify-center space-y-2">
+                                <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                                <span className="text-xs text-slate-500">Loading student records...</span>
+                            </div>
+                        ) : (
+                            <table className="w-full text-left">
+                                <thead>
                                     <tr>
-                                        <td colSpan={4} className="py-8 text-center text-slate-600 text-sm">
-                                            No students registered yet.
-                                        </td>
+                                        <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Name</th>
+                                        <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">LRN</th>
+                                        <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Grade & Section</th>
+                                        <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Action</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {recentStudents.length > 0 ? recentStudents.map((student) => (
+                                        <tr key={student.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                                            <td className="py-3.5 px-4 text-sm font-semibold text-black">
+                                                {student.first_name} {student.last_name}
+                                            </td>
+                                            <td className="py-3.5 px-4 text-sm text-slate-800 font-mono">{student.student_lrn}</td>
+                                            <td className="py-3.5 px-4 text-sm text-slate-800">
+                                                {student.grade_level} {student.section ? `- ${student.section}` : ''}
+                                            </td>
+                                            <td className="py-3.5 px-4 text-sm">
+                                                <Link
+                                                    to={`/teacher/students/${student.id}`}
+                                                    className="text-emerald-800 hover:text-emerald-900 font-medium text-xs border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors inline-block"
+                                                >
+                                                    View Profile
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={4} className="py-8 text-center text-slate-600 text-sm">
+                                                No students registered yet. Click &quot;Register Student&quot; to begin.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
                 </div>
 
@@ -178,7 +240,7 @@ const TeacherDashboard: React.FC = () => {
                                 <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                                 <div>
                                     <h3 className="text-sm font-bold text-black">Pending Forms</h3>
-                                    <p className="text-xs text-slate-700 mt-1">You have {pendingModules} module forms pending completion.</p>
+                                    <p className="text-xs text-slate-700 mt-1">You have {pendingModules} module health forms pending completion.</p>
                                 </div>
                             </div>
                         ) : (
@@ -205,7 +267,7 @@ const TeacherDashboard: React.FC = () => {
                         {/* Header */}
                         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 sticky top-0 bg-white z-20 shrink-0">
                             <div className="flex items-center gap-3">
-                                <div className="h-2 w-2 rounded-full bg-indigo-600"></div>
+                                <div className="h-2 w-2 rounded-full bg-emerald-600"></div>
                                 <div>
                                     <h2 className="text-lg font-semibold text-slate-900 tracking-tight">Register New Student</h2>
                                     <p className="text-xs text-slate-500 mt-0.5">Fill in the student credentials and required details below.</p>
@@ -224,7 +286,13 @@ const TeacherDashboard: React.FC = () => {
 
                         {/* Form Body */}
                         <div className="p-6 md:p-8 overflow-y-auto flex-1 text-slate-800">
-                            <RegistrationForm onClose={() => setIsRegisterModalOpen(false)} />
+                            <RegistrationForm
+                                onClose={() => setIsRegisterModalOpen(false)}
+                                onSuccess={() => {
+                                    setIsRegisterModalOpen(false);
+                                    fetchDashboardData();
+                                }}
+                            />
                         </div>
                     </div>
                 </div>
@@ -233,4 +301,4 @@ const TeacherDashboard: React.FC = () => {
     );
 };
 
-export default TeacherDashboard;
+export default TeacherDashboard;

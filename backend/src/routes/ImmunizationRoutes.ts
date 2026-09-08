@@ -1,0 +1,21 @@
+import { Router } from 'express';
+import {
+    createImmunization,
+    getImmunizationByStudent,
+    updateImmunization,
+} from '../controllers/ImmunizationController.js';
+import { authenticate } from '../middleware/auth.js';
+import { requireRole } from '../middleware/rbac.js';
+
+const router = Router();
+
+// POST /api/modules/immunization — Create Immunization record [Teacher, Superuser]
+router.post('/', authenticate, requireRole('teacher', 'superuser'), createImmunization);
+
+// GET /api/modules/immunization/student/:studentId — Get Immunization records by student [Teacher, Superuser]
+router.get('/student/:studentId', authenticate, requireRole('teacher', 'superuser'), getImmunizationByStudent);
+
+// PUT /api/modules/immunization/:id — Update Immunization record [Teacher, Superuser]
+router.put('/:id', authenticate, requireRole('teacher', 'superuser'), updateImmunization);
+
+export default router;

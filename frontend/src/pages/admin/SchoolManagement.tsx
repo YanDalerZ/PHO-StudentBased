@@ -2,6 +2,14 @@ import React from 'react';
 import { DataTable } from '../../components/common/DataTable';
 import { Building2 } from 'lucide-react';
 
+interface SchoolTableRow {
+    id: number | string;
+    name: string;
+    municipality: string;
+    barangay: string;
+    actions?: string;
+}
+
 const SchoolManagement: React.FC = () => {
     return (
         <div className="space-y-6">
@@ -17,14 +25,14 @@ const SchoolManagement: React.FC = () => {
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                <DataTable 
+                <DataTable<SchoolTableRow> 
                     data={[]}
                     columns={[
-                        { header: 'School ID', accessorKey: 'id' as any },
-                        { header: 'Name', accessorKey: 'name' as any },
-                        { header: 'Municipality', accessorKey: 'municipality' as any },
-                        { header: 'Barangay', accessorKey: 'barangay' as any },
-                        { header: 'Actions', accessorKey: 'actions' as any }
+                        { header: 'School ID', accessorKey: 'id' },
+                        { header: 'Name', accessorKey: 'name' },
+                        { header: 'Municipality', accessorKey: 'municipality' },
+                        { header: 'Barangay', accessorKey: 'barangay' },
+                        { header: 'Actions', accessorKey: 'actions' }
                     ]}
                     isLoading={false}
                 />

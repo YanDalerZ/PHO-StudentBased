@@ -213,6 +213,7 @@ CREATE TABLE ORAL_HEALTH (
 
     is_pregnant BOOLEAN DEFAULT FALSE,
 
+    -- Routine Preventive Oral Care (RPOC)
     has_oral_screening BOOLEAN DEFAULT FALSE,
     has_risk_assessment BOOLEAN DEFAULT FALSE,
     has_oral_prophylaxis BOOLEAN DEFAULT FALSE,
@@ -224,6 +225,34 @@ CREATE TABLE ORAL_HEALTH (
     service_location service_location_enum,
     visit_type visit_type_enum,
     administered_by VARCHAR(200),
+
+    -- Tooth Charts (JSONB format for upper and lower arches)
+    tooth_chart_upper JSONB,
+    tooth_chart_lower JSONB,
+
+    -- Condition & Permanent Teeth (DMFT)
+    oral_health_condition VARCHAR(100),
+    no_of_perm_teeth INT,
+    no_of_perm_sound_teeth INT,
+    no_of_decayed_teeth INT,
+    no_of_missing_teeth INT,
+    no_of_filled_teeth INT,
+    total_dmft INT,
+
+    -- Primary / Temporary Teeth (dmft)
+    no_of_primary_teeth INT,
+    no_of_primary_sound_teeth INT,
+    no_of_primary_decayed INT,
+    no_of_primary_missing INT,
+    no_of_primary_filled INT,
+    total_dmft_primary INT,
+
+    -- Diagnosis & Treatment
+    remarks_diagnosis TEXT,
+    recommended_treatment TEXT,
+    treatment_type VARCHAR(50),
+    consent_given BOOLEAN DEFAULT FALSE,
+    consent_notes TEXT,
 
     remarks TEXT,
 

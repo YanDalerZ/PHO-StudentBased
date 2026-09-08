@@ -13,26 +13,21 @@ const Login: React.FC = () => {
     const { login, isAuthenticated, user } = useAuth();
 
     // Remember Me States
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [rememberMe, setRememberMe] = useState(false);
+    const [email, setEmail] = useState(() => {
+        const savedRememberMe = localStorage.getItem('remember_me') === 'true';
+        return savedRememberMe ? (localStorage.getItem('remembered_email') || '') : '';
+    });
+    const [password, setPassword] = useState(() => {
+        const savedRememberMe = localStorage.getItem('remember_me') === 'true';
+        return savedRememberMe ? (localStorage.getItem('remembered_password') || '') : '';
+    });
+    const [rememberMe, setRememberMe] = useState(() => {
+        return localStorage.getItem('remember_me') === 'true';
+    });
 
     const [loading, setLoading] = useState(false);
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-
-    // Load saved email, password, and remember state from localStorage on mount
-    useEffect(() => {
-        const savedEmail = localStorage.getItem('remembered_email');
-        const savedPassword = localStorage.getItem('remembered_password');
-        const savedRememberMe = localStorage.getItem('remember_me') === 'true';
-
-        if (savedRememberMe) {
-            if (savedEmail) setEmail(savedEmail);
-            if (savedPassword) setPassword(savedPassword);
-            setRememberMe(true);
-        }
-    }, []);
 
     useEffect(() => {
         if (isAuthenticated && user) {
@@ -68,8 +63,9 @@ const Login: React.FC = () => {
             }
 
             toast.success('Login successful!');
-        } catch (err: any) {
-            const message = err.response?.data?.message || 'Login failed. Please try again.';
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            const message = axiosErr.response?.data?.message || 'Login failed. Please try again.';
             toast.error(message);
         } finally {
             setLoading(false);
