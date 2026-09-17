@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import {
+    dashboardFiltersSchema,
+    validateGeographyHierarchy,
+    getOralHealthDashboard as fetchOralHealthDashboard,
+} from '../services/dashboard.service.js';
 
 // Strict typing for Oral Health DB row
 export interface OralHealthDbRow {
@@ -554,5 +559,45 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
         }
         console.error('Error updating oral health record:', error);
         res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+/**
+ * GET /api/modules/oral-health/dashboard
+ * Aggregated KPIs for Oral Health module (RPOC-based).
+ * Access: superuser, admin
+ */
+export const getOralHealthDashboard = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const parseResult = dashboardFiltersSchema.safeParse(req.query);
+        if (!parseResult.success) {
+            res.status(400).json({
+                message: 'Invalid filter parameters',
+                errors: parseResult.error.flatten(),
+            });
+            return;
+        }
+
+        const filters = parseResult.data;
+
+        // Validate geographic hierarchy
+        const geoValidation = await validateGeographyHierarchy(filters);
+        if (!geoValidation.valid) {
+            res.status(400).json({
+                message: 'Invalid geography hierarchy',
+                error: geoValidation.error,
+            });
+            return;
+        }
+
+        const dashboardData = await fetchOralHealthDashboard(filters);
+
+        res.status(200).json({
+            message: 'Oral Health dashboard overview fetched successfully',
+            data: dashboardData,
+        });
+    } catch (error) {
+        console.error('Oral Health dashboard error:', error);
+        res.status(500).json({ message: 'Internal server error while generating dashboard data' });
     }
 };

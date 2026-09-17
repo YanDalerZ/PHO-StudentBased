@@ -3,11 +3,15 @@ import {
     createVitalSigns,
     getVitalSignsByStudent,
     updateVitalSigns,
+    getVitalSignsDashboard,
 } from '../controllers/VitalSignsController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
 const router = Router();
+
+// GET /api/modules/vital-signs/dashboard — Vital signs dashboard KPIs [Superuser, Admin]
+router.get('/dashboard', authenticate, requireRole('superuser', 'admin'), getVitalSignsDashboard);
 
 // POST /api/modules/vital-signs — Create Vital Signs record [Teacher, Superuser]
 router.post('/', authenticate, requireRole('teacher', 'superuser'), createVitalSigns);

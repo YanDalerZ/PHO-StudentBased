@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import {
+    dashboardFiltersSchema,
+    validateGeographyHierarchy,
+    getImmunizationDashboard as fetchImmunizationDashboard,
+} from '../services/dashboard.service.js';
 
 // Strict typing for Immunization DB row
 export interface ImmunizationDbRow {
@@ -618,5 +623,44 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
         }
         console.error('Error updating immunization record:', error);
         res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+/**
+ * GET /api/modules/immunization/dashboard
+ * Aggregated KPIs for Immunization module.
+ * Access: superuser, admin
+ */
+export const getImmunizationDashboard = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const parseResult = dashboardFiltersSchema.safeParse(req.query);
+        if (!parseResult.success) {
+            res.status(400).json({
+                message: 'Invalid filter parameters',
+                errors: parseResult.error.flatten(),
+            });
+            return;
+        }
+
+        const filters = parseResult.data;
+
+        const geoValidation = await validateGeographyHierarchy(filters);
+        if (!geoValidation.valid) {
+            res.status(400).json({
+                message: 'Invalid geography hierarchy',
+                error: geoValidation.error,
+            });
+            return;
+        }
+
+        const dashboardData = await fetchImmunizationDashboard(filters);
+
+        res.status(200).json({
+            message: 'Immunization dashboard overview fetched successfully',
+            data: dashboardData,
+        });
+    } catch (error) {
+        console.error('Immunization dashboard error:', error);
+        res.status(500).json({ message: 'Internal server error while generating dashboard data' });
     }
 };

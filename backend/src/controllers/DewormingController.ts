@@ -1,6 +1,12 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import {
+    dashboardFiltersSchema,
+    validateGeographyHierarchy,
+    getDewormingDashboard as fetchDewormingDashboard,
+    getDewormingReport as fetchDewormingReport,
+} from '../services/dashboard.service.js';
 
 // Strict typing for Deworming DB row
 export interface DewormingDbRow {
@@ -413,5 +419,77 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
         }
         console.error('Error updating deworming record:', error);
         res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+/**
+ * GET /api/modules/deworming/dashboard
+ * Aggregated KPIs for Deworming module.
+ * Access: superuser, admin
+ */
+export const getDewormingDashboard = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const parseResult = dashboardFiltersSchema.safeParse(req.query);
+        if (!parseResult.success) {
+            res.status(400).json({
+                message: 'Invalid filter parameters',
+                errors: parseResult.error.flatten(),
+            });
+            return;
+        }
+
+        const filters = parseResult.data;
+
+        const geoValidation = await validateGeographyHierarchy(filters);
+        if (!geoValidation.valid) {
+            res.status(400).json({
+                message: 'Invalid geography hierarchy',
+                error: geoValidation.error,
+            });
+            return;
+        }
+
+        const dashboardData = await fetchDewormingDashboard(filters);
+
+        res.status(200).json({
+            message: 'Deworming dashboard overview fetched successfully',
+            data: dashboardData,
+        });
+    } catch (error) {
+        console.error('Deworming dashboard error:', error);
+        res.status(500).json({ message: 'Internal server error while generating dashboard data' });
+    }
+};
+
+const dewormingReportSchema = z.object({
+    period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be in YYYY-MM format'),
+});
+
+/**
+ * GET /api/modules/deworming/report
+ * Deworming municipality consolidation report.
+ * Access: superuser, admin
+ */
+export const getDewormingReport = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const parseResult = dewormingReportSchema.safeParse(req.query);
+        if (!parseResult.success) {
+            res.status(400).json({
+                message: 'Invalid query parameters: period (YYYY-MM) is required',
+                errors: parseResult.error.flatten(),
+            });
+            return;
+        }
+
+        const { period } = parseResult.data;
+        const reportData = await fetchDewormingReport(period);
+
+        res.status(200).json({
+            message: 'Deworming consolidation report fetched successfully',
+            data: reportData,
+        });
+    } catch (error) {
+        console.error('Deworming report error:', error);
+        res.status(500).json({ message: 'Internal server error while generating consolidation report' });
     }
 };

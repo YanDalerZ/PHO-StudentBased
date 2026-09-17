@@ -3,11 +3,19 @@ import {
     createDeworming,
     getDewormingByStudent,
     updateDeworming,
+    getDewormingDashboard,
+    getDewormingReport,
 } from '../controllers/DewormingController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
 const router = Router();
+
+// GET /api/modules/deworming/dashboard — Deworming dashboard KPIs [Superuser, Admin]
+router.get('/dashboard', authenticate, requireRole('superuser', 'admin'), getDewormingDashboard);
+
+// GET /api/modules/deworming/report — Deworming municipality consolidation report [Superuser, Admin]
+router.get('/report', authenticate, requireRole('superuser', 'admin'), getDewormingReport);
 
 // POST /api/modules/deworming — Create Deworming record [Teacher, Superuser]
 router.post('/', authenticate, requireRole('teacher', 'superuser'), createDeworming);

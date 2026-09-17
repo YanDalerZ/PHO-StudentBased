@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import {
+    dashboardFiltersSchema,
+    validateGeographyHierarchy,
+    getPatientInfoDashboard as fetchPatientInfoDashboard,
+} from '../services/dashboard.service.js';
 
 // Strict typing for Patient Info DB row
 export interface PatientInfoDbRow {
@@ -808,5 +813,45 @@ export const updateAnimalBite = async (req: Request, res: Response): Promise<voi
         }
         console.error('Error updating animal bite record:', error);
         res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+/**
+ * GET /api/modules/patient-info/dashboard
+ * Aggregated KPIs for Patient Info module.
+ * Access: superuser, admin
+ */
+export const getPatientInfoDashboard = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const parseResult = dashboardFiltersSchema.safeParse(req.query);
+        if (!parseResult.success) {
+            res.status(400).json({
+                message: 'Invalid filter parameters',
+                errors: parseResult.error.flatten(),
+            });
+            return;
+        }
+
+        const filters = parseResult.data;
+
+        // Validate geographic hierarchy
+        const geoValidation = await validateGeographyHierarchy(filters);
+        if (!geoValidation.valid) {
+            res.status(400).json({
+                message: 'Invalid geography hierarchy',
+                error: geoValidation.error,
+            });
+            return;
+        }
+
+        const dashboardData = await fetchPatientInfoDashboard(filters);
+
+        res.status(200).json({
+            message: 'Patient Info dashboard overview fetched successfully',
+            data: dashboardData,
+        });
+    } catch (error) {
+        console.error('Patient Info dashboard error:', error);
+        res.status(500).json({ message: 'Internal server error while generating dashboard data' });
     }
 };

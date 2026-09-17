@@ -3,11 +3,15 @@ import {
     createImmunization,
     getImmunizationByStudent,
     updateImmunization,
+    getImmunizationDashboard,
 } from '../controllers/ImmunizationController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
 const router = Router();
+
+// GET /api/modules/immunization/dashboard — Immunization dashboard KPIs [Superuser, Admin]
+router.get('/dashboard', authenticate, requireRole('superuser', 'admin'), getImmunizationDashboard);
 
 // POST /api/modules/immunization — Create Immunization record [Teacher, Superuser]
 router.post('/', authenticate, requireRole('teacher', 'superuser'), createImmunization);

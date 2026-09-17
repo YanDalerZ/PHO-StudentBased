@@ -50,6 +50,7 @@ app.use('/api/modules/oral-health', AllRoutes.OralHealthRoutes);
 app.use('/api/modules/deworming', AllRoutes.DewormingRoutes);
 app.use('/api/modules/immunization', AllRoutes.ImmunizationRoutes);
 app.use('/api/modules/vital-signs', AllRoutes.VitalSignsRoutes);
+app.use('/api/dashboard', AllRoutes.DashboardRoutes);
 
 
 // Serving static uploads
