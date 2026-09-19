@@ -58,9 +58,15 @@ import type {
 
 
 
+const getBaseUrl = () => {
+    if (window.location.hostname.includes('pho-studentbased.onrender.com')) {
+        return 'https://pho-studentbased.onrender.com/api';
+    }
+    return 'http://localhost:3000/api';
+};
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+    baseURL: getBaseUrl(),
 });
 
 // Request interceptor to attach JWT token
