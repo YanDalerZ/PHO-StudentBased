@@ -19,15 +19,19 @@ import {
     Edit3,
     X,
     ShieldAlert,
-    Building2
+    Building2,
+    XCircle,
+    Lock
 } from 'lucide-react';
-import { getStudent } from '../../services/api';
-import type { Student } from '../../types';
+import { toast } from 'react-hot-toast';
+import { getStudent, getLookupModules } from '../../services/api';
+import type { Student, AdminModule } from '../../types';
 import RegistrationForm from '../RegistrationForm';
 
 const StudentProfile: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const [student, setStudent] = useState<Student | null>(null);
+    const [moduleConfigs, setModuleConfigs] = useState<AdminModule[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [errorStatus, setErrorStatus] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -87,6 +91,16 @@ const StudentProfile: React.FC = () => {
                         }
                         setLoading(false);
                     }
+                });
+
+            getLookupModules()
+                .then((mods) => {
+                    if (isMounted) {
+                        setModuleConfigs(mods);
+                    }
+                })
+                .catch((err: unknown) => {
+                    console.error('Failed to load module configuration:', err);
                 });
         }
         return () => {
@@ -264,6 +278,46 @@ const StudentProfile: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {modules.map((mod) => {
                         const Icon = mod.icon;
+                        const config = moduleConfigs.find((c) => c.slug === mod.id);
+                        const isActive = config ? config.is_active : true;
+
+                        if (!isActive) {
+                            return (
+                                <div
+                                    key={mod.id}
+                                    onClick={() =>
+                                        toast.error(
+                                            `The ${mod.name} module is currently deactivated by the administrator.`
+                                        )
+                                    }
+                                    className="group relative bg-slate-50/80 dark:bg-slate-900/40 border border-dashed border-slate-300 dark:border-slate-700/80 p-5 rounded-2xl shadow-xs opacity-65 flex flex-col justify-between h-40 overflow-hidden cursor-not-allowed select-none transition-all"
+                                    title={`${mod.name} is currently deactivated by the administrator`}
+                                >
+                                    <div className="flex justify-between items-start z-10">
+                                        <div className="p-2.5 rounded-xl border bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400">
+                                            <Icon className="w-5 h-5" />
+                                        </div>
+
+                                        <span className="flex items-center space-x-1 text-xs font-medium text-slate-500 bg-slate-200/60 dark:bg-slate-800 px-2.5 py-1 rounded-full border border-slate-300/80 dark:border-slate-700">
+                                            <XCircle className="w-3.5 h-3.5 text-slate-400" />
+                                            <span>Deactivated</span>
+                                        </span>
+                                    </div>
+
+                                    <div className="z-10 mt-auto">
+                                        <div className="flex items-center space-x-1.5">
+                                            <h3 className="font-bold text-slate-600 dark:text-slate-400">
+                                                {mod.name}
+                                            </h3>
+                                            <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                        </div>
+                                        <p className="text-xs text-rose-500/90 dark:text-rose-400 mt-1 font-medium">
+                                            Unavailable (Deactivated by PHO)
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        }
 
                         return (
                             <Link

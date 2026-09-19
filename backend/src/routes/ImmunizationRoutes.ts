@@ -7,6 +7,7 @@ import {
 } from '../controllers/ImmunizationController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
+import { requireActiveModule } from '../middleware/activeModule.js';
 
 const router = Router();
 
@@ -14,12 +15,12 @@ const router = Router();
 router.get('/dashboard', authenticate, requireRole('superuser', 'admin'), getImmunizationDashboard);
 
 // POST /api/modules/immunization — Create Immunization record [Teacher, Superuser]
-router.post('/', authenticate, requireRole('teacher', 'superuser'), createImmunization);
+router.post('/', authenticate, requireRole('teacher', 'superuser'), requireActiveModule('immunization'), createImmunization);
 
 // GET /api/modules/immunization/student/:studentId — Get Immunization records by student [Teacher, Superuser]
 router.get('/student/:studentId', authenticate, requireRole('teacher', 'superuser'), getImmunizationByStudent);
 
 // PUT /api/modules/immunization/:id — Update Immunization record [Teacher, Superuser]
-router.put('/:id', authenticate, requireRole('teacher', 'superuser'), updateImmunization);
+router.put('/:id', authenticate, requireRole('teacher', 'superuser'), requireActiveModule('immunization'), updateImmunization);
 
 export default router;

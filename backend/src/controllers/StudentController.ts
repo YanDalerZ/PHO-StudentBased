@@ -431,6 +431,13 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
             : validatedData.barangay ? Number(validatedData.barangay) || null : null;
 
         const schoolId = validatedData.school_id ? Number(validatedData.school_id) || null : null;
+        if (schoolId) {
+            const schoolCheck = await pool.query('SELECT id, is_active FROM SCHOOLS WHERE id = $1', [schoolId]);
+            if (schoolCheck.rows.length === 0 || !schoolCheck.rows[0].is_active) {
+                res.status(400).json({ message: 'Selected school does not exist or is inactive' });
+                return;
+            }
+        }
 
         const isIndigenous = validatedData.is_indigenous ?? (validatedData.indigenous === 'Yes' || validatedData.indigenous === true);
         const is4ps = validatedData.is_4ps_member ?? (validatedData.dswd_4ps === 'Yes' || validatedData.dswd_4ps === true);
@@ -689,6 +696,13 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
         const schoolId = validatedData.school_id !== undefined
             ? (validatedData.school_id ? Number(validatedData.school_id) : null)
             : existing.school_id;
+        if (schoolId) {
+            const schoolCheck = await pool.query('SELECT id, is_active FROM SCHOOLS WHERE id = $1', [schoolId]);
+            if (schoolCheck.rows.length === 0 || !schoolCheck.rows[0].is_active) {
+                res.status(400).json({ message: 'Selected school does not exist or is inactive' });
+                return;
+            }
+        }
 
         const isIndigenous = validatedData.is_indigenous !== undefined
             ? validatedData.is_indigenous

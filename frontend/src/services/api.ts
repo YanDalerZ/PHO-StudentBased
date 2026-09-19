@@ -38,6 +38,21 @@ import type {
     DewormingReportResponse,
     VitalSignsDashboardResponse,
     ImmunizationDashboardResponse,
+    AdminDashboardStats,
+    AdminUserSummary,
+    GetAdminUsersParams,
+    AdminUserListResponse,
+    CreateAdminUserPayload,
+    UpdateAdminUserPayload,
+    UpdateAdminUserStatusPayload,
+    AdminModule,
+    CreateAdminModulePayload,
+    UpdateAdminModulePayload,
+    AdminSchool,
+    GetAdminSchoolsParams,
+    AdminSchoolListResponse,
+    CreateAdminSchoolPayload,
+    UpdateAdminSchoolPayload,
 } from '../types';
 
 
@@ -93,6 +108,11 @@ export const getBarangays = async (municipalityId: string | number): Promise<Bar
 
 export const getSchools = async (barangayId: string | number): Promise<School[]> => {
     const response = await api.get<School[]>(`/lookup/schools/${barangayId}`);
+    return response.data;
+};
+
+export const getLookupModules = async (): Promise<AdminModule[]> => {
+    const response = await api.get<AdminModule[]>('/lookup/modules');
     return response.data;
 };
 
@@ -331,7 +351,68 @@ export const getImmunizationDashboard = async (
     return response.data.data;
 };
 
+// Admin Dashboard
+export const getAdminDashboard = async (): Promise<AdminDashboardStats> => {
+    const response = await api.get<{ data: AdminDashboardStats }>('/admin/dashboard');
+    return response.data.data;
+};
+
+// Admin User Management
+export const getAdminUsers = async (params?: GetAdminUsersParams): Promise<AdminUserListResponse> => {
+    const response = await api.get<AdminUserListResponse>('/admin/users', { params });
+    return response.data;
+};
+
+export const createAdminUser = async (payload: CreateAdminUserPayload): Promise<AdminUserSummary> => {
+    const response = await api.post<{ data: AdminUserSummary }>('/admin/users', payload);
+    return response.data.data;
+};
+
+export const updateAdminUser = async (id: number, payload: UpdateAdminUserPayload): Promise<AdminUserSummary> => {
+    const response = await api.put<{ data: AdminUserSummary }>(`/admin/users/${id}`, payload);
+    return response.data.data;
+};
+
+export const updateAdminUserStatus = async (id: number, payload: UpdateAdminUserStatusPayload): Promise<AdminUserSummary> => {
+    const response = await api.patch<{ data: AdminUserSummary }>(`/admin/users/${id}/status`, payload);
+    return response.data.data;
+};
+
+// Admin Module Management
+export const getAdminModules = async (): Promise<AdminModule[]> => {
+    const response = await api.get<{ data: AdminModule[]; total: number }>('/admin/modules');
+    return response.data.data;
+};
+
+export const createAdminModule = async (payload: CreateAdminModulePayload): Promise<AdminModule> => {
+    const response = await api.post<{ data: AdminModule }>('/admin/modules', payload);
+    return response.data.data;
+};
+
+export const updateAdminModule = async (id: number, payload: UpdateAdminModulePayload): Promise<AdminModule> => {
+    const response = await api.put<{ data: AdminModule }>(`/admin/modules/${id}`, payload);
+    return response.data.data;
+};
+
+// Admin School Management
+export const getAdminSchools = async (params?: GetAdminSchoolsParams): Promise<AdminSchoolListResponse> => {
+    const response = await api.get<AdminSchoolListResponse>('/admin/schools', { params });
+    return response.data;
+};
+
+export const createAdminSchool = async (payload: CreateAdminSchoolPayload): Promise<AdminSchool> => {
+    const response = await api.post<{ data: AdminSchool }>('/admin/schools', payload);
+    return response.data.data;
+};
+
+export const updateAdminSchool = async (id: number, payload: UpdateAdminSchoolPayload): Promise<AdminSchool> => {
+    const response = await api.put<{ data: AdminSchool }>(`/admin/schools/${id}`, payload);
+    return response.data.data;
+};
+
 export default api;
+
+
 
 
 

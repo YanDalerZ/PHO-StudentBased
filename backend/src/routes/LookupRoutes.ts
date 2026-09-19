@@ -1,13 +1,12 @@
 import { Router } from 'express';
-import { getMunicipalities, getBarangays, getSchools } from '../controllers/LookupController.js';
-import { authenticate } from '../middleware/auth.js';
+import { getMunicipalities, getBarangays, getSchools, getModules } from '../controllers/LookupController.js';
 
 const router = Router();
 
-// Routes are public because they are used by the public Registration Form
-
+// Routes are public/lookup endpoints
 router.get('/municipalities', getMunicipalities);
 router.get('/barangays/:munId', getBarangays);
 router.get('/schools/:bgyId', getSchools);
+router.get('/modules', getModules);
 
 export default router;

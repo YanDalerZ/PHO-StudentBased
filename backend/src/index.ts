@@ -51,6 +51,7 @@ app.use('/api/modules/deworming', AllRoutes.DewormingRoutes);
 app.use('/api/modules/immunization', AllRoutes.ImmunizationRoutes);
 app.use('/api/modules/vital-signs', AllRoutes.VitalSignsRoutes);
 app.use('/api/dashboard', AllRoutes.DashboardRoutes);
+app.use('/api/admin', AllRoutes.AdminRoutes);
 
 
 // Serving static uploads
