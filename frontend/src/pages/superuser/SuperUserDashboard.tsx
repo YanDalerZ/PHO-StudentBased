@@ -305,7 +305,7 @@ export const NurseDashboard: React.FC = () => {
                                     <tr className="border-b border-slate-100 text-[11px] font-semibold text-slate-400">
                                         <th className="pb-2">Name</th>
                                         <th className="pb-2">School</th>
-                                        <th className="pb-2">School Municipality</th>
+                                        <th className="pb-2">Municipality</th>
                                         <th className="pb-2 text-right">Date</th>
                                     </tr>
                                 </thead>
@@ -389,7 +389,7 @@ export const NurseDashboard: React.FC = () => {
 
                 {/* Students by Municipality (3 cols) */}
                 <div className="lg:col-span-3 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
-                    <h3 className="font-bold text-slate-800 mb-4">By School Municipality</h3>
+                    <h3 className="font-bold text-slate-800 mb-4">By Municipality</h3>
                     {overview.students_by_municipality.length === 0 ? (
                         <p className="text-sm text-slate-400 text-center py-8">No data</p>
                     ) : (

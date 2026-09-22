@@ -188,7 +188,7 @@ export const FilterBar = ({ onFilterChange, className }: FilterBarProps) => {
               onChange={(e) => handleMunicipalityChange(e.target.value)}
               disabled={loadingMunicipalities}
             >
-              <option value="">All School Municipalities</option>
+              <option value="">All Municipalities</option>
               {municipalities.map((mun) => (
                 <option key={mun.id} value={String(mun.id)}>{mun.name}</option>
               ))}

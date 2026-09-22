@@ -73,7 +73,7 @@ const VitalSignsForm: React.FC = () => {
     const location = useLocation();
 
     const isSuperUser = location.pathname.startsWith('/superuser');
-    const basePath = isSuperUser ? '/superuser' : '/staff';
+    const basePath = isSuperUser ? '/superuser' : '/teacher';
 
     const [loading, setLoading] = useState<boolean>(true);
     const [isSaving, setIsSaving] = useState<boolean>(false);

@@ -82,106 +82,30 @@ const App: React.FC = () => {
             <Route
               path="/registration-form"
               element={
-                <ProtectedRoute allowedRoles={['school_staff', 'superuser']} requiredModule="patient-info" requiredAction="can_create">
+                <ProtectedRoute allowedRoles={['teacher', 'superuser']}>
                   <RegistrationForm />
                 </ProtectedRoute>
               }
             />
 
-            {/* School Staff Portal Routes (Canonical) */}
-            <Route
-              path="/staff"
-              element={
-                <ProtectedRoute allowedRoles={['school_staff']}>
-                  <DashboardLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Navigate to="dashboard" replace />} />
-              <Route path="dashboard" element={<TeacherDashboard />} />
-              <Route path="students" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="patient-info" requiredAction="can_view">
-                  <StudentRegistry />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="patient-info" requiredAction="can_view">
-                  <StudentProfile />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/patient-info" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="patient-info" requiredAction="can_view">
-                  <PatientInfoForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/oral-health" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="oral-health" requiredAction="can_view">
-                  <OralHealthForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/deworming" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="deworming" requiredAction="can_view">
-                  <DewormingForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/immunization" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="immunization" requiredAction="can_view">
-                  <ImmunizationForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/vital-signs" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="vital-signs" requiredAction="can_view">
-                  <VitalSignsForm />
-                </ProtectedRoute>
-              } />
-            </Route>
-
-            {/* Teacher Portal Routes (Compatibility Alias) */}
+            {/* Teacher Portal Routes */}
             <Route
               path="/teacher"
               element={
-                <ProtectedRoute allowedRoles={['school_staff']}>
+                <ProtectedRoute allowedRoles={['teacher']}>
                   <DashboardLayout />
                 </ProtectedRoute>
               }
             >
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<TeacherDashboard />} />
-              <Route path="students" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="patient-info" requiredAction="can_view">
-                  <StudentRegistry />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="patient-info" requiredAction="can_view">
-                  <StudentProfile />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/patient-info" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="patient-info" requiredAction="can_view">
-                  <PatientInfoForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/oral-health" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="oral-health" requiredAction="can_view">
-                  <OralHealthForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/deworming" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="deworming" requiredAction="can_view">
-                  <DewormingForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/immunization" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="immunization" requiredAction="can_view">
-                  <ImmunizationForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/vital-signs" element={
-                <ProtectedRoute allowedRoles={['school_staff']} requiredModule="vital-signs" requiredAction="can_view">
-                  <VitalSignsForm />
-                </ProtectedRoute>
-              } />
+              <Route path="students" element={<StudentRegistry />} />
+              <Route path="students/:id" element={<StudentProfile />} />
+              <Route path="students/:id/patient-info" element={<PatientInfoForm />} />
+              <Route path="students/:id/oral-health" element={<OralHealthForm />} />
+              <Route path="students/:id/deworming" element={<DewormingForm />} />
+              <Route path="students/:id/immunization" element={<ImmunizationForm />} />
+              <Route path="students/:id/vital-signs" element={<VitalSignsForm />} />
             </Route>
 
             {/* Super User Portal Routes */}
@@ -195,67 +119,19 @@ const App: React.FC = () => {
             >
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<SuperUserDashboard />} />
-              <Route path="patient-info" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="patient-info" requiredAction="can_report">
-                  <PatientInfoDash />
-                </ProtectedRoute>
-              } />
-              <Route path="students" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="patient-info" requiredAction="can_view">
-                  <StudentRegistry />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="patient-info" requiredAction="can_view">
-                  <StudentProfile />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/patient-info" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="patient-info" requiredAction="can_view">
-                  <PatientInfoForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/oral-health" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="oral-health" requiredAction="can_view">
-                  <OralHealthForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/deworming" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="deworming" requiredAction="can_view">
-                  <DewormingForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/immunization" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="immunization" requiredAction="can_view">
-                  <ImmunizationForm />
-                </ProtectedRoute>
-              } />
-              <Route path="students/:id/vital-signs" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="vital-signs" requiredAction="can_view">
-                  <VitalSignsForm />
-                </ProtectedRoute>
-              } />
+              <Route path="patient-info" element={<PatientInfoDash />} />
+              <Route path="students" element={<StudentRegistry />} />
+              <Route path="students/:id" element={<StudentProfile />} />
+              <Route path="students/:id/patient-info" element={<PatientInfoForm />} />
+              <Route path="students/:id/oral-health" element={<OralHealthForm />} />
+              <Route path="students/:id/deworming" element={<DewormingForm />} />
+              <Route path="students/:id/immunization" element={<ImmunizationForm />} />
+              <Route path="students/:id/vital-signs" element={<VitalSignsForm />} />
 
-              <Route path="oral-health" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="oral-health" requiredAction="can_report">
-                  <OralHealthDash />
-                </ProtectedRoute>
-              } />
-              <Route path="deworming" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="deworming" requiredAction="can_report">
-                  <DewormingDash />
-                </ProtectedRoute>
-              } />
-              <Route path="immunization" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="immunization" requiredAction="can_report">
-                  <ImmunizationDash />
-                </ProtectedRoute>
-              } />
-              <Route path="vital-signs" element={
-                <ProtectedRoute allowedRoles={['superuser']} requiredModule="vital-signs" requiredAction="can_report">
-                  <VitalSignsDash />
-                </ProtectedRoute>
-              } />
+              <Route path="oral-health" element={<OralHealthDash />} />
+              <Route path="deworming" element={<DewormingDash />} />
+              <Route path="immunization" element={<ImmunizationDash />} />
+              <Route path="vital-signs" element={<VitalSignsDash />} />
             </Route>
 
             {/* Admin Portal Routes */}

@@ -1,8 +1,69 @@
 import 'dotenv/config';
+import express, { type Application } from 'express';
+import cors from 'cors';
+
+import path from 'path';
+import { fileURLToPath } from 'url';
 import pool from './database/db.js';
-import app from './app.js';
+
+import AllRoutes from './routes/AllRoutes.js';
+
+const app: Application = express();
+
+if (!process.env.JWT_SECRET) {
+    console.error('FATAL ERROR: JWT_SECRET is not defined in environment variables.');
+    process.exit(1);
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
+
+const allowedOrigins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://pho-studentbased.onrender.com",
+];
+
+const corsOptions: cors.CorsOptions = {
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+};
+
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' }));
+
+app.use('/api/users', AllRoutes.UserRoutes);
+app.use('/api/students', AllRoutes.StudentRoutes);
+app.use('/api/auth', AllRoutes.AuthRoutes);
+app.use('/api/lookup', AllRoutes.LookupRoutes);
+app.use('/api/modules/patient-info', AllRoutes.PatientInfoRoutes);
+app.use('/api/modules/oral-health', AllRoutes.OralHealthRoutes);
+app.use('/api/modules/deworming', AllRoutes.DewormingRoutes);
+app.use('/api/modules/immunization', AllRoutes.ImmunizationRoutes);
+app.use('/api/modules/vital-signs', AllRoutes.VitalSignsRoutes);
+app.use('/api/dashboard', AllRoutes.DashboardRoutes);
+app.use('/api/admin', AllRoutes.AdminRoutes);
+
+
+// Serving static uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Serving frontend static files
+const frontendPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendPath));
+
+app.get(/^((?!\/api).)*$/, (req, res) => {
+    res.sendFile(path.resolve(frontendPath, "index.html"));
+});
 
 // Start Server and Verify Aiven Postgres Connection
 app.listen(PORT, '0.0.0.0', async () => {

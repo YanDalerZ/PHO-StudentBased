@@ -129,7 +129,7 @@ const StudentProfile: React.FC = () => {
                     {errorMessage}
                 </p>
                 <Link
-                    to={`${window.location.pathname.startsWith('/superuser') ? '/superuser' : '/staff'}/students`}
+                    to={`${window.location.pathname.startsWith('/superuser') ? '/superuser' : '/teacher'}/students`}
                     className="mt-6 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold transition-colors flex items-center shadow-xs"
                 >
                     <ArrowLeft className="w-4 h-4 mr-2" />
@@ -147,7 +147,7 @@ const StudentProfile: React.FC = () => {
                     {errorMessage || 'The requested student record could not be found.'}
                 </p>
                 <Link
-                    to={`${window.location.pathname.startsWith('/superuser') ? '/superuser' : '/staff'}/students`}
+                    to={`${window.location.pathname.startsWith('/superuser') ? '/superuser' : '/teacher'}/students`}
                     className="mt-6 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold transition-colors flex items-center"
                 >
                     <ArrowLeft className="w-4 h-4 mr-2" />
@@ -204,7 +204,7 @@ const StudentProfile: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <Link to={`${window.location.pathname.startsWith('/superuser') ? '/superuser' : '/staff'}/students`} className="text-sm text-slate-500 hover:text-slate-800 flex items-center transition-colors w-fit">
+            <Link to={`${window.location.pathname.startsWith('/superuser') ? '/superuser' : '/teacher'}/students`} className="text-sm text-slate-500 hover:text-slate-800 flex items-center transition-colors w-fit">
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Back to Student Registry
             </Link>
@@ -322,7 +322,7 @@ const StudentProfile: React.FC = () => {
                         return (
                             <Link
                                 key={mod.id}
-                                to={`${window.location.pathname.startsWith('/superuser') ? '/superuser' : '/staff'}/students/${student.id}/${mod.id}`}
+                                to={`${window.location.pathname.startsWith('/superuser') ? '/superuser' : '/teacher'}/students/${student.id}/${mod.id}`}
                                 className="group relative bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-200 transition-all flex flex-col justify-between h-40 overflow-hidden"
                             >
                                 {/* Background accent */}

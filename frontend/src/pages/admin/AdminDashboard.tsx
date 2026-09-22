@@ -100,7 +100,7 @@ export const AdminDashboard: React.FC = () => {
             Superuser
           </span>
         );
-      case 'school_staff':
+      case 'teacher':
         return (
           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center space-x-1 bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
             <UserCheck className="w-3 h-3 mr-1" aria-hidden="true" />
@@ -204,7 +204,7 @@ export const AdminDashboard: React.FC = () => {
               subtitle={
                 <div className="flex flex-wrap items-center gap-1.5 mt-1 font-medium">
                   <span className="text-teal-600 dark:text-teal-400">
-                    {stats.users_by_role.school_staff} Teachers
+                    {stats.users_by_role.teacher} Teachers
                   </span>
                   <span>•</span>
                   <span className="text-indigo-600 dark:text-indigo-400">

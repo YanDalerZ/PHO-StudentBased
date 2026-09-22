@@ -61,7 +61,7 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
 
 const listUsersQuerySchema = z.object({
   search: z.string().optional(),
-  role: z.enum(['school_staff', 'superuser', 'admin']).optional(),
+  role: z.enum(['teacher', 'superuser', 'admin']).optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().optional().default(10),
 });
@@ -89,7 +89,7 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
 const createUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.'),
   password: z.string().min(8, 'Password must be at least 8 characters long.'),
-  role: z.enum(['school_staff', 'superuser']),
+  role: z.enum(['teacher', 'superuser']),
   first_name: z.string().trim().min(1, 'First name is required.'),
   last_name: z.string().trim().min(1, 'Last name is required.'),
   contact_no: z.string().trim().optional().nullable(),
@@ -115,7 +115,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
 const updateUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.').optional(),
   password: z.string().min(8, 'Password must be at least 8 characters long.').optional(),
-  role: z.enum(['school_staff', 'superuser']).optional(),
+  role: z.enum(['teacher', 'superuser']).optional(),
 
   first_name: z.string().trim().min(1).optional(),
   last_name: z.string().trim().min(1).optional(),
@@ -340,91 +340,4 @@ export const updateSchool = async (req: Request, res: Response): Promise<void> =
   } catch (error) {
     handleControllerError(error, res, 'Failed to update school.');
   }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PERMISSION & SCOPE MANAGEMENT CONTROLLERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const getModulePermissions = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const userId = parseIdParam(req);
-        if (!userId) {
-            res.status(400).json({ error: 'Valid positive user ID is required.' });
-            return;
-        }
-        const perms = await adminService.getModulePermissions(userId);
-        res.status(200).json({ data: perms });
-    } catch (error) {
-        handleControllerError(error, res, 'Failed to get module permissions.');
-    }
-};
-
-export const updateModulePermissions = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const userId = parseIdParam(req);
-        if (!userId) {
-            res.status(400).json({ error: 'Valid positive user ID is required.' });
-            return;
-        }
-        const { moduleSlug, permissions } = req.body;
-        if (!moduleSlug || !permissions) {
-            res.status(400).json({ error: 'moduleSlug and permissions are required.' });
-            return;
-        }
-        const adminId = req.user?.id || 0; // Assuming auth middleware sets req.user
-        
-        const result = await adminService.updateModulePermissions(userId, moduleSlug, permissions, adminId);
-        res.status(200).json({ data: result });
-    } catch (error) {
-        handleControllerError(error, res, 'Failed to update module permissions.');
-    }
-};
-
-export const getSchoolAssignments = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const userId = parseIdParam(req);
-        if (!userId) {
-            res.status(400).json({ error: 'Valid positive user ID is required.' });
-            return;
-        }
-        const schools = await adminService.getSchoolAssignments(userId);
-        res.status(200).json({ data: schools });
-    } catch (error) {
-        handleControllerError(error, res, 'Failed to get school assignments.');
-    }
-};
-
-export const updateSchoolAssignments = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const userId = parseIdParam(req);
-        if (!userId) {
-            res.status(400).json({ error: 'Valid positive user ID is required.' });
-            return;
-        }
-        const { schoolIds } = req.body;
-        if (!Array.isArray(schoolIds)) {
-            res.status(400).json({ error: 'schoolIds must be an array of integers.' });
-            return;
-        }
-        const adminId = req.user?.id || 0;
-        const result = await adminService.updateSchoolAssignments(userId, schoolIds, adminId);
-        res.status(200).json({ data: result });
-    } catch (error) {
-        handleControllerError(error, res, 'Failed to update school assignments.');
-    }
-};
-
-export const getEffectiveAccess = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const userId = parseIdParam(req);
-        if (!userId) {
-            res.status(400).json({ error: 'Valid positive user ID is required.' });
-            return;
-        }
-        const access = await adminService.getEffectiveAccess(userId);
-        res.status(200).json({ data: access });
-    } catch (error) {
-        handleControllerError(error, res, 'Failed to get effective access.');
-    }
 };

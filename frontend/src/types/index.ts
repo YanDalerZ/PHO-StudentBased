@@ -1,35 +1,11 @@
 // Type definitions for the application
 
-export interface UserModulePermission {
-  module_id: number;
-  module_slug: string;
-  can_view: boolean;
-  can_create: boolean;
-  can_edit: boolean;
-  can_approve_registration: boolean;
-  can_report: boolean;
-  can_export: boolean;
-}
-
-export interface UserSchoolAssignment {
-  school_id: number;
-  school_name: string;
-}
-
-export interface UserEffectiveAccess {
-  role: 'school_staff' | 'teacher' | 'superuser' | 'admin';
-  job_title?: string | null;
-  modulePermissions: Record<string, UserModulePermission>;
-  schoolAssignments: UserSchoolAssignment[];
-}
-
 export interface User {
   id: number;
   email: string;
-  role: 'school_staff' | 'teacher' | 'superuser' | 'admin'; // teacher is kept for legacy compatibility during migration
+  role: 'teacher' | 'superuser' | 'admin';
   first_name: string;
   last_name: string;
-  effectiveAccess?: UserEffectiveAccess;
 }
 
 export interface AuthResponse {
@@ -764,7 +740,7 @@ export interface ImmunizationDashboardResponse {
 export interface AdminUserSummary {
   id: number;
   email: string;
-  role: 'school_staff' | 'superuser' | 'admin';
+  role: 'teacher' | 'superuser' | 'admin';
   first_name: string;
   last_name: string;
   contact_no: string | null;
@@ -776,7 +752,7 @@ export interface AdminUserSummary {
 
 export interface AdminDashboardStats {
   users_by_role: {
-    school_staff: number;
+    teacher: number;
     superuser: number;
     admin: number;
     total: number;
@@ -788,7 +764,7 @@ export interface AdminDashboardStats {
 
 export interface GetAdminUsersParams {
   search?: string;
-  role?: 'school_staff' | 'superuser' | 'admin';
+  role?: 'teacher' | 'superuser' | 'admin';
   page?: number;
   limit?: number;
 }
@@ -800,7 +776,7 @@ export interface AdminUserListResponse {
   limit: number;
 }
 
-export type CreatableAdminUserRole = 'school_staff' | 'superuser';
+export type CreatableAdminUserRole = 'teacher' | 'superuser';
 
 export interface CreateAdminUserPayload {
   email: string;

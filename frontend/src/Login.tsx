@@ -34,8 +34,8 @@ const Login: React.FC = () => {
             const from = location.state?.from;
             if (from) {
                 navigate(from, { replace: true });
-            } else if (user.role === 'school_staff') {
-                navigate('/staff/dashboard', { replace: true });
+            } else if (user.role === 'teacher') {
+                navigate('/teacher/dashboard', { replace: true });
             } else if (user.role === 'superuser') {
                 navigate('/superuser', { replace: true });
             } else if (user.role === 'admin') {

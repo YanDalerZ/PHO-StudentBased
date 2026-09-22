@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs';
 import pool from '../database/db.js';
-import { AuditService } from './AuditService.js';
 import type {
   AdminDashboardStats,
   AdminModule,
@@ -87,14 +86,14 @@ export async function getDashboardStats(): Promise<AdminDashboardStats> {
     'SELECT role, COUNT(*)::int as count FROM USERS GROUP BY role'
   );
   const usersByRole = {
-    school_staff: 0,
+    teacher: 0,
     superuser: 0,
     admin: 0,
     total: 0,
   };
   for (const row of roleResult.rows) {
     const count = parseInt(row.count, 10) || 0;
-    if (row.role === 'school_staff' || row.role === 'school_staff') usersByRole.school_staff += count;
+    if (row.role === 'teacher') usersByRole.teacher = count;
     else if (row.role === 'superuser') usersByRole.superuser = count;
     else if (row.role === 'admin') usersByRole.admin = count;
     usersByRole.total += count;
@@ -193,8 +192,8 @@ export interface CreateUserInput {
 
 export async function createUser(input: CreateUserInput): Promise<AdminUserSummary> {
   // Prevent admin creation through API
-  if (input.role !== 'school_staff' && input.role !== 'superuser') {
-    throw new AdminServiceError(400, "Invalid role. Only 'school_staff' and 'superuser' roles can be created via this API.");
+  if (input.role !== 'teacher' && input.role !== 'superuser') {
+    throw new AdminServiceError(400, "Invalid role. Only 'teacher' and 'superuser' roles can be created via this API.");
   }
 
   const normalizedEmail = input.email.trim().toLowerCase();
@@ -252,7 +251,7 @@ export async function updateUser(id: number, input: UpdateUserInput): Promise<Ad
 
   // Prevent role escalation to admin
   if (input.role !== undefined) {
-    if (input.role !== 'school_staff' && input.role !== 'superuser') {
+    if (input.role !== 'teacher' && input.role !== 'superuser') {
       throw new AdminServiceError(400, "Role cannot be updated to 'admin'.");
     }
   }
@@ -765,162 +764,3 @@ export async function updateSchool(id: number, input: UpdateSchoolInput): Promis
   if (!row) throw new AdminServiceError(404, 'School not found.');
   return mapSchoolWithGeo(row);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PERMISSION & SCOPE MANAGEMENT
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function getModulePermissions(userId: number) {
-    const res = await pool.query(`
-        SELECT ump.*, m.slug as module_slug 
-        FROM USER_MODULE_PERMISSIONS ump
-        JOIN MODULES m ON ump.module_id = m.id
-        WHERE ump.user_id = $1 AND ump.revoked_at IS NULL
-    `, [userId]);
-    return res.rows;
-}
-
-export async function updateModulePermissions(userId: number, moduleSlug: string, permissions: any, adminId: number) {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        
-        const targetUserRes = await client.query('SELECT role FROM USERS WHERE id = $1', [userId]);
-        if (targetUserRes.rows.length === 0) throw new AdminServiceError(404, 'User not found');
-        if (targetUserRes.rows[0].role === 'admin') throw new AdminServiceError(400, 'Cannot assign clinical access to admin role');
-
-        const moduleRes = await client.query('SELECT id, is_active FROM MODULES WHERE slug = $1', [moduleSlug]);
-        if (moduleRes.rows.length === 0) throw new AdminServiceError(404, 'Module not found');
-        if (!moduleRes.rows[0].is_active) throw new AdminServiceError(400, 'Module is not active');
-        const moduleId = moduleRes.rows[0].id;
-
-        if (moduleSlug !== 'patient-info' && permissions.can_approve_registration) {
-            throw new AdminServiceError(400, 'can_approve_registration is only valid for patient-info module');
-        }
-
-        // Revoke existing
-        await client.query(`
-            UPDATE USER_MODULE_PERMISSIONS 
-            SET revoked_at = CURRENT_TIMESTAMP, revoked_by = $1 
-            WHERE user_id = $2 AND module_id = $3 AND revoked_at IS NULL
-        `, [adminId, userId, moduleId]);
-
-        // Insert new
-        const res = await client.query(`
-            INSERT INTO USER_MODULE_PERMISSIONS 
-            (user_id, module_id, can_view, can_create, can_edit, can_approve_registration, can_report, can_export, granted_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING *
-        `, [
-            userId, moduleId,
-            permissions.can_view || false,
-            permissions.can_create || false,
-            permissions.can_edit || false,
-            permissions.can_approve_registration || false,
-            permissions.can_report || false,
-            permissions.can_export || false,
-            adminId
-        ]);
-
-        await AuditService.logEvent({
-            actor_id: adminId,
-            action: 'UPDATE_MODULE_PERMISSIONS',
-            entity_type: 'USER',
-            entity_id: userId,
-            after_data: { module_slug: moduleSlug, permissions }
-        }, client);
-
-        await client.query('COMMIT');
-        return res.rows[0];
-    } catch (e) {
-        await client.query('ROLLBACK');
-        throw e;
-    } finally {
-        client.release();
-    }
-}
-
-export async function getSchoolAssignments(userId: number) {
-    const res = await pool.query(`
-        SELECT usa.*, s.name as school_name 
-        FROM USER_SCHOOL_ASSIGNMENTS usa
-        JOIN SCHOOLS s ON usa.school_id = s.id
-        WHERE usa.user_id = $1 AND usa.revoked_at IS NULL
-    `, [userId]);
-    return res.rows;
-}
-
-export async function updateSchoolAssignments(userId: number, schoolIds: number[], adminId: number) {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        const targetUserRes = await client.query('SELECT role FROM USERS WHERE id = $1', [userId]);
-        if (targetUserRes.rows.length === 0) throw new AdminServiceError(404, 'User not found');
-        if (targetUserRes.rows[0].role === 'admin') throw new AdminServiceError(400, 'Cannot assign schools to admin role');
-
-        const uniqueSchoolIds = Array.from(new Set(schoolIds));
-
-        for (const schoolId of uniqueSchoolIds) {
-            const schoolCheck = await client.query('SELECT is_active FROM SCHOOLS WHERE id = $1', [schoolId]);
-            if (schoolCheck.rows.length === 0) throw new AdminServiceError(404, `School ${schoolId} not found`);
-            if (!schoolCheck.rows[0].is_active) throw new AdminServiceError(400, `School ${schoolId} is inactive`);
-        }
-
-        // Revoke all existing
-        await client.query(`
-            UPDATE USER_SCHOOL_ASSIGNMENTS 
-            SET revoked_at = CURRENT_TIMESTAMP, revoked_by = $1 
-            WHERE user_id = $2 AND revoked_at IS NULL
-        `, [adminId, userId]);
-
-        // Insert new
-        const newAssignments = [];
-        for (const schoolId of uniqueSchoolIds) {
-            const res = await client.query(`
-                INSERT INTO USER_SCHOOL_ASSIGNMENTS (user_id, school_id, assigned_by)
-                VALUES ($1, $2, $3)
-                RETURNING *
-            `, [userId, schoolId, adminId]);
-            newAssignments.push(res.rows[0]);
-        }
-
-        await AuditService.logEvent({
-            actor_id: adminId,
-            action: 'UPDATE_SCHOOL_ASSIGNMENTS',
-            entity_type: 'USER',
-            entity_id: userId,
-            after_data: { school_ids: uniqueSchoolIds }
-        }, client);
-
-        await client.query('COMMIT');
-        return newAssignments;
-    } catch (e) {
-        await client.query('ROLLBACK');
-        throw e;
-    } finally {
-        client.release();
-    }
-}
-
-export async function getEffectiveAccess(userId: number) {
-    const userRes = await pool.query('SELECT role, job_title FROM USERS WHERE id = $1', [userId]);
-    if (userRes.rows.length === 0) throw new AdminServiceError(404, 'User not found');
-    const user = userRes.rows[0];
-
-    const perms = await getModulePermissions(userId);
-    const schools = await getSchoolAssignments(userId);
-
-    const mappedPerms: Record<string, any> = {};
-    for (const p of perms) {
-        mappedPerms[p.module_slug] = p;
-    }
-
-    return {
-        role: user.role,
-        job_title: user.job_title,
-        modulePermissions: mappedPerms,
-        schoolAssignments: schools
-    };
-}
-
