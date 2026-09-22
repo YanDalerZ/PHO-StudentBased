@@ -501,7 +501,7 @@ export const PatientInfoDash: React.FC = () => {
                         {/* Registration by Municipality */}
                         <BarChart
                             data={municipalityChartData.length > 0 ? municipalityChartData : [{ name: 'None', Registrations: 0 }]}
-                            title="Student Registration by Municipality"
+                            title="Student Registration by School Municipality"
                             dataKey="Registrations"
                             xAxisKey="name"
                             colors={['#14b8a6']}

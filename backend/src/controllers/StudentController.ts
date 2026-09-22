@@ -715,6 +715,11 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
         const schoolId = validatedData.school_id !== undefined
             ? (validatedData.school_id ? Number(validatedData.school_id) : null)
             : existing.school_id;
+        if (req.user?.role === 'school_staff' &&
+            (!schoolId || !req.user.schoolAssignments.includes(schoolId))) {
+            res.status(403).json({ message: 'Access forbidden: Unassigned school' });
+            return;
+        }
         if (schoolId) {
             const schoolCheck = await pool.query('SELECT id, is_active FROM SCHOOLS WHERE id = $1', [schoolId]);
             if (schoolCheck.rows.length === 0 || !schoolCheck.rows[0].is_active) {

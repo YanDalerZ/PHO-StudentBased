@@ -58,21 +58,30 @@ export async function runPhase1SmokeTests(context: TestContext): Promise<void> {
     try {
         console.log('\nTesting Lookup Endpoints (Public)...');
         const munData = await fetchJSON<Municipality[]>(`${apiBaseUrl}/lookup/municipalities`);
-        if (munData.length === 0) throw new Error('No municipalities found.');
+        if (munData.length !== 17) throw new Error(`Expected 17 municipalities, got ${munData.length}.`);
         console.log(`✅ Municipalities loaded: ${munData.length}`);
 
-        const munId = munData[0]?.id;
+        const munId = munData.find(municipality => municipality.name === 'Kalibo')?.id;
         if (!munId) throw new Error('Municipality ID is missing');
         const bgyData = await fetchJSON<Barangay[]>(`${apiBaseUrl}/lookup/barangays/${munId}`);
         console.log(`✅ Barangays for mun ${munId} loaded: ${bgyData.length}`);
         
-        if (bgyData.length > 0) {
-            const bgyId = bgyData[0]?.id;
+        if (bgyData.length === 0) throw new Error('Kalibo must have seeded barangays.');
+        if (bgyData.some(barangay => barangay.municipality_id !== munId)) {
+            throw new Error('Barangay cascade returned a different municipality.');
+        }
+        {
+            const bgyId = bgyData.find(barangay => barangay.name === 'Poblacion')?.id;
             if (!bgyId) throw new Error('Barangay ID is missing');
             const schoolData = await fetchJSON<School[]>(`${apiBaseUrl}/lookup/schools/${bgyId}`);
+            if (schoolData.length === 0) throw new Error('Poblacion, Kalibo must have a seeded school.');
+            if (!schoolData.some(school => school.name === 'Kalibo Elementary School')) {
+                throw new Error('Expected sample school in Poblacion, Kalibo.');
+            }
+            if (schoolData.some(school => school.barangay_id !== bgyId)) {
+                throw new Error('School cascade returned a different barangay.');
+            }
             console.log(`✅ Schools for bgy ${bgyId} loaded: ${schoolData.length}`);
-        } else {
-            console.log(`✅ No barangays found for mun ${munId}, skipping school lookup.`);
         }
     } catch (err: unknown) {
         const httpErr = err as HttpErrorPayload;

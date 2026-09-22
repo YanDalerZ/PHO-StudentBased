@@ -56,16 +56,34 @@ async function main() {
             throw new Error(`CRITICAL: current_database() '${currentDb}' does not match parsed TEST_DATABASE_URL '${expectedDbName}'.`);
         }
 
+        console.log(`Guarded test database: ${currentDb}`);
+
         await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
         console.log('✅ Cleaned schema');
 
         const schema = fs.readFileSync(path.join(process.cwd(), 'database', 'schema.sql'), 'utf8');
         await pool.query(schema);
         console.log('✅ Executed schema.sql');
+
+        // Non-default sequence starts catch accidental hardcoded geographic IDs.
+        await pool.query('ALTER SEQUENCE municipalities_id_seq RESTART WITH 101; ALTER SEQUENCE barangays_id_seq RESTART WITH 1001;');
         
         const seed = fs.readFileSync(path.join(process.cwd(), 'database', 'seed.sql'), 'utf8');
         await pool.query(seed);
         console.log('✅ Executed seed.sql');
+
+        const counts = await pool.query<{ municipalities: number; barangays: number; schools: number }>(
+            'SELECT (SELECT COUNT(*)::int FROM municipalities) AS municipalities, (SELECT COUNT(*)::int FROM barangays) AS barangays, (SELECT COUNT(*)::int FROM schools) AS schools'
+        );
+        const totals = counts.rows[0];
+        if (!totals || totals.municipalities !== 17 || totals.barangays !== 327 || totals.schools !== 2) {
+            throw new Error('Expected seed totals: 17 municipalities, 327 barangays, 2 sample schools.');
+        }
+        const missing = await pool.query(
+            'SELECT m.name FROM municipalities m LEFT JOIN barangays b ON b.municipality_id = m.id GROUP BY m.id, m.name HAVING COUNT(b.id) = 0'
+        );
+        if (missing.rows.length > 0) throw new Error('Every seeded municipality must have barangays.');
+        console.log(`✅ Seed counts: ${totals.municipalities} municipalities, ${totals.barangays} barangays, ${totals.schools} sample schools.`);
         
         const { runMigrations } = await import('../database/run_migrations.js');
         await runMigrations(pool);

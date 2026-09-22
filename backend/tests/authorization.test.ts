@@ -2,6 +2,7 @@ import { createSchoolStaffUser, assignUserToSchool, grantModulePermissions, revo
 import pool from '../src/database/db.js';
 import type { TestContext } from './helpers/testContext.js';
 import { cleanupTestFixtures } from './helpers/cleanup.js';
+import { changeResidence } from '../../frontend/src/utils/residentialLocation.js';
 
 interface ApiResponse<T = Record<string, unknown>> {
     status: number;
@@ -94,6 +95,71 @@ export async function runAuthorizationTests(context: TestContext): Promise<void>
         assert(createWithoutPerms.status === 403, 'Missing can_create blocks student creation');
 
         // Test 5: Grant can_create for patient-info
+        await grantModulePermissions(staff.id, 'patient-info', { can_create: true, can_view: true }, admin.id);
+
+        // Residence and campus geography are independent.
+        const homeRows = await pool.query<{ id: number; municipality_id: number }>(
+            "SELECT b.id, b.municipality_id FROM BARANGAYS b JOIN MUNICIPALITIES m ON m.id = b.municipality_id WHERE m.name = 'Altavas' ORDER BY b.name LIMIT 2"
+        );
+        const home = homeRows.rows[0];
+        const otherHome = homeRows.rows[1];
+        if (!home || !otherHome) throw new Error('Altavas residence fixtures missing');
+        const current = { municipality: String(home.municipality_id), barangay: String(home.id), school_id: schoolId };
+        const changed = changeResidence(current, 'barangay', String(otherHome.id));
+        assert(changed.school_id === schoolId && changed.barangay === String(otherHome.id),
+            'Changing residential barangay preserves the selected school');
+        const cleared = changeResidence(changed, 'municipality', '');
+        assert(cleared.school_id === schoolId && cleared.barangay === '',
+            'Clearing residential municipality preserves the selected school');
+
+        interface SchoolLookup { id: number; barangay_id: number; municipality_id: number; municipality_name: string; barangay_name: string; is_active: boolean }
+        const staffOptions = await fetchAPI<SchoolLookup[]>('/lookup/schools', { headers: { Authorization: `Bearer ${staff.token}` } });
+        assert(staffOptions.status === 200 && staffOptions.data?.length === 1 && staffOptions.data[0]?.id === schoolId,
+            'School staff selection contains only assigned active schools');
+        const allOptions = await fetchAPI<SchoolLookup[]>('/lookup/schools', { headers: { Authorization: `Bearer ${superuser.token}` } });
+        assert(allOptions.status === 200 && Boolean(allOptions.data?.some(s => s.id === unassignedSchoolId)),
+            'Superuser selection includes schools without an assignment');
+        const campus = allOptions.data?.find(s => s.id === schoolId);
+        if (!campus || campus.municipality_name !== 'Kalibo') throw new Error('Expected Kalibo school fixture');
+        const filtered = await fetchAPI<SchoolLookup[]>(`/lookup/schools?search=Kalibo&municipality_id=${campus.municipality_id}&barangay_id=${campus.barangay_id}`,
+            { headers: { Authorization: `Bearer ${superuser.token}` } });
+        assert(filtered.status === 200 && Boolean(filtered.data?.length) && Boolean(filtered.data?.every(s => s.barangay_id === campus.barangay_id)),
+            'School search and campus municipality/barangay filters work');
+        const invalid = await fetchAPI('/lookup/schools?municipality_id=invalid', { headers: { Authorization: `Bearer ${staff.token}` } });
+        assert(invalid.status === 400, 'Invalid school filters return 400');
+        await pool.query('UPDATE SCHOOLS SET is_active = false WHERE id = $1', [unassignedSchoolId]);
+        try {
+            const activeOnly = await fetchAPI<SchoolLookup[]>('/lookup/schools?includeInactive=true', { headers: { Authorization: `Bearer ${superuser.token}` } });
+            assert(activeOnly.status === 200 && !activeOnly.data?.some(s => s.id === unassignedSchoolId), 'Inactive schools are excluded');
+        } finally {
+            await pool.query('UPDATE SCHOOLS SET is_active = true WHERE id = $1', [unassignedSchoolId]);
+        }
+        const payload = { school_id: schoolId, municipality_id: home.municipality_id, barangay_id: home.id,
+            first_name: 'CrossMunicipality', last_name: 'Student', student_lrn: `cross_${runId}`, sex: 'Male', date_of_birth: '2010-01-01' };
+        const createOptions = (token: string, body: object): RequestInit => ({
+            method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const created = await fetchAPI<{ id: number }>('/students', createOptions(staff.token, payload));
+        assert(created.status === 201, 'Staff can register an Altavas resident at an assigned Kalibo school');
+        const saved = await pool.query<{ id: number; school_id: number; barangay_id: number }>('SELECT id, school_id, barangay_id FROM STUDENTS WHERE student_lrn = $1', [payload.student_lrn]);
+        const student = saved.rows[0];
+        if (!student) throw new Error('Cross-municipality student was not saved');
+        assert(student.school_id === schoolId && student.barangay_id === home.id, 'Residence and school are stored independently');
+        const forbidden = await fetchAPI('/students', createOptions(staff.token, { ...payload, school_id: unassignedSchoolId, student_lrn: `deny_${runId}` }));
+        assert(forbidden.status === 403, 'Staff cannot register at an unassigned school');
+        await grantModulePermissions(staff.id, 'patient-info', { can_create: true, can_view: true, can_edit: true }, admin.id);
+        const transfer = await fetchAPI(`/students/${student.id}`, { ...createOptions(staff.token, { school_id: unassignedSchoolId }), method: 'PUT' });
+        assert(transfer.status === 403, 'Staff cannot transfer a student to an unassigned school');
+        const homeUpdate = await fetchAPI(`/students/${student.id}`, { ...createOptions(staff.token, { barangay_id: otherHome.id }), method: 'PUT' });
+        const afterUpdate = await pool.query<{ school_id: number; barangay_id: number }>('SELECT school_id, barangay_id FROM STUDENTS WHERE id = $1', [student.id]);
+        assert(homeUpdate.status === 200 && afterUpdate.rows[0]?.school_id === schoolId && afterUpdate.rows[0]?.barangay_id === otherHome.id,
+            'Updating residence keeps the Kalibo school');
+        await grantModulePermissions(superuser.id, 'patient-info', { can_create: true, can_view: true }, admin.id);
+        for (const target of allOptions.data ?? []) {
+            const superCreate = await fetchAPI('/students', createOptions(superuser.token,
+                { ...payload, school_id: target.id, student_lrn: `super_${target.id}_${runId}` }));
+            assert(superCreate.status === 201, `Superuser can register at active school ${target.id} without assignment`);
+        }
         await grantModulePermissions(staff.id, 'patient-info', { can_create: true, can_view: true }, admin.id);
         
         // Test 6: Missing can_edit blocks updates

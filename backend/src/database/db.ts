@@ -9,8 +9,14 @@ const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Helper to resolve ca.pem: checks local folder first, then Render secrets
-const getCaCert = (): string | undefined => {
+// Helper to resolve ca.pem: checks local folder first, then Render secrets.
+// Local PostgreSQL does not require the Aiven CA certificate.
+const getCaCert = (databaseUrl: string): string | undefined => {
+    const hostname = new URL(databaseUrl).hostname.toLowerCase();
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+        return undefined;
+    }
+
     // If testing without SSL, return undefined
     if (process.env.NODE_ENV === 'test' && process.env.TEST_DATABASE_SSL === 'false') {
         return undefined;
@@ -46,6 +52,10 @@ const getCaCert = (): string | undefined => {
 // --- Test Safeguards ---
 let connectionString = process.env.DATABASE_URL;
 
+if (!connectionString) {
+    throw new Error('DATABASE_URL is required');
+}
+
 if (process.env.NODE_ENV === 'test') {
     if (!process.env.TEST_DATABASE_URL) {
         throw new Error('TEST_DATABASE_URL is required in test mode');
@@ -71,7 +81,20 @@ if (process.env.NODE_ENV === 'test') {
     connectionString = process.env.TEST_DATABASE_URL;
 }
 
-const caCert = getCaCert();
+const parsedConnection = new URL(connectionString);
+const databaseName = decodeURIComponent(parsedConnection.pathname).replace(/^\//, '');
+const isLocalDatabase = ['localhost', '127.0.0.1', '::1'].includes(parsedConnection.hostname.toLowerCase());
+
+// Prevent a local development server from silently writing to the production
+// Aiven database. Render must set NODE_ENV=production to use `defaultdb`.
+if (process.env.NODE_ENV !== 'production' && !isLocalDatabase && databaseName === 'defaultdb') {
+    throw new Error(
+        'Refusing to connect a non-production process to production database "defaultdb". ' +
+        'Point DATABASE_URL to a dedicated pho_dev database.'
+    );
+}
+
+const caCert = getCaCert(connectionString);
 
 const pool = new Pool({
     connectionString,

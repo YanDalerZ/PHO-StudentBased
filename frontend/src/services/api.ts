@@ -90,6 +90,17 @@ api.interceptors.response.use(
 
 
 // Lookups
+export interface SchoolOption extends School {
+    barangay_name: string | null;
+    municipality_id: number | null;
+    municipality_name: string | null;
+}
+
+export const getActiveSchools = async (params?: { search?: string; municipality_id?: number; barangay_id?: number }): Promise<SchoolOption[]> => {
+    const response = await api.get<SchoolOption[]>('/lookup/schools', { params });
+    return response.data;
+};
+
 export const getMunicipalities = async (): Promise<Municipality[]> => {
     const response = await api.get<Municipality[]>('/lookup/municipalities');
     return response.data;

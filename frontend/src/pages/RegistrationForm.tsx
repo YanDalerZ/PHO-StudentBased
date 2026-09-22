@@ -14,8 +14,10 @@ import {
     INDIGENOUS_GROUP_OPTIONS, PWD_TYPE_OPTIONS,
     PHILHEALTH_STATUS_OPTIONS, PHILHEALTH_CATEGORY_OPTIONS
 } from '../utils/constants';
-import { getMunicipalities, getBarangays, getSchools, createStudent, updateStudent } from '../services/api';
-import type { Student, Municipality, Barangay, School } from '../types';
+import { getMunicipalities, getBarangays, getActiveSchools, createStudent, updateStudent } from '../services/api';
+import type { SchoolOption } from '../services/api';
+import { changeResidence } from '../utils/residentialLocation';
+import type { Student, Municipality, Barangay } from '../types';
 import { cn } from '../lib/utils';
 import logo from '../assets/images/logo.jpg';
 
@@ -266,7 +268,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
     // Cascading Dropdown States
     const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
     const [barangays, setBarangays] = useState<Barangay[]>([]);
-    const [schools, setSchools] = useState<School[]>([]);
+    const [schools, setSchools] = useState<SchoolOption[]>([]);
+    const [schoolSearch, setSchoolSearch] = useState('');
+    const [schoolError, setSchoolError] = useState(false);
+    const [schoolsLoading, setSchoolsLoading] = useState(true);
+    const visibleSchools = schools.filter(s => Number(s.id) === formData.school_id ||
+        [s.name, s.barangay_name, s.municipality_name].join(' ').toLowerCase().includes(schoolSearch.toLowerCase()));
 
     const [prevInitialData, setPrevInitialData] = useState(initialData);
     if (initialData !== prevInitialData) {
@@ -297,13 +304,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
 
     useEffect(() => {
         let isCurrent = true;
-        if (formData.barangay) {
-            getSchools(formData.barangay).then(data => {
+        getActiveSchools().then(data => {
                 if (isCurrent) setSchools(data);
+            }).catch(() => {
+                if (isCurrent) setSchoolError(true);
+            }).finally(() => {
+                if (isCurrent) setSchoolsLoading(false);
             });
-        }
         return () => { isCurrent = false; };
-    }, [formData.barangay]);
+    }, []);
 
 
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -360,10 +369,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
         const { name, value } = e.target;
         setFormData(prev => {
             if (name === 'municipality') {
-                return { ...prev, municipality: value, barangay: '', school_id: 0 };
+                return changeResidence(prev, 'municipality', value);
             }
             if (name === 'barangay') {
-                return { ...prev, barangay: value, school_id: 0 };
+                return changeResidence(prev, 'barangay', value);
             }
             return {
                 ...prev,
@@ -371,7 +380,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
             };
         });
         if (name === 'municipality') {
-            setSchools([]);
+            setBarangays([]);
         }
     }, []);
 
@@ -998,7 +1007,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                     </div>
                                     <div>
                                         <label className={labelClasses}>
-                                            <span>City/Municipality *</span>
+                                            <span>Residence Municipality *</span>
                                             {isFieldInvalid('municipality') && (
                                                 <span className="text-red-600 text-xs flex items-center font-normal lowercase">
                                                     <AlertCircle className="w-3 h-3 mr-1" /> required
@@ -1021,7 +1030,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                     </div>
                                     <div>
                                         <label className={labelClasses}>
-                                            <span>Barangay *</span>
+                                            <span>Residence Barangay *</span>
                                             {isFieldInvalid('barangay') && (
                                                 <span className="text-red-600 text-xs flex items-center font-normal lowercase">
                                                     <AlertCircle className="w-3 h-3 mr-1" /> required
@@ -1298,26 +1307,32 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                                 </span>
                                             )}
                                         </label>
+                                        <label htmlFor="school-search" className={labelClasses}>Search school name, barangay, or municipality</label>
+                                        <input id="school-search" type="search" value={schoolSearch}
+                                            onChange={e => setSchoolSearch(e.target.value)}
+                                            className={getSelectClasses('school_id')} placeholder="Search assigned or available schools" />
                                         <select
+                                            aria-label="School"
                                             required
                                             name="school_id"
                                             value={formData.school_id}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            disabled={!formData.barangay}
+                                            disabled={schoolsLoading || schoolError}
                                             className={cn(
                                                 getSelectClasses('school_id'),
                                                 "disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed"
                                             )}
                                         >
                                             <option value={0}>Select School</option>
-                                            {schools.map(s => (
-                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                            {visibleSchools.map(s => (
+                                                <option key={s.id} value={s.id}>{s.name} — {s.barangay_name ?? 'Barangay unavailable'} — {s.municipality_name ?? 'Municipality unavailable'}</option>
                                             ))}
                                         </select>
-                                        {!formData.barangay && (
-                                            <p className="text-xs text-emerald-800 font-medium mt-1.5">Note: Select a Municipality and Barangay first to populate local schools.</p>
-                                        )}
+                                        <p className="text-xs text-slate-600 mt-1.5">School Municipality describes the campus location. Residence Municipality describes the student's home.</p>
+                                        {schoolsLoading && <p role="status">Loading schools…</p>}
+                                        {schoolError && <p role="alert">Unable to load schools. Reopen the form to retry.</p>}
+                                        {!schoolsLoading && !schoolError && visibleSchools.length === 0 && <p role="status">No available schools match your search.</p>}
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
