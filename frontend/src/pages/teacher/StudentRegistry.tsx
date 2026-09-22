@@ -121,7 +121,7 @@ const StudentRegistry: React.FC = () => {
         {
             header: 'Actions',
             cell: (student: Student) => {
-                const basePath = window.location.pathname.startsWith('/superuser') ? '/superuser' : '/teacher';
+                const basePath = window.location.pathname.startsWith('/superuser') ? '/superuser' : '/staff';
                 return (
                     <Link
                         to={`${basePath}/students/${student.id}`}

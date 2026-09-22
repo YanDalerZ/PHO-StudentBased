@@ -144,7 +144,7 @@ export const createVitalSigns = async (req: Request, res: Response): Promise<voi
 
         // Verify student existence and authorization
         const studentRes = await pool.query(
-            'SELECT id, registered_by, date_of_birth FROM STUDENTS WHERE id = $1',
+            'SELECT id, registered_by, date_of_birth, school_id FROM STUDENTS WHERE id = $1',
             [validated.student_id]
         );
         if (studentRes.rows.length === 0) {
@@ -153,9 +153,12 @@ export const createVitalSigns = async (req: Request, res: Response): Promise<voi
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record vital signs for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only record vital signs for students in your assigned schools' });
+                return;
+            }
         }
 
         const dateCheckedStr = formatDate(validated.date_checked);
@@ -256,16 +259,19 @@ export const getVitalSignsByStudent = async (req: Request, res: Response): Promi
         }
 
         // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
+        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [studentId]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only view records for students in your assigned schools' });
+                return;
+            }
         }
 
         const querySql = `
@@ -312,7 +318,7 @@ export const updateVitalSigns = async (req: Request, res: Response): Promise<voi
 
         // Verify record existence and check teacher ownership
         const checkSql = `
-            SELECT vs.*, s.registered_by, s.date_of_birth
+            SELECT vs.*, s.registered_by, s.date_of_birth, s.school_id AS student_school_id
             FROM VITAL_SIGNS vs
             JOIN STUDENTS s ON vs.student_id = s.id
             WHERE vs.id = $1
@@ -324,9 +330,12 @@ export const updateVitalSigns = async (req: Request, res: Response): Promise<voi
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!existingRecord.student_school_id || !assignedSchools.includes(existingRecord.student_school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only update records for students in your assigned schools' });
+                return;
+            }
         }
 
         const validated = updateVitalSignsSchema.parse(req.body);

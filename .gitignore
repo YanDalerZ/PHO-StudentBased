@@ -25,4 +25,10 @@ pnpm-debug.log*
 # System Files
 .DS_Store
 Thumbs.db
-backend/tests/
+
+# Test Artifacts and Temporary Outputs
+coverage/
+*.lcov
+*.log
+test-results/
+.nyc_output/

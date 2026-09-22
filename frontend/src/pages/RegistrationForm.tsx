@@ -493,7 +493,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
             if (onClose) {
                 onClose();
             } else {
-                navigate('/teacher/students');
+                navigate('/staff/students');
             }
         } else {
             setStep(prev => Math.max(prev - 1, 1));
@@ -540,7 +540,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     if (onClose) {
                         onClose();
                     } else {
-                        navigate('/teacher/students');
+                        navigate('/staff/students');
                     }
                 }, 1000);
             }

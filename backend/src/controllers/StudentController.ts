@@ -335,13 +335,19 @@ export const getAllStudents = async (req: Request, res: Response): Promise<void>
 
         const { search, school_id, grade_level } = req.query;
         const conditions: string[] = [];
-        const params: (string | number)[] = [];
+        const params: unknown[] = [];
         let paramIdx = 1;
 
         // Role-based filtering
-        if (req.user.role === 'teacher') {
-            conditions.push(`s.registered_by = $${paramIdx++}`);
-            params.push(req.user.id);
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (assignedSchools.length === 0) {
+                // No assignments = no access
+                conditions.push('1 = 0');
+            } else {
+                conditions.push(`s.school_id = ANY($${paramIdx++}::int[])`);
+                params.push(assignedSchools);
+            }
         }
 
         // Search query filter
@@ -361,6 +367,13 @@ export const getAllStudents = async (req: Request, res: Response): Promise<void>
         if (school_id) {
             const parsedSchoolId = Number(school_id);
             if (!isNaN(parsedSchoolId) && parsedSchoolId > 0) {
+                if (req.user.role === 'school_staff') {
+                    const assignedSchools = req.user.schoolAssignments || [];
+                    if (!assignedSchools.includes(parsedSchoolId)) {
+                        res.status(403).json({ message: 'Access forbidden: You are not assigned to the requested school' });
+                        return;
+                    }
+                }
                 conditions.push(`s.school_id = $${paramIdx++}`);
                 params.push(parsedSchoolId);
             }
@@ -594,10 +607,13 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
 
         const student = result.rows[0];
 
-        // Access check: teacher can only access their own registered students
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You do not have permission to view this student' });
-            return;
+        // Access check: teacher can only access their assigned students
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You do not have permission to view this student' });
+                return;
+            }
         }
 
         // Query module completion summary
@@ -669,9 +685,12 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
         }
 
         const existing = checkRes.rows[0];
-        if (req.user.role === 'teacher' && existing.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You do not have permission to update this student' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!existing.school_id || !assignedSchools.includes(existing.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You do not have permission to update this student' });
+                return;
+            }
         }
 
         const validatedData = updateStudentSchema.parse(req.body);
@@ -891,9 +910,12 @@ export const getStudentProfile = async (req: Request, res: Response): Promise<vo
         const student = studentRes.rows[0];
 
         // Access check
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You do not have permission to view this student profile' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You do not have permission to view this student profile' });
+                return;
+            }
         }
 
         // Fetch module records in parallel

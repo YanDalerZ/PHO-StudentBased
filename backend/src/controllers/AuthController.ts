@@ -3,6 +3,7 @@ import pool from '../database/db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+import { getEffectiveAccess } from '../services/admin.service.js';
 
 const loginSchema = z.object({
     email: z.string().email(),
@@ -50,6 +51,8 @@ export const login = async (req: Request, res: Response) => {
             { expiresIn: '24h' }
         );
 
+        const effectiveAccess = await getEffectiveAccess(user.id);
+
         res.json({
             token,
             user: {
@@ -57,7 +60,8 @@ export const login = async (req: Request, res: Response) => {
                 email: user.email,
                 role: user.role,
                 first_name: user.first_name,
-                last_name: user.last_name
+                last_name: user.last_name,
+                effectiveAccess
             }
         });
     } catch (error) {
@@ -89,7 +93,13 @@ export const getMe = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        res.json(userResult.rows[0]);
+        const user = userResult.rows[0];
+        const effectiveAccess = await getEffectiveAccess(user.id);
+
+        res.json({
+            ...user,
+            effectiveAccess
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Internal server error' });
