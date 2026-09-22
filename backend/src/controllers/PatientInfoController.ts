@@ -186,19 +186,16 @@ export const createPatientInfo = async (req: Request, res: Response): Promise<vo
         const validated = createPatientInfoSchema.parse(req.body);
 
         // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [validated.student_id]);
+        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [validated.student_id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'school_staff') {
-            const assignedSchools = req.user.schoolAssignments || [];
-            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
-                res.status(403).json({ message: 'Access forbidden: You can only record information for students in your assigned schools' });
-                return;
-            }
+        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
+            res.status(403).json({ message: 'Access forbidden: You can only record information for students you registered' });
+            return;
         }
 
         const client = await pool.connect();
@@ -324,19 +321,16 @@ export const getPatientInfoByStudent = async (req: Request, res: Response): Prom
         }
 
         // Verify student existence and permissions
-        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [studentId]);
+        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'school_staff') {
-            const assignedSchools = req.user.schoolAssignments || [];
-            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
-                res.status(403).json({ message: 'Access forbidden: You can only view records for students in your assigned schools' });
-                return;
-            }
+        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
+            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
+            return;
         }
 
         const [patientInfoRes, animalBitesRes] = await Promise.all([
@@ -384,7 +378,7 @@ export const updatePatientInfo = async (req: Request, res: Response): Promise<vo
 
         // Verify patient info exists and get student ownership
         const existingQuery = `
-            SELECT pi.*, s.registered_by, s.school_id AS student_school_id
+            SELECT pi.*, s.registered_by
             FROM PATIENT_INFO pi
             JOIN STUDENTS s ON pi.student_id = s.id
             WHERE pi.id = $1
@@ -396,12 +390,9 @@ export const updatePatientInfo = async (req: Request, res: Response): Promise<vo
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'school_staff') {
-            const assignedSchools = req.user.schoolAssignments || [];
-            if (!existingRecord.student_school_id || !assignedSchools.includes(existingRecord.student_school_id)) {
-                res.status(403).json({ message: 'Access forbidden: You can only update records for students in your assigned schools' });
-                return;
-            }
+        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
+            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
+            return;
         }
 
         const validated = updatePatientInfoSchema.parse(req.body);
@@ -631,19 +622,16 @@ export const createAnimalBite = async (req: Request, res: Response): Promise<voi
         const validated = standaloneAnimalBiteSchema.parse(req.body);
 
         // Verify student and ownership
-        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [validated.student_id]);
+        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [validated.student_id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'school_staff') {
-            const assignedSchools = req.user.schoolAssignments || [];
-            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
-                res.status(403).json({ message: 'Access forbidden: You can only record information for students in your assigned schools' });
-                return;
-            }
+        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
+            res.status(403).json({ message: 'Access forbidden: You can only record information for students you registered' });
+            return;
         }
 
         // Verify patient info exists and matches student
@@ -747,7 +735,7 @@ export const updateAnimalBite = async (req: Request, res: Response): Promise<voi
         }
 
         const existingQuery = `
-            SELECT ab.*, s.registered_by, s.school_id AS student_school_id
+            SELECT ab.*, s.registered_by
             FROM ANIMAL_BITES ab
             JOIN STUDENTS s ON ab.student_id = s.id
             WHERE ab.id = $1
@@ -759,12 +747,9 @@ export const updateAnimalBite = async (req: Request, res: Response): Promise<voi
         }
 
         const existing = existingRes.rows[0];
-        if (req.user.role === 'school_staff') {
-            const assignedSchools = req.user.schoolAssignments || [];
-            if (!existing.student_school_id || !assignedSchools.includes(existing.student_school_id)) {
-                res.status(403).json({ message: 'Access forbidden: You can only update records for students in your assigned schools' });
-                return;
-            }
+        if (req.user.role === 'teacher' && existing.registered_by !== req.user.id) {
+            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
+            return;
         }
 
         const validated = animalBiteSchema.parse(req.body);

@@ -495,7 +495,7 @@ export const DewormingDash: React.FC = () => {
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                             <div>
                                 <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                                    School Municipality Target vs Accomplished
+                                    Municipality Target vs Accomplished
                                 </h2>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                     Target population is based on registered students enrolled in each municipality.
@@ -517,7 +517,7 @@ export const DewormingDash: React.FC = () => {
                             <table className="w-full text-xs text-left">
                                 <thead className="text-[11px] uppercase bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                                     <tr>
-                                        <th className="py-2.5 px-3 font-semibold">School Municipality</th>
+                                        <th className="py-2.5 px-3 font-semibold">Municipality</th>
                                         <th className="py-2.5 px-3 font-semibold text-right">Target</th>
                                         <th className="py-2.5 px-3 font-semibold text-right">Male</th>
                                         <th className="py-2.5 px-3 font-semibold text-right">Female</th>
@@ -670,7 +670,7 @@ export const DewormingDash: React.FC = () => {
                                 </div>
                                 <div>
                                     <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                                        Deworming School Municipality Consolidation Report
+                                        Deworming Municipality Consolidation Report
                                     </h2>
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
                                         Official PHO provincial consolidation across all 17 municipalities
@@ -755,7 +755,7 @@ export const DewormingDash: React.FC = () => {
                                             <thead className="text-[11px] uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                                                 <tr>
                                                     <th className="py-2.5 px-3 font-bold w-12 text-center">#</th>
-                                                    <th className="py-2.5 px-3 font-bold">School Municipality</th>
+                                                    <th className="py-2.5 px-3 font-bold">Municipality</th>
                                                     <th className="py-2.5 px-3 font-bold text-right">Target Pop</th>
                                                     <th className="py-2.5 px-3 font-bold text-right">Male</th>
                                                     <th className="py-2.5 px-3 font-bold text-right">Female</th>

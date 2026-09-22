@@ -7,11 +7,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/src/server.js",
     "go": "concurrently \"npm run dev\" \"cd ../frontend && npm run dev\"",
-    "render-build": "npm install && npm run build && cd ../frontend && npm install && npm run build",
-    "typecheck:tests": "tsc --project tsconfig.tests.json",
-    "test:phase1": "tsx tests/run_all_tests.ts"
+    "render-build": "npm install && npm run build && cd ../frontend && npm install && npm run build"
   },
   "keywords": [],
   "author": "",

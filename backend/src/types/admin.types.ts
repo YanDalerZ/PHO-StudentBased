@@ -1,5 +1,5 @@
-export type UserRole = 'school_staff' | 'superuser' | 'admin';
-export type CreatableUserRole = 'school_staff' | 'superuser';
+export type UserRole = 'teacher' | 'superuser' | 'admin';
+export type CreatableUserRole = 'teacher' | 'superuser';
 
 export interface AdminUserSummary {
   id: number;
@@ -16,7 +16,7 @@ export interface AdminUserSummary {
 
 export interface AdminDashboardStats {
   users_by_role: {
-    school_staff: number;
+    teacher: number;
     superuser: number;
     admin: number;
     total: number;

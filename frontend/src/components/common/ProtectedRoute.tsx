@@ -3,16 +3,13 @@ import type { ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoadingSpinner } from './LoadingSpinner';
-import type { UserModulePermission } from '../../types';
 
 interface ProtectedRouteProps {
   children: ReactNode;
   allowedRoles?: string[];
-  requiredModule?: string;
-  requiredAction?: keyof UserModulePermission;
 }
 
-export const ProtectedRoute = ({ children, allowedRoles, requiredModule, requiredAction }: ProtectedRouteProps) => {
+export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   const { user, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -20,32 +17,15 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredModule, require
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       navigate('/Login', { state: { from: location.pathname }, replace: true });
-    } else if (!loading && isAuthenticated && user) {
-      let isAuthorized = true;
-
-      // Check role
-      if (allowedRoles && !allowedRoles.includes(user.role)) {
-        isAuthorized = false;
-      }
-
-      // Check module permission
-      if (isAuthorized && requiredModule && requiredAction) {
-        if (user.role !== 'admin') {
-          const perms = user.effectiveAccess?.modulePermissions?.[requiredModule];
-          if (!perms || !perms[requiredAction]) {
-            isAuthorized = false;
-          }
-        }
-      }
-
-      if (!isAuthorized) {
+    } else if (!loading && isAuthenticated && allowedRoles && user) {
+      if (!allowedRoles.includes(user.role)) {
         // Redirect to their respective dashboard if they lack access
         if (user.role === 'admin') navigate('/admin');
         else if (user.role === 'superuser') navigate('/superuser');
-        else navigate('/staff');
+        else navigate('/teacher');
       }
     }
-  }, [loading, isAuthenticated, allowedRoles, requiredModule, requiredAction, user, navigate, location]);
+  }, [loading, isAuthenticated, allowedRoles, user, navigate, location]);
 
   if (loading) {
     return (
@@ -56,11 +36,8 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredModule, require
   }
 
   // If not authenticated or not authorized, return null to prevent flash of content
-  if (!isAuthenticated) return null;
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) return null;
-  if (requiredModule && requiredAction && user && user.role !== 'admin') {
-     const perms = user.effectiveAccess?.modulePermissions?.[requiredModule];
-     if (!perms || !perms[requiredAction]) return null;
+  if (!isAuthenticated || (allowedRoles && user && !allowedRoles.includes(user.role))) {
+    return null;
   }
 
   return <>{children}</>;

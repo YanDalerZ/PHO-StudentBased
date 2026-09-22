@@ -176,7 +176,7 @@ const TeacherDashboard: React.FC = () => {
                 <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs lg:col-span-2">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-bold text-black">Recent Registrations</h2>
-                        <Link to="/staff/students" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800 flex items-center space-x-1">
+                        <Link to="/teacher/students" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800 flex items-center space-x-1">
                             <span>View all</span>
                             <ChevronRight className="w-4 h-4" />
                         </Link>
@@ -210,7 +210,7 @@ const TeacherDashboard: React.FC = () => {
                                             </td>
                                             <td className="py-3.5 px-4 text-sm">
                                                 <Link
-                                                    to={`/staff/students/${student.id}`}
+                                                    to={`/teacher/students/${student.id}`}
                                                     className="text-emerald-800 hover:text-emerald-900 font-medium text-xs border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors inline-block"
                                                 >
                                                     View Profile
