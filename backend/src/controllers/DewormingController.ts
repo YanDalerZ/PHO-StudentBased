@@ -137,9 +137,12 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record deworming for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only record deworming for students in your assigned schools' });
+                return;
+            }
         }
 
         const dateDewormedStr = formatDate(validated.date_dewormed);
@@ -168,7 +171,7 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
             }
 
             // Teachers cannot override record to a school outside the student's authorized school
-            if (req.user.role === 'teacher' && student.school_id && validated.school_id !== student.school_id) {
+            if (req.user.role === 'school_staff' && student.school_id && validated.school_id !== student.school_id) {
                 res.status(403).json({ message: 'Access forbidden: Teachers cannot assign records to a different school' });
                 return;
             }
@@ -248,16 +251,19 @@ export const getDewormingByStudent = async (req: Request, res: Response): Promis
         }
 
         // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
+        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [studentId]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only view records for students in your assigned schools' });
+                return;
+            }
         }
 
         const querySql = `
@@ -316,9 +322,12 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!existingRecord.student_school_id || !assignedSchools.includes(existingRecord.student_school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only update records for students in your assigned schools' });
+                return;
+            }
         }
 
         const validated = updateDewormingSchema.parse(req.body);
@@ -358,7 +367,7 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
                     return;
                 }
 
-                if (req.user.role === 'teacher' && existingRecord.student_school_id && validated.school_id !== existingRecord.student_school_id) {
+                if (req.user.role === 'school_staff' && existingRecord.student_school_id && validated.school_id !== existingRecord.student_school_id) {
                     res.status(403).json({ message: 'Access forbidden: Teachers cannot assign records to a different school' });
                     return;
                 }

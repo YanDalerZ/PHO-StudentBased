@@ -58,15 +58,8 @@ import type {
 
 
 
-const getBaseUrl = () => {
-    if (window.location.hostname.includes('pho-studentbased.onrender.com')) {
-        return 'https://pho-studentbased.onrender.com/api';
-    }
-    return 'http://localhost:3000/api';
-};
-
 const api = axios.create({
-    baseURL: getBaseUrl(),
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1',
 });
 
 // Request interceptor to attach JWT token
@@ -96,6 +89,17 @@ api.interceptors.response.use(
 
 
 // Lookups
+export interface SchoolOption extends School {
+    barangay_name: string | null;
+    municipality_id: number | null;
+    municipality_name: string | null;
+}
+
+export const getActiveSchools = async (params?: { search?: string; municipality_id?: number; barangay_id?: number }): Promise<SchoolOption[]> => {
+    const response = await api.get<SchoolOption[]>('/lookup/schools', { params });
+    return response.data;
+};
+
 export const getMunicipalities = async (): Promise<Municipality[]> => {
     const response = await api.get<Municipality[]>('/lookup/municipalities');
     return response.data;

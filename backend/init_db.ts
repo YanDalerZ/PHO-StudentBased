@@ -6,8 +6,28 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function assertSafeResetTarget() {
+    if (process.env.ALLOW_DATABASE_RESET !== 'true') {
+        throw new Error('Database reset refused. Set ALLOW_DATABASE_RESET=true for an intentional local/test reset.');
+    }
+
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+        throw new Error('DATABASE_URL is required');
+    }
+
+    const parsed = new URL(databaseUrl);
+    const databaseName = decodeURIComponent(parsed.pathname).replace(/^\//, '');
+    if (databaseName !== 'pho_dev' && !databaseName.endsWith('_test')) {
+        throw new Error(
+            `Database reset refused for '${databaseName}'. Only pho_dev or databases ending in _test may be reset.`
+        );
+    }
+}
+
 async function initDB() {
     try {
+        assertSafeResetTarget();
         console.log('Connecting to database...');
         const client = await pool.connect();
         

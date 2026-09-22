@@ -51,8 +51,8 @@ export const uploadStudentPhoto = async (
     }
 
     // 2. Read Cloudinary frontend environment variables
-    const cloudName = 'lajydhvy';
-    const uploadPreset = 'pho_student_photos';
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
     if (!cloudName || !uploadPreset) {
         throw new Error(

@@ -37,21 +37,24 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
   // Define links based on roles
   const getNavLinks = () => {
     switch (role) {
-      case 'teacher':
+      case 'school_staff':
         return [
-          { name: 'Dashboard', path: '/teacher', icon: LayoutDashboard },
-          { name: 'Students', path: '/teacher/students', icon: Users },
+          { name: 'Dashboard', path: '/staff', icon: LayoutDashboard },
+          { name: 'Students', path: '/staff/students', icon: Users },
         ];
-      case 'superuser':
-        return [
+      case 'superuser': {
+        const perms = user.effectiveAccess?.modulePermissions || {};
+        const links = [
           { name: 'Overview', path: '/superuser/dashboard', icon: LayoutDashboard },
           { name: 'Students', path: '/superuser/students', icon: Users },
-          { name: 'Patients', path: '/superuser/patient-info', icon: FileText },
-          { name: 'Oral Health', path: '/superuser/oral-health', icon: Heart },
-          { name: 'Deworming', path: '/superuser/deworming', icon: Droplets },
-          { name: 'Immunization', path: '/superuser/immunization', icon: Syringe },
-          { name: 'Vitals', path: '/superuser/vital-signs', icon: Activity },
         ];
+        if (perms['patient-info']?.can_view) links.push({ name: 'Patients', path: '/superuser/patient-info', icon: FileText });
+        if (perms['oral-health']?.can_view) links.push({ name: 'Oral Health', path: '/superuser/oral-health', icon: Heart });
+        if (perms['deworming']?.can_view) links.push({ name: 'Deworming', path: '/superuser/deworming', icon: Droplets });
+        if (perms['immunization']?.can_view) links.push({ name: 'Immunization', path: '/superuser/immunization', icon: Syringe });
+        if (perms['vital-signs']?.can_view) links.push({ name: 'Vitals', path: '/superuser/vital-signs', icon: Activity });
+        return links;
+      }
       case 'admin':
         return [
           { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
@@ -123,7 +126,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
         {/* Navigation Items */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-6 px-3 space-y-1 bg-white">
           {navLinks.map((link) => {
-            const isActive = location.pathname === link.path || (location.pathname.startsWith(link.path) && link.path !== '/teacher' && link.path !== '/dashboard' && link.path !== '/admin');
+            const isActive = location.pathname === link.path || (location.pathname.startsWith(link.path) && link.path !== '/staff' && link.path !== '/dashboard' && link.path !== '/admin');
 
             return (
               <Link
@@ -199,7 +202,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
       {/* ------------------- MOBILE BOTTOM BAR ------------------- */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-lg px-2 py-1.5 flex items-center justify-around">
         {navLinks.map((link) => {
-          const isActive = location.pathname === link.path || (location.pathname.startsWith(link.path) && link.path !== '/teacher' && link.path !== '/dashboard' && link.path !== '/admin');
+          const isActive = location.pathname === link.path || (location.pathname.startsWith(link.path) && link.path !== '/staff' && link.path !== '/dashboard' && link.path !== '/admin');
 
           return (
             <Link

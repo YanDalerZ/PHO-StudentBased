@@ -200,16 +200,19 @@ export const createOralHealth = async (req: Request, res: Response): Promise<voi
         const validated = createOralHealthSchema.parse(req.body);
 
         // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [validated.student_id]);
+        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [validated.student_id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record oral health for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only record oral health for students in your assigned schools' });
+                return;
+            }
         }
 
         // Auto-calculate DMFT totals if not explicitly provided
@@ -345,16 +348,19 @@ export const getOralHealthByStudent = async (req: Request, res: Response): Promi
         }
 
         // Verify student existence and permissions
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
+        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [studentId]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!student.school_id || !assignedSchools.includes(student.school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only view records for students in your assigned schools' });
+                return;
+            }
         }
 
         const querySql = `
@@ -401,7 +407,7 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
 
         // Verify record existence and check teacher ownership of the student
         const checkSql = `
-            SELECT oh.*, s.registered_by
+            SELECT oh.*, s.registered_by, s.school_id AS student_school_id
             FROM ORAL_HEALTH oh
             JOIN STUDENTS s ON oh.student_id = s.id
             WHERE oh.id = $1
@@ -413,9 +419,12 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
-            return;
+        if (req.user.role === 'school_staff') {
+            const assignedSchools = req.user.schoolAssignments || [];
+            if (!existingRecord.student_school_id || !assignedSchools.includes(existingRecord.student_school_id)) {
+                res.status(403).json({ message: 'Access forbidden: You can only update records for students in your assigned schools' });
+                return;
+            }
         }
 
         const validated = updateOralHealthSchema.parse(req.body);
