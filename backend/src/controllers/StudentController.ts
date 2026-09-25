@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import pool from '../database/db.js';
 import { z } from 'zod';
+import { AuditService } from '../services/AuditService.js';
 
-const studentPayloadSchema = z.object({
+export const studentPayloadSchema = z.object({
     // I. Personal Information
     photo_url: z
         .string()
@@ -328,20 +329,25 @@ export const getAllStudents = async (req: Request, res: Response): Promise<void>
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Insufficient privileges' });
             return;
         }
 
         const { search, school_id, grade_level } = req.query;
         const conditions: string[] = [];
-        const params: (string | number)[] = [];
+        const params: (string | number | number[])[] = [];
         let paramIdx = 1;
 
         // Role-based filtering
-        if (req.user.role === 'teacher') {
-            conditions.push(`s.registered_by = $${paramIdx++}`);
-            params.push(req.user.id);
+        if (req.user.portal_role === 'school_staff') {
+            const assigned = req.effectiveAccess?.assignedSchoolIds || [];
+            if (assigned.length === 0) {
+                res.status(200).json({ data: [], total: 0 });
+                return;
+            }
+            conditions.push(`s.school_id = ANY($${paramIdx++})`);
+            params.push(assigned);
         }
 
         // Search query filter
@@ -361,6 +367,10 @@ export const getAllStudents = async (req: Request, res: Response): Promise<void>
         if (school_id) {
             const parsedSchoolId = Number(school_id);
             if (!isNaN(parsedSchoolId) && parsedSchoolId > 0) {
+                if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(parsedSchoolId)) {
+                    res.status(200).json({ data: [], total: 0 });
+                    return;
+                }
                 conditions.push(`s.school_id = $${paramIdx++}`);
                 params.push(parsedSchoolId);
             }
@@ -412,7 +422,7 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Insufficient privileges' });
             return;
         }
@@ -435,6 +445,11 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
             const schoolCheck = await pool.query('SELECT id, is_active FROM SCHOOLS WHERE id = $1', [schoolId]);
             if (schoolCheck.rows.length === 0 || !schoolCheck.rows[0].is_active) {
                 res.status(400).json({ message: 'Selected school does not exist or is inactive' });
+                return;
+            }
+
+            if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(schoolId)) {
+                res.status(403).json({ message: 'Access forbidden: You cannot register a student in an unassigned school' });
                 return;
             }
         }
@@ -473,70 +488,96 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
             RETURNING id
         `;
 
-        const result = await pool.query(studentQuery, [
-            validatedData.student_lrn,
-            validatedData.first_name,
-            validatedData.middle_name || null,
-            validatedData.last_name,
-            validatedData.suffix || 'NOT APPLICABLE',
-            validatedData.sex,
-            dobStr,
-            validatedData.photo_url || null,
-            // II. Other Personal Info
-            validatedData.birth_place || null,
-            validatedData.civil_status || null,
-            validatedData.educational_attainment || null,
-            validatedData.employment_status || null,
-            validatedData.tax_id_no || validatedData.tin_no || null,
-            validatedData.religion || null,
-            isIndigenous,
-            validatedData.indigenous_group || null,
-            validatedData.blood_type || null,
-            // Mother's Info
-            validatedData.mother_first_name || null,
-            validatedData.mother_last_name || null,
-            validatedData.mother_middle_name || null,
-            motherDobStr,
-            // III. Address
-            validatedData.country || 'PHILIPPINES',
-            validatedData.region || 'REGION 6',
-            validatedData.province || 'AKLAN',
-            municipalityId,
-            barangayId,
-            validatedData.street_address || validatedData.address || null,
-            validatedData.zip_code || null,
-            validatedData.email || null,
-            validatedData.mobile || validatedData.contact_no || null,
-            validatedData.landline || null,
-            validatedData.psa_national_id || null,
-            // IV. 4Ps/PWD
-            is4ps,
-            validatedData.fourps_household_no || validatedData.dswd_4ps_no || null,
-            isPwd,
-            validatedData.pwd_type || null,
-            validatedData.pwd_id || validatedData.pwd_id_no || null,
-            // V. Philhealth
-            isPhilhealth,
-            validatedData.philhealth_no || validatedData.philhealth_id || null,
-            validatedData.philhealth_status_type || null,
-            validatedData.philhealth_category || null,
-            // School
-            schoolId,
-            validatedData.grade_level || null,
-            validatedData.section || null,
-            // Parent/Guardian
-            validatedData.parent_guardian_name || null,
-            validatedData.parent_guardian_contact || null,
-            // System
-            req.user.id,
-        ]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await client.query(studentQuery, [
+                validatedData.student_lrn,
+                validatedData.first_name,
+                validatedData.middle_name || null,
+                validatedData.last_name,
+                validatedData.suffix || 'NOT APPLICABLE',
+                validatedData.sex,
+                dobStr,
+                validatedData.photo_url || null,
+                // II. Other Personal Info
+                validatedData.birth_place || null,
+                validatedData.civil_status || null,
+                validatedData.educational_attainment || null,
+                validatedData.employment_status || null,
+                validatedData.tax_id_no || validatedData.tin_no || null,
+                validatedData.religion || null,
+                isIndigenous,
+                validatedData.indigenous_group || null,
+                validatedData.blood_type || null,
+                // Mother's Info
+                validatedData.mother_first_name || null,
+                validatedData.mother_last_name || null,
+                validatedData.mother_middle_name || null,
+                motherDobStr,
+                // III. Address
+                validatedData.country || 'PHILIPPINES',
+                validatedData.region || 'REGION 6',
+                validatedData.province || 'AKLAN',
+                municipalityId,
+                barangayId,
+                validatedData.street_address || validatedData.address || null,
+                validatedData.zip_code || null,
+                validatedData.email || null,
+                validatedData.mobile || validatedData.contact_no || null,
+                validatedData.landline || null,
+                validatedData.psa_national_id || null,
+                // IV. 4Ps/PWD
+                is4ps,
+                validatedData.fourps_household_no || validatedData.dswd_4ps_no || null,
+                isPwd,
+                validatedData.pwd_type || null,
+                validatedData.pwd_id || validatedData.pwd_id_no || null,
+                // V. Philhealth
+                isPhilhealth,
+                validatedData.philhealth_no || validatedData.philhealth_id || null,
+                validatedData.philhealth_status_type || null,
+                validatedData.philhealth_category || null,
+                // School
+                schoolId,
+                validatedData.grade_level || null,
+                validatedData.section || null,
+                // Parent/Guardian
+                validatedData.parent_guardian_name || null,
+                validatedData.parent_guardian_contact || null,
+                // System
+                req.user.id,
+            ]);
 
-        const studentId = result.rows[0].id;
-        res.status(201).json({
-            message: 'Student registered successfully',
-            id: studentId,
-            data: { id: studentId }
-        });
+            const studentId = result.rows[0].id;
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'CREATE_STUDENT',
+                entity_type: 'STUDENT',
+                entity_id: String(studentId),
+                school_id: schoolId,
+                details: {
+                    operation: 'direct_registration',
+                    module_slug: 'patient-info',
+                },
+                ip_address: req.ip
+            }, client);
+
+            await client.query('COMMIT');
+
+            res.status(201).json({
+                message: 'Student registered successfully',
+                id: studentId,
+                data: { id: studentId }
+            });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     } catch (error: unknown) {
         console.error('Error creating student:', error);
         const dbError = error as { code?: string };
@@ -562,7 +603,7 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Insufficient privileges' });
             return;
         }
@@ -594,42 +635,41 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
 
         const student = result.rows[0];
 
-        // Access check: teacher can only access their own registered students
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
+        // Access check: teacher can only access students in assigned schools
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(student.school_id)) {
             res.status(403).json({ message: 'Access forbidden: You do not have permission to view this student' });
             return;
         }
 
-        // Query module completion summary
-        const moduleSummaryQuery = `
-            SELECT 
-                EXISTS(SELECT 1 FROM PATIENT_INFO WHERE student_id = $1) AS has_patient_info,
-                EXISTS(SELECT 1 FROM ORAL_HEALTH WHERE student_id = $1) AS has_oral_health,
-                EXISTS(SELECT 1 FROM DEWORMING WHERE student_id = $1) AS has_deworming,
-                EXISTS(SELECT 1 FROM IMMUNIZATION WHERE student_id = $1) AS has_immunization,
-                EXISTS(SELECT 1 FROM VITAL_SIGNS WHERE student_id = $1) AS has_vital_signs
-        `;
-        const moduleSummaryRes = await pool.query(moduleSummaryQuery, [studentId]);
-        const summary = moduleSummaryRes.rows[0] as {
-            has_patient_info?: boolean;
-            has_oral_health?: boolean;
-            has_deworming?: boolean;
-            has_immunization?: boolean;
-            has_vital_signs?: boolean;
-        } | undefined;
+        // Query module completion summary only for authorized modules (skip unauthorized queries)
+        const perms = req.effectiveAccess?.modulePermissions;
+        const checks: string[] = [];
+        if (perms?.['patient-info']?.can_view) checks.push('EXISTS(SELECT 1 FROM PATIENT_INFO WHERE student_id = $1) AS has_patient_info');
+        if (perms?.['oral-health']?.can_view) checks.push('EXISTS(SELECT 1 FROM ORAL_HEALTH WHERE student_id = $1) AS has_oral_health');
+        if (perms?.['deworming']?.can_view) checks.push('EXISTS(SELECT 1 FROM DEWORMING WHERE student_id = $1) AS has_deworming');
+        if (perms?.['immunization']?.can_view) checks.push('EXISTS(SELECT 1 FROM IMMUNIZATION WHERE student_id = $1) AS has_immunization');
+        if (perms?.['vital-signs']?.can_view) checks.push('EXISTS(SELECT 1 FROM VITAL_SIGNS WHERE student_id = $1) AS has_vital_signs');
+
+        let summary: Record<string, boolean> = {};
+        if (checks.length > 0) {
+            const moduleSummaryQuery = `SELECT ${checks.join(', ')}`;
+            const moduleSummaryRes = await pool.query(moduleSummaryQuery, [studentId]);
+            summary = moduleSummaryRes.rows[0] || {};
+        }
+
+        const modulesOutput: Record<string, boolean> = {};
+        if (perms?.['patient-info']?.can_view) modulesOutput.patient_info = Boolean(summary.has_patient_info);
+        if (perms?.['oral-health']?.can_view) modulesOutput.oral_health = Boolean(summary.has_oral_health);
+        if (perms?.['deworming']?.can_view) modulesOutput.deworming = Boolean(summary.has_deworming);
+        if (perms?.['immunization']?.can_view) modulesOutput.immunization = Boolean(summary.has_immunization);
+        if (perms?.['vital-signs']?.can_view) modulesOutput.vital_signs = Boolean(summary.has_vital_signs);
 
         const mappedStudent = mapStudentRow(student);
 
         res.status(200).json({
             data: {
                 ...mappedStudent,
-                modules: {
-                    patient_info: Boolean(summary?.has_patient_info),
-                    oral_health: Boolean(summary?.has_oral_health),
-                    deworming: Boolean(summary?.has_deworming),
-                    immunization: Boolean(summary?.has_immunization),
-                    vital_signs: Boolean(summary?.has_vital_signs),
-                }
+                modules: modulesOutput
             }
         });
     } catch (error: unknown) {
@@ -649,7 +689,7 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Insufficient privileges' });
             return;
         }
@@ -669,7 +709,7 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
         }
 
         const existing = checkRes.rows[0];
-        if (req.user.role === 'teacher' && existing.registered_by !== req.user.id) {
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(existing.school_id)) {
             res.status(403).json({ message: 'Access forbidden: You do not have permission to update this student' });
             return;
         }
@@ -700,6 +740,11 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
             const schoolCheck = await pool.query('SELECT id, is_active FROM SCHOOLS WHERE id = $1', [schoolId]);
             if (schoolCheck.rows.length === 0 || !schoolCheck.rows[0].is_active) {
                 res.status(400).json({ message: 'Selected school does not exist or is inactive' });
+                return;
+            }
+
+            if (schoolId !== existing.school_id && req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(schoolId)) {
+                res.status(403).json({ message: 'Access forbidden: You cannot transfer a student to an unassigned school' });
                 return;
             }
         }
@@ -779,61 +824,89 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
             RETURNING *
         `;
 
-        const result = await pool.query(updateQuery, [
-            validatedData.student_lrn ?? existing.student_lrn,
-            validatedData.first_name ?? existing.first_name,
-            validatedData.middle_name !== undefined ? validatedData.middle_name : existing.middle_name,
-            validatedData.last_name ?? existing.last_name,
-            validatedData.suffix !== undefined ? validatedData.suffix : existing.suffix,
-            validatedData.sex ?? existing.sex,
-            dobStr,
-            validatedData.photo_url !== undefined ? (validatedData.photo_url || null) : existing.photo_url,
-            validatedData.birth_place !== undefined ? validatedData.birth_place : existing.birth_place,
-            validatedData.civil_status !== undefined ? validatedData.civil_status : existing.civil_status,
-            validatedData.educational_attainment !== undefined ? validatedData.educational_attainment : existing.educational_attainment,
-            validatedData.employment_status !== undefined ? validatedData.employment_status : existing.employment_status,
-            (validatedData.tax_id_no || validatedData.tin_no) !== undefined ? (validatedData.tax_id_no || validatedData.tin_no) : existing.tax_id_no,
-            validatedData.religion !== undefined ? validatedData.religion : existing.religion,
-            isIndigenous,
-            validatedData.indigenous_group !== undefined ? validatedData.indigenous_group : existing.indigenous_group,
-            validatedData.blood_type !== undefined ? validatedData.blood_type : existing.blood_type,
-            validatedData.mother_first_name !== undefined ? validatedData.mother_first_name : existing.mother_first_name,
-            validatedData.mother_last_name !== undefined ? validatedData.mother_last_name : existing.mother_last_name,
-            validatedData.mother_middle_name !== undefined ? validatedData.mother_middle_name : existing.mother_middle_name,
-            motherDobStr,
-            validatedData.country ?? existing.country,
-            validatedData.region ?? existing.region,
-            validatedData.province ?? existing.province,
-            municipalityId,
-            barangayId,
-            (validatedData.street_address || validatedData.address) !== undefined ? (validatedData.street_address || validatedData.address) : existing.street_address,
-            validatedData.zip_code !== undefined ? validatedData.zip_code : existing.zip_code,
-            validatedData.email !== undefined ? validatedData.email : existing.email,
-            (validatedData.mobile || validatedData.contact_no) !== undefined ? (validatedData.mobile || validatedData.contact_no) : existing.mobile,
-            validatedData.landline !== undefined ? validatedData.landline : existing.landline,
-            validatedData.psa_national_id !== undefined ? validatedData.psa_national_id : existing.psa_national_id,
-            is4ps,
-            (validatedData.fourps_household_no || validatedData.dswd_4ps_no) !== undefined ? (validatedData.fourps_household_no || validatedData.dswd_4ps_no) : existing.fourps_household_no,
-            isPwd,
-            validatedData.pwd_type !== undefined ? validatedData.pwd_type : existing.pwd_type,
-            (validatedData.pwd_id || validatedData.pwd_id_no) !== undefined ? (validatedData.pwd_id || validatedData.pwd_id_no) : existing.pwd_id,
-            isPhilhealth,
-            (validatedData.philhealth_no || validatedData.philhealth_id) !== undefined ? (validatedData.philhealth_no || validatedData.philhealth_id) : existing.philhealth_no,
-            validatedData.philhealth_status_type !== undefined ? validatedData.philhealth_status_type : existing.philhealth_status_type,
-            validatedData.philhealth_category !== undefined ? validatedData.philhealth_category : existing.philhealth_category,
-            schoolId,
-            validatedData.grade_level !== undefined ? validatedData.grade_level : existing.grade_level,
-            validatedData.section !== undefined ? validatedData.section : existing.section,
-            validatedData.parent_guardian_name !== undefined ? validatedData.parent_guardian_name : existing.parent_guardian_name,
-            validatedData.parent_guardian_contact !== undefined ? validatedData.parent_guardian_contact : existing.parent_guardian_contact,
-            studentId
-        ]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await client.query(updateQuery, [
+                validatedData.student_lrn ?? existing.student_lrn,
+                validatedData.first_name ?? existing.first_name,
+                validatedData.middle_name !== undefined ? validatedData.middle_name : existing.middle_name,
+                validatedData.last_name ?? existing.last_name,
+                validatedData.suffix !== undefined ? validatedData.suffix : existing.suffix,
+                validatedData.sex ?? existing.sex,
+                dobStr,
+                validatedData.photo_url !== undefined ? (validatedData.photo_url || null) : existing.photo_url,
+                validatedData.birth_place !== undefined ? validatedData.birth_place : existing.birth_place,
+                validatedData.civil_status !== undefined ? validatedData.civil_status : existing.civil_status,
+                validatedData.educational_attainment !== undefined ? validatedData.educational_attainment : existing.educational_attainment,
+                validatedData.employment_status !== undefined ? validatedData.employment_status : existing.employment_status,
+                (validatedData.tax_id_no || validatedData.tin_no) !== undefined ? (validatedData.tax_id_no || validatedData.tin_no) : existing.tax_id_no,
+                validatedData.religion !== undefined ? validatedData.religion : existing.religion,
+                isIndigenous,
+                validatedData.indigenous_group !== undefined ? validatedData.indigenous_group : existing.indigenous_group,
+                validatedData.blood_type !== undefined ? validatedData.blood_type : existing.blood_type,
+                validatedData.mother_first_name !== undefined ? validatedData.mother_first_name : existing.mother_first_name,
+                validatedData.mother_last_name !== undefined ? validatedData.mother_last_name : existing.mother_last_name,
+                validatedData.mother_middle_name !== undefined ? validatedData.mother_middle_name : existing.mother_middle_name,
+                motherDobStr,
+                validatedData.country ?? existing.country,
+                validatedData.region ?? existing.region,
+                validatedData.province ?? existing.province,
+                municipalityId,
+                barangayId,
+                (validatedData.street_address || validatedData.address) !== undefined ? (validatedData.street_address || validatedData.address) : existing.street_address,
+                validatedData.zip_code !== undefined ? validatedData.zip_code : existing.zip_code,
+                validatedData.email !== undefined ? validatedData.email : existing.email,
+                (validatedData.mobile || validatedData.contact_no) !== undefined ? (validatedData.mobile || validatedData.contact_no) : existing.mobile,
+                validatedData.landline !== undefined ? validatedData.landline : existing.landline,
+                validatedData.psa_national_id !== undefined ? validatedData.psa_national_id : existing.psa_national_id,
+                is4ps,
+                (validatedData.fourps_household_no || validatedData.dswd_4ps_no) !== undefined ? (validatedData.fourps_household_no || validatedData.dswd_4ps_no) : existing.fourps_household_no,
+                isPwd,
+                validatedData.pwd_type !== undefined ? validatedData.pwd_type : existing.pwd_type,
+                (validatedData.pwd_id || validatedData.pwd_id_no) !== undefined ? (validatedData.pwd_id || validatedData.pwd_id_no) : existing.pwd_id,
+                isPhilhealth,
+                (validatedData.philhealth_no || validatedData.philhealth_id) !== undefined ? (validatedData.philhealth_no || validatedData.philhealth_id) : existing.philhealth_no,
+                validatedData.philhealth_status_type !== undefined ? validatedData.philhealth_status_type : existing.philhealth_status_type,
+                validatedData.philhealth_category !== undefined ? validatedData.philhealth_category : existing.philhealth_category,
+                schoolId,
+                validatedData.grade_level !== undefined ? validatedData.grade_level : existing.grade_level,
+                validatedData.section !== undefined ? validatedData.section : existing.section,
+                validatedData.parent_guardian_name !== undefined ? validatedData.parent_guardian_name : existing.parent_guardian_name,
+                validatedData.parent_guardian_contact !== undefined ? validatedData.parent_guardian_contact : existing.parent_guardian_contact,
+                studentId
+            ]);
 
-        const mappedUpdated = mapStudentRow(result.rows[0]);
-        res.status(200).json({
-            message: 'Student updated successfully',
-            data: mappedUpdated
-        });
+            const mappedUpdated = mapStudentRow(result.rows[0]);
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'UPDATE_STUDENT',
+                entity_type: 'STUDENT',
+                entity_id: String(studentId),
+                school_id: schoolId,
+                details: {
+                    updated_fields: Object.keys(validatedData),
+                    school_changed: schoolId !== existing.school_id,
+                    previous_school_id: existing.school_id,
+                    new_school_id: schoolId,
+                },
+                ip_address: req.ip
+            }, client);
+
+            await client.query('COMMIT');
+
+            res.status(200).json({
+                message: 'Student updated successfully',
+                data: mappedUpdated
+            });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     } catch (error: unknown) {
         console.error('Error updating student:', error);
         const dbError = error as { code?: string };
@@ -858,7 +931,7 @@ export const getStudentProfile = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Insufficient privileges' });
             return;
         }
@@ -891,12 +964,19 @@ export const getStudentProfile = async (req: Request, res: Response): Promise<vo
         const student = studentRes.rows[0];
 
         // Access check
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(student.school_id)) {
             res.status(403).json({ message: 'Access forbidden: You do not have permission to view this student profile' });
             return;
         }
 
-        // Fetch module records in parallel
+        const perms = req.effectiveAccess?.modulePermissions;
+        const canViewPI = Boolean(perms?.['patient-info']?.can_view);
+        const canViewOH = Boolean(perms?.['oral-health']?.can_view);
+        const canViewDW = Boolean(perms?.['deworming']?.can_view);
+        const canViewIM = Boolean(perms?.['immunization']?.can_view);
+        const canViewVS = Boolean(perms?.['vital-signs']?.can_view);
+
+        // Fetch module records in parallel ONLY for authorized modules (skip unauthorized queries)
         const [
             patientInfoRes,
             animalBitesRes,
@@ -905,34 +985,37 @@ export const getStudentProfile = async (req: Request, res: Response): Promise<vo
             immunizationRes,
             vitalSignsRes
         ] = await Promise.all([
-            pool.query('SELECT * FROM PATIENT_INFO WHERE student_id = $1 ORDER BY created_at DESC', [studentId]),
-            pool.query('SELECT * FROM ANIMAL_BITES WHERE student_id = $1 ORDER BY created_at DESC', [studentId]),
-            pool.query('SELECT * FROM ORAL_HEALTH WHERE student_id = $1 ORDER BY created_at DESC', [studentId]),
-            pool.query('SELECT * FROM DEWORMING WHERE student_id = $1 ORDER BY created_at DESC', [studentId]),
-            pool.query('SELECT * FROM IMMUNIZATION WHERE student_id = $1 ORDER BY created_at DESC', [studentId]),
-            pool.query('SELECT * FROM VITAL_SIGNS WHERE student_id = $1 ORDER BY created_at DESC', [studentId])
+            canViewPI ? pool.query('SELECT * FROM PATIENT_INFO WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
+            canViewPI ? pool.query('SELECT * FROM ANIMAL_BITES WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
+            canViewOH ? pool.query('SELECT * FROM ORAL_HEALTH WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
+            canViewDW ? pool.query('SELECT * FROM DEWORMING WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
+            canViewIM ? pool.query('SELECT * FROM IMMUNIZATION WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
+            canViewVS ? pool.query('SELECT * FROM VITAL_SIGNS WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] })
         ]);
 
         const mappedStudent = mapStudentRow(student);
 
+        const modulesOutput: Record<string, unknown> = {
+            patient_info: canViewPI ? patientInfoRes.rows : null,
+            animal_bites: canViewPI ? animalBitesRes.rows : null,
+            oral_health: canViewOH ? oralHealthRes.rows : null,
+            deworming: canViewDW ? dewormingRes.rows : null,
+            immunization: canViewIM ? immunizationRes.rows : null,
+            vital_signs: canViewVS ? vitalSignsRes.rows : null,
+        };
+
+        const moduleSummaryOutput: Record<string, boolean> = {};
+        if (canViewPI) moduleSummaryOutput.patient_info = patientInfoRes.rows.length > 0;
+        if (canViewOH) moduleSummaryOutput.oral_health = oralHealthRes.rows.length > 0;
+        if (canViewDW) moduleSummaryOutput.deworming = dewormingRes.rows.length > 0;
+        if (canViewIM) moduleSummaryOutput.immunization = immunizationRes.rows.length > 0;
+        if (canViewVS) moduleSummaryOutput.vital_signs = vitalSignsRes.rows.length > 0;
+
         res.status(200).json({
             data: {
                 student: mappedStudent,
-                modules: {
-                    patient_info: patientInfoRes.rows,
-                    animal_bites: animalBitesRes.rows,
-                    oral_health: oralHealthRes.rows,
-                    deworming: dewormingRes.rows,
-                    immunization: immunizationRes.rows,
-                    vital_signs: vitalSignsRes.rows,
-                },
-                module_summary: {
-                    patient_info: patientInfoRes.rows.length > 0,
-                    oral_health: oralHealthRes.rows.length > 0,
-                    deworming: dewormingRes.rows.length > 0,
-                    immunization: immunizationRes.rows.length > 0,
-                    vital_signs: vitalSignsRes.rows.length > 0,
-                }
+                modules: modulesOutput,
+                module_summary: moduleSummaryOutput
             }
         });
     } catch (error: unknown) {
@@ -940,4 +1023,3 @@ export const getStudentProfile = async (req: Request, res: Response): Promise<vo
         res.status(500).json({ message: 'Internal server error' });
     }
 };
-

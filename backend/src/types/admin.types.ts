@@ -1,10 +1,13 @@
-export type UserRole = 'teacher' | 'superuser' | 'admin';
-export type CreatableUserRole = 'teacher' | 'superuser';
+import type { PortalRole } from './auth.types.js';
+
+export type UserRole = PortalRole;
+export type CreatableUserRole = 'school_staff' | 'superuser';
 
 export interface AdminUserSummary {
   id: number;
   email: string;
-  role: UserRole;
+  portal_role: UserRole;
+  job_title: string;
   first_name: string;
   last_name: string;
   contact_no: string | null;
@@ -16,7 +19,7 @@ export interface AdminUserSummary {
 
 export interface AdminDashboardStats {
   users_by_role: {
-    teacher: number;
+    school_staff: number;
     superuser: number;
     admin: number;
     total: number;
@@ -28,7 +31,7 @@ export interface AdminDashboardStats {
 
 export interface AdminUserFilters {
   search?: string | undefined;
-  role?: UserRole | undefined;
+  portal_role?: UserRole | undefined;
   page: number;
   limit: number;
 }
@@ -74,4 +77,31 @@ export interface PaginatedResult<T> {
   total: number;
   page?: number | undefined;
   limit?: number | undefined;
+}
+
+export interface AdminModulePermission {
+  module_id: number;
+  module_slug: ApprovedModuleSlug;
+  module_name: string;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_approve_registration: boolean;
+  can_report: boolean;
+  can_export: boolean;
+}
+
+export interface ModulePermissionReplacement {
+  module_id: number;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_approve_registration: boolean;
+  can_report: boolean;
+  can_export: boolean;
+}
+
+export interface AdminSchoolAssignment {
+  school_id: number;
+  school_name: string;
 }

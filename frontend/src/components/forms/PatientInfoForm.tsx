@@ -14,6 +14,8 @@ import {
     Activity
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { canWriteModuleRecord, hasModulePermission } from '../../lib/access';
+import { useAuth } from '../../contexts/AuthContext';
 import {
     getStudent,
     updateStudent,
@@ -40,6 +42,7 @@ const ANATOMICAL_OPTIONS = [
 ];
 
 const PatientInfoForm: React.FC = () => {
+    const { effectiveAccess } = useAuth();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
@@ -217,6 +220,10 @@ const PatientInfoForm: React.FC = () => {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!id || !student) return;
+        if (!canWriteModuleRecord(effectiveAccess, 'patient-info', Boolean(existingPatientInfo))) {
+            toast.error('Your current access allows viewing this record, but not saving this change.');
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -260,7 +267,7 @@ const PatientInfoForm: React.FC = () => {
             }
 
             // 3. Sync student socio-demographic updates
-            await updateStudent(id, {
+            if (hasModulePermission(effectiveAccess, 'patient-info', 'can_edit')) await updateStudent(id, {
                 civil_status: civilStatus,
                 blood_type: bloodType || null,
                 educational_attainment: educationalAttainment || null,
@@ -351,6 +358,7 @@ const PatientInfoForm: React.FC = () => {
     }
 
     const isRecordCompleted = Boolean(existingPatientInfo);
+    const canSave = canWriteModuleRecord(effectiveAccess, 'patient-info', isRecordCompleted);
 
     const tabs = [
         { id: 'basic', label: 'Patient Info & Demographics', icon: User },
@@ -946,12 +954,14 @@ const PatientInfoForm: React.FC = () => {
 
                 {/* Form Footer Actions */}
                 <div className="pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-100 mt-8">
-                    <p className="text-xs text-slate-500">
-                        Saving creates or updates the student's official Patient Information health record and updates their clinical registry status.
+                    <p className={cn('text-xs', canSave ? 'text-slate-500' : 'text-amber-700')}>
+                        {canSave
+                            ? "Saving creates or updates the student's official Patient Information health record and updates their clinical registry status."
+                            : 'Read-only: your current access does not allow this record to be created or edited.'}
                     </p>
                     <button
                         type="submit"
-                        disabled={isSaving}
+                        disabled={isSaving || !canSave}
                         className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm rounded-xl shadow-xs transition-all flex items-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer shrink-0"
                     >
                         {isSaving ? (

@@ -12,10 +12,22 @@ import {
 /**
  * GET /api/dashboard/overview
  * Returns province-wide or filtered overview KPIs.
- * Access: superuser, admin
+ * Access: superuser, school_staff
  */
 export const getOverview = async (req: Request, res: Response): Promise<void> => {
   try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    // Exclude admin portal role from clinical / student overview dashboard
+    if (user.portal_role === 'admin') {
+      res.status(403).json({ error: 'Clinical and student dashboard is restricted from admin role' });
+      return;
+    }
+
     // 1. Validate query params
     const parseResult = dashboardFiltersSchema.safeParse(req.query);
     if (!parseResult.success) {
@@ -26,6 +38,32 @@ export const getOverview = async (req: Request, res: Response): Promise<void> =>
     }
 
     const filters: DashboardFilters = parseResult.data;
+
+    // Scope check for school_staff
+    const assignedSchoolIds = req.effectiveAccess?.assignedSchoolIds || [];
+    if (user.portal_role === 'school_staff') {
+      if (assignedSchoolIds.length === 0) {
+        res.status(200).json({
+          data: {
+            total_students: 0,
+            students_by_municipality: [],
+            gender_distribution: { male: 0, female: 0 },
+            module_completion: [],
+            recent_registrations: [],
+          },
+        });
+        return;
+      }
+
+      if (filters.school_id) {
+        if (!assignedSchoolIds.includes(filters.school_id)) {
+          res.status(403).json({ error: 'Access denied: school outside assigned scope' });
+          return;
+        }
+      } else {
+        filters.school_ids = assignedSchoolIds;
+      }
+    }
 
     // 2. Validate geography hierarchy
     const geoValidation = await validateGeographyHierarchy(filters);
@@ -78,48 +116,63 @@ export const getOverview = async (req: Request, res: Response): Promise<void> =>
       female: parseInt(genderResult.rows[0]?.female ?? '0', 10),
     };
 
-    // 7. Module completion counts (parallel queries — no N+1)
-    const [
-      patientInfoCount,
-      oralHealthCount,
-      dewormingCount,
-      immunizationCount,
-      vitalSignsCount,
-    ] = await Promise.all([
-      countModuleStudents('patient_info', filters, 'mt.created_at'),
-      countModuleStudents('oral_health', filters, 'mt.created_at'),
-      countModuleStudents('deworming', filters, 'mt.created_at'),
-      countModuleStudents('immunization', filters, 'mt.created_at'),
-      countModuleStudents('vital_signs', filters, 'mt.created_at'),
-    ]);
+    // 7. Module completion counts (filtered to authorized modules)
+    const perms = req.effectiveAccess?.modulePermissions;
+    const canAccessModule = (slug: 'patient-info' | 'oral-health' | 'deworming' | 'immunization' | 'vital-signs') => {
+      const mod = perms?.[slug];
+      return Boolean(mod?.can_view || mod?.can_report);
+    };
 
-    const moduleCompletion = [
-      {
-        module: 'Patient Info',
-        count: patientInfoCount,
-        rate: totalStudents > 0 ? Math.round((patientInfoCount / totalStudents) * 100) : 0,
-      },
-      {
-        module: 'Oral Health',
-        count: oralHealthCount,
-        rate: totalStudents > 0 ? Math.round((oralHealthCount / totalStudents) * 100) : 0,
-      },
-      {
-        module: 'Deworming',
-        count: dewormingCount,
-        rate: totalStudents > 0 ? Math.round((dewormingCount / totalStudents) * 100) : 0,
-      },
-      {
-        module: 'Immunization',
-        count: immunizationCount,
-        rate: totalStudents > 0 ? Math.round((immunizationCount / totalStudents) * 100) : 0,
-      },
-      {
-        module: 'Vital Signs',
-        count: vitalSignsCount,
-        rate: totalStudents > 0 ? Math.round((vitalSignsCount / totalStudents) * 100) : 0,
-      },
-    ];
+    const moduleCompletionPromises: Promise<{ module: string; count: number; rate: number } | null>[] = [];
+
+    if (canAccessModule('patient-info')) {
+      moduleCompletionPromises.push(
+        countModuleStudents('patient_info', filters, 'mt.created_at').then(count => ({
+          module: 'Patient Info',
+          count,
+          rate: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+        }))
+      );
+    }
+    if (canAccessModule('oral-health')) {
+      moduleCompletionPromises.push(
+        countModuleStudents('oral_health', filters, 'mt.created_at').then(count => ({
+          module: 'Oral Health',
+          count,
+          rate: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+        }))
+      );
+    }
+    if (canAccessModule('deworming')) {
+      moduleCompletionPromises.push(
+        countModuleStudents('deworming', filters, 'mt.created_at').then(count => ({
+          module: 'Deworming',
+          count,
+          rate: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+        }))
+      );
+    }
+    if (canAccessModule('immunization')) {
+      moduleCompletionPromises.push(
+        countModuleStudents('immunization', filters, 'mt.created_at').then(count => ({
+          module: 'Immunization',
+          count,
+          rate: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+        }))
+      );
+    }
+    if (canAccessModule('vital-signs')) {
+      moduleCompletionPromises.push(
+        countModuleStudents('vital_signs', filters, 'mt.created_at').then(count => ({
+          module: 'Vital Signs',
+          count,
+          rate: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+        }))
+      );
+    }
+
+    const resolvedModules = await Promise.all(moduleCompletionPromises);
+    const moduleCompletion = resolvedModules.filter((m): m is NonNullable<typeof m> => m !== null);
 
     // 8. Recent registrations (last 10)
     const recentQuery = `

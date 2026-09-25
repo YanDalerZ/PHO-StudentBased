@@ -39,7 +39,7 @@ interface UserFormData {
   last_name: string;
   email: string;
   contact_no: string;
-  role: CreatableAdminUserRole;
+  portal_role: CreatableAdminUserRole;
   password: string;
 }
 
@@ -57,7 +57,7 @@ const initialFormData: UserFormData = {
   last_name: '',
   email: '',
   contact_no: '',
-  role: 'teacher',
+  portal_role: 'school_staff',
   password: '',
 };
 
@@ -72,7 +72,7 @@ export const UserManagement: React.FC = () => {
   // Filters state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
-  const [selectedRole, setSelectedRole] = useState<'all' | 'teacher' | 'superuser' | 'admin'>('all');
+  const [selectedRole, setSelectedRole] = useState<'all' | 'school_staff' | 'superuser' | 'admin'>('all');
 
   // Loading & error states
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -110,7 +110,7 @@ export const UserManagement: React.FC = () => {
 
     getAdminUsers({
       search: debouncedSearch || undefined,
-      role: selectedRole === 'all' ? undefined : selectedRole,
+      portal_role: selectedRole === 'all' ? undefined : selectedRole,
       page,
       limit,
     })
@@ -165,13 +165,13 @@ export const UserManagement: React.FC = () => {
   const openEditModal = useCallback((user: AdminUserSummary) => {
     setEditingUser(user);
     // Role for creation/editing must be teacher or superuser
-    const editableRole: CreatableAdminUserRole = user.role === 'superuser' ? 'superuser' : 'teacher';
+    const editableRole: CreatableAdminUserRole = user.portal_role === 'superuser' ? 'superuser' : 'school_staff';
     setFormData({
       first_name: user.first_name,
       last_name: user.last_name,
       email: user.email,
       contact_no: user.contact_no || '',
-      role: editableRole,
+      portal_role: editableRole,
       password: '', // Blank unless admin enters replacement
     });
     setFormErrors({});
@@ -240,8 +240,8 @@ export const UserManagement: React.FC = () => {
         };
 
         // If target user is not admin, role can be updated
-        if (editingUser.role !== 'admin') {
-          payload.role = formData.role;
+        if (editingUser.portal_role !== 'admin') {
+          payload.portal_role = formData.portal_role;
         }
 
         // Only include password if entered
@@ -258,7 +258,7 @@ export const UserManagement: React.FC = () => {
           last_name: formData.last_name.trim(),
           email: formData.email.trim().toLowerCase(),
           contact_no: formData.contact_no.trim() || null,
-          role: formData.role,
+          portal_role: formData.portal_role,
           password: formData.password,
         };
 
@@ -283,7 +283,7 @@ export const UserManagement: React.FC = () => {
   // Status toggle / Unlock handler
   const handleToggleStatus = useCallback(
     async (user: AdminUserSummary, action: 'activate' | 'deactivate' | 'unlock') => {
-      if (user.role === 'admin') {
+      if (user.portal_role === 'admin') {
         toast.error('System administrator status cannot be modified.');
         return;
       }
@@ -335,7 +335,7 @@ export const UserManagement: React.FC = () => {
       {
         header: 'Role',
         cell: (user) => {
-          switch (user.role) {
+          switch (user.portal_role) {
             case 'admin':
               return (
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center space-x-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
@@ -350,7 +350,7 @@ export const UserManagement: React.FC = () => {
                   Superuser
                 </span>
               );
-            case 'teacher':
+            case 'school_staff':
               return (
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center space-x-1 bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
                   <UserCheck className="w-3 h-3 mr-1" aria-hidden="true" />
@@ -419,7 +419,7 @@ export const UserManagement: React.FC = () => {
               {isLocked ? (
                 <button
                   onClick={() => handleToggleStatus(user, 'unlock')}
-                  disabled={isBusy || user.role === 'admin'}
+                  disabled={isBusy || user.portal_role === 'admin'}
                   className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors inline-flex items-center space-x-1 disabled:opacity-50"
                   title="Unlock and restore login access"
                   aria-label={`Unlock account for ${user.first_name}`}
@@ -430,7 +430,7 @@ export const UserManagement: React.FC = () => {
               ) : (
                 <button
                   onClick={() => handleToggleStatus(user, 'deactivate')}
-                  disabled={isBusy || user.role === 'admin'}
+                  disabled={isBusy || user.portal_role === 'admin'}
                   className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors inline-flex items-center space-x-1 disabled:opacity-50"
                   title="Deactivate account access"
                   aria-label={`Deactivate account for ${user.first_name}`}
@@ -443,9 +443,9 @@ export const UserManagement: React.FC = () => {
               {/* Edit Profile Action */}
               <button
                 onClick={() => openEditModal(user)}
-                disabled={user.role === 'admin'}
+                disabled={user.portal_role === 'admin'}
                 className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40"
-                title={user.role === 'admin' ? 'Cannot edit system administrator' : 'Edit user details'}
+                title={user.portal_role === 'admin' ? 'Cannot edit system administrator' : 'Edit user details'}
                 aria-label={`Edit user ${user.first_name}`}
               >
                 <Pencil className="w-4 h-4" />
@@ -519,7 +519,7 @@ export const UserManagement: React.FC = () => {
         {/* Role Filter Tabs */}
         <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
           <Filter className="w-4 h-4 text-slate-400 hidden sm:inline" />
-          {(['all', 'teacher', 'superuser', 'admin'] as const).map((roleKey) => (
+          {(['all', 'school_staff', 'superuser', 'admin'] as const).map((roleKey) => (
             <button
               key={roleKey}
               onClick={() => {
@@ -628,12 +628,12 @@ export const UserManagement: React.FC = () => {
           {/* Role Selection (Restricted strictly to teacher or superuser) */}
           <FormField label="System Role">
             <select
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as CreatableAdminUserRole })}
-              disabled={editingUser?.role === 'admin'}
+              value={formData.portal_role}
+              onChange={(e) => setFormData({ ...formData, portal_role: e.target.value as CreatableAdminUserRole })}
+              disabled={editingUser?.portal_role === 'admin'}
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-surface-input border border-slate-200 dark:border-teal-500/30 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all"
             >
-              <option value="teacher">Teacher (School Data Encoder)</option>
+              <option value="school_staff">School Staff (School Data Encoder)</option>
               <option value="superuser">Superuser (PHO Public Health Officer)</option>
             </select>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">

@@ -1,10 +1,11 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import api from '../services/api';
-import type { User, AuthResponse } from '../types';
+import type { User, AuthResponse, EffectiveAccess } from '../types';
 
 interface AuthContextType {
   user: User | null;
+  effectiveAccess: EffectiveAccess | null;
   token: string | null;
   isAuthenticated: boolean;
   loading: boolean;
@@ -28,84 +29,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     return null;
   });
+  const [effectiveAccess, setEffectiveAccess] = useState<EffectiveAccess | null>(null);
   const [loading, setLoading] = useState(() => !localStorage.getItem('token') ? false : true);
+  const refreshPromise = useRef<Promise<void> | null>(null);
 
   const login = async (email: string, password: string) => {
     const response = await api.post<AuthResponse>('/auth/login', { email, password });
-    const { token: newToken, user: newUser } = response.data;
+    const { token: newToken, user: newUser, effectiveAccess: newAccess } = response.data;
     
     setUser(newUser);
+    setEffectiveAccess(newAccess);
     setToken(newToken);
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
+    setEffectiveAccess(null);
     setToken(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/Login';
-  };
+  }, []);
 
-  const checkAuth = async () => {
-    try {
+  const checkAuth = useCallback(async () => {
+    if (refreshPromise.current) return refreshPromise.current;
+
+    const refresh = (async () => {
+      try {
       const storedToken = localStorage.getItem('token');
       if (!storedToken) {
+        setUser(null);
+        setEffectiveAccess(null);
+        setToken(null);
         setLoading(false);
         return;
       }
-      
+
+      setLoading(true);
       setToken(storedToken);
-      
-      // Verify token with backend
-      const response = await api.get<User>('/auth/me');
-      setUser(response.data);
-      localStorage.setItem('user', JSON.stringify(response.data));
-    } catch (error) {
-      console.error("Auth check failed:", error);
-      logout();
-    } finally {
-      setLoading(false);
-    }
-  };
+      const response = await api.get<{ user?: User; effectiveAccess?: EffectiveAccess } | User>('/auth/me');
+      const resData = response.data;
+      const actualUser = (resData && 'user' in resData && resData.user) ? resData.user : (resData as User);
+      const actualAccess = (resData && 'effectiveAccess' in resData && resData.effectiveAccess) ? resData.effectiveAccess : null;
+      setUser(actualUser);
+      setEffectiveAccess(actualAccess);
+      localStorage.setItem('user', JSON.stringify(actualUser));
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        logout();
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    refreshPromise.current = refresh.finally(() => {
+      refreshPromise.current = null;
+    });
+    return refreshPromise.current;
+  }, [logout]);
 
   useEffect(() => {
-    let isMounted = true;
-    const storedToken = localStorage.getItem('token');
-    if (!storedToken) {
-      return;
-    }
-
-    api.get<User>('/auth/me')
-      .then((response) => {
-        if (isMounted) {
-          setUser(response.data);
-          localStorage.setItem('user', JSON.stringify(response.data));
-        }
-      })
-      .catch((error) => {
-        console.error("Auth check failed:", error);
-        if (isMounted) {
-          setUser(null);
-          setToken(null);
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    void checkAuth();
+  }, [checkAuth]);
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!user, loading, login, logout, checkAuth }}>
+    <AuthContext.Provider value={{ user, effectiveAccess, token, isAuthenticated: !!user, loading, login, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,7 @@
 import bcrypt from 'bcryptjs';
 import pool from '../database/db.js';
+import { AuditService } from './AuditService.js';
+import { APPROVED_MODULE_SLUGS } from '../types/admin.types.js';
 import type {
   AdminDashboardStats,
   AdminModule,
@@ -8,8 +10,11 @@ import type {
   AdminUserSummary,
   ApprovedModuleSlug,
   CreatableUserRole,
+  ModulePermissionReplacement,
   PaginatedResult,
 } from '../types/admin.types.js';
+import type { AdminModulePermission, AdminSchoolAssignment } from '../types/admin.types.js';
+import type { EffectiveAccess, PortalRole } from '../types/auth.types.js';
 
 export class AdminServiceError extends Error {
   constructor(
@@ -29,7 +34,8 @@ function mapUserSummary(row: Record<string, unknown>): AdminUserSummary {
   return {
     id: row.id as number,
     email: row.email as string,
-    role: row.role as AdminUserSummary['role'],
+    portal_role: row.portal_role as AdminUserSummary['portal_role'],
+    job_title: row.job_title as string,
     first_name: row.first_name as string,
     last_name: row.last_name as string,
     contact_no: (row.contact_no as string) ?? null,
@@ -82,20 +88,20 @@ function mapSchoolWithGeo(row: Record<string, unknown>): AdminSchoolWithGeo {
 
 export async function getDashboardStats(): Promise<AdminDashboardStats> {
   // 1. Users grouped by role
-  const roleResult = await pool.query<{ role: string; count: string }>(
-    'SELECT role, COUNT(*)::int as count FROM USERS GROUP BY role'
+  const roleResult = await pool.query<{ portal_role: string; count: string }>(
+    'SELECT portal_role, COUNT(*)::int as count FROM USERS GROUP BY portal_role'
   );
   const usersByRole = {
-    teacher: 0,
+    school_staff: 0,
     superuser: 0,
     admin: 0,
     total: 0,
   };
   for (const row of roleResult.rows) {
     const count = parseInt(row.count, 10) || 0;
-    if (row.role === 'teacher') usersByRole.teacher = count;
-    else if (row.role === 'superuser') usersByRole.superuser = count;
-    else if (row.role === 'admin') usersByRole.admin = count;
+    if (row.portal_role === 'school_staff') usersByRole.school_staff = count;
+    else if (row.portal_role === 'superuser') usersByRole.superuser = count;
+    else if (row.portal_role === 'admin') usersByRole.admin = count;
     usersByRole.total += count;
   }
 
@@ -113,7 +119,7 @@ export async function getDashboardStats(): Promise<AdminDashboardStats> {
 
   // 4. Recent account creations (last 10)
   const recentResult = await pool.query<Record<string, unknown>>(
-    `SELECT id, email, role, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    `SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
      FROM USERS
      ORDER BY created_at DESC
      LIMIT 10`
@@ -144,9 +150,9 @@ export async function listUsers(filters: AdminUserFilters): Promise<PaginatedRes
     paramIndex++;
   }
 
-  if (filters.role) {
-    conditions.push(`role = $${paramIndex}`);
-    params.push(filters.role);
+  if (filters.portal_role) {
+    conditions.push(`portal_role = $${paramIndex}`);
+    params.push(filters.portal_role);
     paramIndex++;
   }
 
@@ -163,7 +169,7 @@ export async function listUsers(filters: AdminUserFilters): Promise<PaginatedRes
 
   const dataParams = [...params, limit, offset];
   const dataQuery = `
-    SELECT id, email, role, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
     FROM USERS
     WHERE ${whereClause}
     ORDER BY created_at DESC
@@ -192,7 +198,7 @@ export interface CreateUserInput {
 
 export async function createUser(input: CreateUserInput): Promise<AdminUserSummary> {
   // Prevent admin creation through API
-  if (input.role !== 'teacher' && input.role !== 'superuser') {
+  if (input.role !== 'school_staff' && input.role !== 'superuser') {
     throw new AdminServiceError(400, "Invalid role. Only 'teacher' and 'superuser' roles can be created via this API.");
   }
 
@@ -207,15 +213,17 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserSumma
   const passwordHash = await bcrypt.hash(input.password, 10);
 
   const insertQuery = `
-    INSERT INTO USERS (email, password_hash, role, first_name, last_name, contact_no, is_active, failed_login_attempts)
-    VALUES ($1, $2, $3, $4, $5, $6, true, 0)
-    RETURNING id, email, role, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    INSERT INTO USERS (email, password_hash, role, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 0)
+    RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
   `;
 
   const result = await pool.query<Record<string, unknown>>(insertQuery, [
     normalizedEmail,
     passwordHash,
+    input.role === 'school_staff' ? 'teacher' : input.role,
     input.role,
+    input.role === 'superuser' ? 'Administrator' : 'Teacher',
     input.first_name.trim(),
     input.last_name.trim(),
     input.contact_no?.trim() || null,
@@ -241,7 +249,7 @@ export interface UpdateUserInput {
 
 export async function updateUser(id: number, input: UpdateUserInput): Promise<AdminUserSummary> {
   const existingResult = await pool.query<Record<string, unknown>>(
-    'SELECT id, email, role, is_active, failed_login_attempts FROM USERS WHERE id = $1',
+    'SELECT id, email, portal_role, job_title, is_active, failed_login_attempts FROM USERS WHERE id = $1',
     [id]
   );
   const currentUser = existingResult.rows[0];
@@ -251,13 +259,13 @@ export async function updateUser(id: number, input: UpdateUserInput): Promise<Ad
 
   // Prevent role escalation to admin
   if (input.role !== undefined) {
-    if (input.role !== 'teacher' && input.role !== 'superuser') {
+    if (input.role !== 'school_staff' && input.role !== 'superuser') {
       throw new AdminServiceError(400, "Role cannot be updated to 'admin'.");
     }
   }
 
   // Prevent modifying an existing admin's role through this API
-  if (currentUser.role === 'admin' && input.role !== undefined) {
+  if (currentUser.portal_role === 'admin' && input.role !== undefined) {
     throw new AdminServiceError(400, "Cannot change role of an existing administrator via this API.");
   }
 
@@ -285,7 +293,11 @@ export async function updateUser(id: number, input: UpdateUserInput): Promise<Ad
   }
 
   if (input.role !== undefined) {
-    updateFields.push(`role = $${paramIndex++}`);
+    updateFields.push(`portal_role = $${paramIndex}, role = CASE $${paramIndex}
+      WHEN 'school_staff' THEN 'teacher'::user_role
+      WHEN 'superuser' THEN 'superuser'::user_role
+      ELSE role END`);
+    paramIndex++;
     params.push(input.role);
   }
 
@@ -311,7 +323,7 @@ export async function updateUser(id: number, input: UpdateUserInput): Promise<Ad
 
   if (updateFields.length === 0) {
     const fresh = await pool.query<Record<string, unknown>>(
-      'SELECT id, email, role, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at FROM USERS WHERE id = $1',
+      'SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at FROM USERS WHERE id = $1',
       [id]
     );
     const userRow = fresh.rows[0];
@@ -326,12 +338,20 @@ export async function updateUser(id: number, input: UpdateUserInput): Promise<Ad
     UPDATE USERS
     SET ${updateFields.join(', ')}
     WHERE id = $${paramIndex}
-    RETURNING id, email, role, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
   `;
 
   const result = await pool.query<Record<string, unknown>>(updateQuery, params);
   const updatedUser = result.rows[0];
   if (!updatedUser) throw new AdminServiceError(404, 'User not found.');
+
+  await AuditService.logEvent({
+    action: 'UPDATE_USER',
+    entity_type: 'USER',
+    entity_id: String(id),
+    details: input
+  });
+
   return mapUserSummary(updatedUser);
 }
 
@@ -380,12 +400,20 @@ export async function updateUserStatus(id: number, input: UpdateUserStatusInput)
     UPDATE USERS
     SET is_active = $1, failed_login_attempts = $2, updated_at = CURRENT_TIMESTAMP
     WHERE id = $3
-    RETURNING id, email, role, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
   `;
 
   const result = await pool.query<Record<string, unknown>>(updateQuery, [newActive, newAttempts, id]);
   const updated = result.rows[0];
   if (!updated) throw new AdminServiceError(404, 'User not found.');
+
+  await AuditService.logEvent({
+    action: 'UPDATE_USER_STATUS',
+    entity_type: 'USER',
+    entity_id: String(id),
+    details: { is_active: newActive, failed_login_attempts: newAttempts, input }
+  });
+
   return mapUserSummary(updated);
 }
 
@@ -763,4 +791,263 @@ export async function updateSchool(id: number, input: UpdateSchoolInput): Promis
   const row = result.rows[0];
   if (!row) throw new AdminServiceError(404, 'School not found.');
   return mapSchoolWithGeo(row);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERMISSIONS AND ACCESS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getModulePermissions(userId: number): Promise<AdminModulePermission[]> {
+  const query = `
+    SELECT 
+      ump.module_id,
+      m.slug as module_slug,
+      m.name as module_name,
+      ump.can_view,
+      ump.can_create,
+      ump.can_edit,
+      ump.can_approve_registration,
+      ump.can_report,
+      ump.can_export
+    FROM USER_MODULE_PERMISSIONS ump
+    JOIN MODULES m ON ump.module_id = m.id
+    WHERE ump.user_id = $1 AND ump.revoked_at IS NULL
+    ORDER BY m.sort_order, m.id
+  `;
+  const result = await pool.query(query, [userId]);
+  return result.rows.map(row => ({
+    module_id: row.module_id,
+    module_slug: row.module_slug,
+    module_name: row.module_name,
+    can_view: row.can_view,
+    can_create: row.can_create,
+    can_edit: row.can_edit,
+    can_approve_registration: row.can_approve_registration,
+    can_report: row.can_report,
+    can_export: row.can_export,
+  }));
+}
+
+interface AccessTargetRow {
+  id: number;
+  portal_role: PortalRole;
+}
+
+interface ModuleValidationRow {
+  id: number;
+  slug: ApprovedModuleSlug;
+}
+
+const permissionActions = [
+  'can_view',
+  'can_create',
+  'can_edit',
+  'can_approve_registration',
+  'can_report',
+  'can_export',
+] as const;
+
+function assertUniquePositiveIds(ids: number[], label: string): void {
+  if (ids.some(id => !Number.isInteger(id) || id <= 0)) {
+    throw new AdminServiceError(400, `${label} must contain only positive integer IDs.`);
+  }
+  if (new Set(ids).size !== ids.length) {
+    throw new AdminServiceError(400, `${label} contains duplicate IDs.`);
+  }
+}
+
+async function lockAccessTarget(
+  client: import('pg').PoolClient,
+  userId: number,
+): Promise<AccessTargetRow> {
+  const result = await client.query<AccessTargetRow>(
+    'SELECT id, portal_role FROM USERS WHERE id = $1 FOR UPDATE',
+    [userId],
+  );
+  const target = result.rows[0];
+  if (!target) throw new AdminServiceError(404, 'User not found.');
+  return target;
+}
+
+export async function updateModulePermissions(
+  userId: number,
+  permissions: ModulePermissionReplacement[],
+  grantedBy: number,
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const target = await lockAccessTarget(client, userId);
+    if (target.portal_role === 'admin' && permissions.length > 0) {
+      throw new AdminServiceError(400, 'Administrator accounts cannot receive clinical module permissions.');
+    }
+
+    const moduleIds = permissions.map(permission => permission.module_id);
+    assertUniquePositiveIds(moduleIds, 'Module permissions');
+    const modules = moduleIds.length === 0
+      ? { rows: [] as ModuleValidationRow[] }
+      : await client.query<ModuleValidationRow>(
+          'SELECT id, slug FROM MODULES WHERE id = ANY($1::int[]) ORDER BY id',
+          [moduleIds],
+        );
+    if (modules.rows.length !== moduleIds.length) {
+      throw new AdminServiceError(400, 'One or more module IDs are invalid.');
+    }
+    if (modules.rows.some(module => !APPROVED_MODULE_SLUGS.includes(module.slug))) {
+      throw new AdminServiceError(400, 'Module permissions are restricted to the five approved clinical modules.');
+    }
+    const moduleById = new Map(modules.rows.map(module => [module.id, module]));
+
+    for (const permission of permissions) {
+      const module = moduleById.get(permission.module_id);
+      if (!module) throw new AdminServiceError(400, 'One or more module IDs are invalid.');
+      const actions = permissionActions.filter(action => permission[action]);
+      if (actions.length === 0) {
+        throw new AdminServiceError(400, `Module ${module.slug} must include at least one action grant.`);
+      }
+      if (permission.can_approve_registration
+        && (target.portal_role !== 'school_staff' || module.slug !== 'patient-info')) {
+        throw new AdminServiceError(
+          400,
+          'Registration approval may be granted only to school staff for Patient Information.',
+        );
+      }
+    }
+
+    const revoked = await client.query(
+      'UPDATE USER_MODULE_PERMISSIONS SET revoked_at = CURRENT_TIMESTAMP, revoked_by = $2 WHERE user_id = $1 AND revoked_at IS NULL',
+      [userId, grantedBy]
+    );
+    
+    for (const perm of permissions) {
+      if (!perm.module_id) continue;
+      await client.query(`
+        INSERT INTO USER_MODULE_PERMISSIONS 
+        (user_id, module_id, can_view, can_create, can_edit, can_approve_registration, can_report, can_export, granted_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [
+        userId, perm.module_id, 
+        perm.can_view, perm.can_create, perm.can_edit,
+        perm.can_approve_registration, perm.can_report, perm.can_export,
+        grantedBy
+      ]);
+    }
+
+    await AuditService.logEvent({
+      actor_id: grantedBy,
+      portal_role: 'admin',
+      action: 'UPDATE_MODULE_PERMISSIONS',
+      entity_type: 'USER',
+      entity_id: String(userId),
+      details: {
+        revoked_count: revoked.rowCount ?? 0,
+        new_grant_count: permissions.length,
+        grants: permissions.map(permission => ({
+          module_id: permission.module_id,
+          actions: permissionActions.filter(action => permission[action]),
+        })),
+      }
+    }, client);
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getSchoolAssignments(userId: number): Promise<AdminSchoolAssignment[]> {
+  const query = `
+    SELECT s.id as school_id, s.name as school_name
+    FROM USER_SCHOOL_ASSIGNMENTS usa
+    JOIN SCHOOLS s ON usa.school_id = s.id
+    WHERE usa.user_id = $1 AND usa.revoked_at IS NULL AND s.is_active = TRUE
+    ORDER BY s.name, s.id
+  `;
+  const result = await pool.query(query, [userId]);
+  return result.rows;
+}
+
+export async function updateSchoolAssignments(userId: number, schoolIds: number[], assignedBy: number): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const target = await lockAccessTarget(client, userId);
+    if (target.portal_role !== 'school_staff' && schoolIds.length > 0) {
+      throw new AdminServiceError(400, 'School assignments may be granted only to school staff accounts.');
+    }
+    assertUniquePositiveIds(schoolIds, 'School assignments');
+    if (schoolIds.length > 0) {
+      const schools = await client.query<{ id: number }>(
+        'SELECT id FROM SCHOOLS WHERE id = ANY($1::int[]) AND is_active = TRUE ORDER BY id',
+        [schoolIds],
+      );
+      if (schools.rows.length !== schoolIds.length) {
+        throw new AdminServiceError(400, 'One or more schools do not exist or are inactive.');
+      }
+    }
+
+    const revoked = await client.query(
+      'UPDATE USER_SCHOOL_ASSIGNMENTS SET revoked_at = CURRENT_TIMESTAMP, revoked_by = $2 WHERE user_id = $1 AND revoked_at IS NULL',
+      [userId, assignedBy]
+    );
+    
+    for (const schoolId of schoolIds) {
+      await client.query(`
+        INSERT INTO USER_SCHOOL_ASSIGNMENTS (user_id, school_id, assigned_by)
+        VALUES ($1, $2, $3)
+      `, [userId, schoolId, assignedBy]);
+    }
+
+    await AuditService.logEvent({
+      actor_id: assignedBy,
+      portal_role: 'admin',
+      action: 'UPDATE_SCHOOL_ASSIGNMENTS',
+      entity_type: 'USER',
+      entity_id: String(userId),
+      details: {
+        revoked_count: revoked.rowCount ?? 0,
+        new_assignment_count: schoolIds.length,
+        school_ids: schoolIds,
+      }
+    }, client);
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getEffectiveAccess(userId: number): Promise<EffectiveAccess> {
+  const schools = await getSchoolAssignments(userId);
+  const perms = await getModulePermissions(userId);
+  
+  const effectiveAccess: EffectiveAccess = {
+    assignedSchoolIds: schools.map(s => s.school_id),
+    modulePermissions: {
+        'patient-info': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
+        'oral-health': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
+        'deworming': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
+        'immunization': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
+        'vital-signs': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
+    }
+  };
+
+  for (const perm of perms) {
+    effectiveAccess.modulePermissions[perm.module_slug] = {
+      can_view: perm.can_view,
+      can_create: perm.can_create,
+      can_edit: perm.can_edit,
+      can_approve_registration: perm.can_approve_registration,
+      can_report: perm.can_report,
+      can_export: perm.can_export,
+    };
+  }
+
+  return effectiveAccess;
 }

@@ -23,6 +23,8 @@ import { LineChart } from '../../components/charts/LineChart';
 import { ProgressRing } from '../../components/charts/ProgressRing';
 import { getDewormingDashboard, getDewormingReport, getStudents } from '../../services/api';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasModulePermission } from '../../lib/access';
 import type {
     Student,
     DashboardFilters,
@@ -43,6 +45,8 @@ const getCurrentPeriod = (): string => {
 
 export const DewormingDash: React.FC = () => {
     const navigate = useNavigate();
+    const { effectiveAccess } = useAuth();
+    const hasPatientInfoAccess = hasModulePermission(effectiveAccess, 'patient-info', 'can_view');
 
     // Dashboard State
     const [filters, setFilters] = useState<DashboardFilters>({});
@@ -83,6 +87,11 @@ export const DewormingDash: React.FC = () => {
 
     // Fetch students list for quick registry navigation
     const fetchStudentsList = useCallback(async (currentFilters: DashboardFilters) => {
+        if (!hasPatientInfoAccess) {
+            setStudents([]);
+            setStudentsLoading(false);
+            return;
+        }
         setStudentsLoading(true);
         try {
             const params: { school_id?: number } = {};
@@ -97,14 +106,16 @@ export const DewormingDash: React.FC = () => {
         } finally {
             setStudentsLoading(false);
         }
-    }, []);
+    }, [hasPatientInfoAccess]);
 
     // Initial load
     useEffect(() => {
         let isMounted = true;
         Promise.all([
             getDewormingDashboard(filters),
-            getStudents(filters.school_id ? { school_id: filters.school_id } : undefined),
+            hasPatientInfoAccess
+                ? getStudents(filters.school_id ? { school_id: filters.school_id } : undefined)
+                : Promise.resolve({ data: [] as Student[], total: 0 }),
         ])
             .then(([dashRes, studentsRes]) => {
                 if (isMounted) {

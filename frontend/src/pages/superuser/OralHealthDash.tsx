@@ -18,6 +18,8 @@ import { BarChart } from '../../components/charts/BarChart';
 import { DonutChart } from '../../components/charts/DonutChart';
 import { LineChart } from '../../components/charts/LineChart';
 import { getOralHealthDashboard, getStudents } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasModulePermission } from '../../lib/access';
 import type {
     Student,
     DashboardFilters,
@@ -28,6 +30,8 @@ const PAGE_SIZE = 5;
 
 export const OralHealthDash: React.FC = () => {
     const navigate = useNavigate();
+    const { effectiveAccess } = useAuth();
+    const hasPatientInfoAccess = hasModulePermission(effectiveAccess, 'patient-info', 'can_view');
 
     // Dashboard State
     const [filters, setFilters] = useState<DashboardFilters>({});
@@ -58,6 +62,11 @@ export const OralHealthDash: React.FC = () => {
 
     // Fetch students list for registry table
     const fetchStudentsList = useCallback(async (currentFilters: DashboardFilters) => {
+        if (!hasPatientInfoAccess) {
+            setStudents([]);
+            setStudentsLoading(false);
+            return;
+        }
         setStudentsLoading(true);
         try {
             const params: { school_id?: number } = {};
@@ -72,14 +81,16 @@ export const OralHealthDash: React.FC = () => {
         } finally {
             setStudentsLoading(false);
         }
-    }, []);
+    }, [hasPatientInfoAccess]);
 
     // Initial load
     useEffect(() => {
         let isMounted = true;
         Promise.all([
             getOralHealthDashboard(filters),
-            getStudents(filters.school_id ? { school_id: filters.school_id } : undefined),
+            hasPatientInfoAccess
+                ? getStudents(filters.school_id ? { school_id: filters.school_id } : undefined)
+                : Promise.resolve({ data: [] as Student[], total: 0 }),
         ])
             .then(([dashRes, studentsRes]) => {
                 if (isMounted) {

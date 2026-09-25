@@ -24,8 +24,13 @@ const allowedOrigins = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    `http://localhost:${PORT}`,
+    `http://127.0.0.1:${PORT}`,
     "https://pho-studentbased.onrender.com",
-];
+    process.env.APP_ORIGIN,
+].filter((origin): origin is string => Boolean(origin));
 
 const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
@@ -41,39 +46,48 @@ const corsOptions: cors.CorsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 
-app.use('/api/users', AllRoutes.UserRoutes);
-app.use('/api/students', AllRoutes.StudentRoutes);
-app.use('/api/auth', AllRoutes.AuthRoutes);
-app.use('/api/lookup', AllRoutes.LookupRoutes);
-app.use('/api/modules/patient-info', AllRoutes.PatientInfoRoutes);
-app.use('/api/modules/oral-health', AllRoutes.OralHealthRoutes);
-app.use('/api/modules/deworming', AllRoutes.DewormingRoutes);
-app.use('/api/modules/immunization', AllRoutes.ImmunizationRoutes);
-app.use('/api/modules/vital-signs', AllRoutes.VitalSignsRoutes);
-app.use('/api/dashboard', AllRoutes.DashboardRoutes);
-app.use('/api/admin', AllRoutes.AdminRoutes);
+const apiRouter = express.Router();
+apiRouter.use('/students', AllRoutes.StudentRoutes);
+apiRouter.use('/auth', AllRoutes.AuthRoutes);
+apiRouter.use('/lookup', AllRoutes.LookupRoutes);
+apiRouter.use('/modules/patient-info', AllRoutes.PatientInfoRoutes);
+apiRouter.use('/modules/oral-health', AllRoutes.OralHealthRoutes);
+apiRouter.use('/modules/deworming', AllRoutes.DewormingRoutes);
+apiRouter.use('/modules/immunization', AllRoutes.ImmunizationRoutes);
+apiRouter.use('/modules/vital-signs', AllRoutes.VitalSignsRoutes);
+apiRouter.use('/dashboard', AllRoutes.DashboardRoutes);
+apiRouter.use('/admin', AllRoutes.AdminRoutes);
+
+// Documented primary prefix
+app.use('/api/v1', apiRouter);
+// Compatibility alias
+app.use('/api', apiRouter);
 
 
 // Serving static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Serving frontend static files
-const frontendPath = path.join(__dirname, '../../frontend/dist');
+const frontendPath = path.resolve(process.cwd(), '../frontend/dist');
 app.use(express.static(frontendPath));
 
 app.get(/^((?!\/api).)*$/, (req, res) => {
     res.sendFile(path.resolve(frontendPath, "index.html"));
 });
 
-// Start Server and Verify Aiven Postgres Connection
-app.listen(PORT, '0.0.0.0', async () => {
-    try {
-        // Test query to confirm Aiven PostgreSQL connection
-        const result = await pool.query('SELECT NOW() as current_time, current_setting(\'TIMEZONE\') as tz');
-        console.log(`✅ Server running on port ${PORT}`);
-        console.log('✅ Connected to Aiven PostgreSQL:', result.rows[0]);
-    } catch (err) {
-        console.error('❌ Database connection failed.');
-        console.error(err);
-    }
-});
+// Export express app for HTTP integration tests
+export { app };
+
+// Start Server and Verify PostgreSQL Connection
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, '0.0.0.0', async () => {
+        try {
+            const result = await pool.query('SELECT NOW() as current_time, current_setting(\'TIMEZONE\') as tz');
+            console.log(`✅ Server running on port ${PORT}`);
+            console.log('✅ Connected to PostgreSQL:', result.rows[0]);
+        } catch (err) {
+            console.error('❌ Database connection failed.');
+            console.error(err);
+        }
+    });
+}

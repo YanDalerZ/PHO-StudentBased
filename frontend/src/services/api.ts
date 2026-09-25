@@ -59,10 +59,16 @@ import type {
 
 
 const getBaseUrl = () => {
-    if (window.location.hostname.includes('pho-studentbased.onrender.com')) {
-        return 'https://pho-studentbased.onrender.com/api';
+    const configured = import.meta.env?.VITE_API_URL?.trim();
+    if (!configured) return '/api/v1';
+
+    const resolved = new URL(configured, window.location.origin);
+    if (import.meta.env?.PROD && resolved.origin !== window.location.origin) {
+        throw new Error('VITE_API_URL must resolve to the same origin in production.');
     }
-    return 'http://localhost:3000/api';
+    return resolved.origin === window.location.origin
+        ? `${resolved.pathname.replace(/\/$/, '')}${resolved.search}${resolved.hash}`
+        : resolved.toString().replace(/\/$/, '');
 };
 
 const api = axios.create({
@@ -81,7 +87,8 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle 401s
+// Authentication failures end the session. Authorization failures invalidate
+// the cached access snapshot so the provider can reload current grants/role.
 api.interceptors.response.use(
     (response) => response,
     (error) => {

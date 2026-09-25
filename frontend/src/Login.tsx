@@ -1,32 +1,28 @@
 import logo from './assets/images/logo.jpg';
-import registerQr from './assets/images/register-qr.jpeg';
 import sealOfAklan from './assets/images/seal_of_aklan.png';
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Building2, Heart, GraduationCap, Loader2, QrCode, Download, ExternalLink, X, ShieldCheck, EyeOff, Eye } from 'lucide-react';
+import { Building2, Heart, GraduationCap, Loader2, ShieldCheck, EyeOff, Eye } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
+import { defaultPortalRoute } from './lib/access';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { login, isAuthenticated, user } = useAuth();
+    const { login, isAuthenticated, user, effectiveAccess } = useAuth();
 
     // Remember Me States
     const [email, setEmail] = useState(() => {
         const savedRememberMe = localStorage.getItem('remember_me') === 'true';
         return savedRememberMe ? (localStorage.getItem('remembered_email') || '') : '';
     });
-    const [password, setPassword] = useState(() => {
-        const savedRememberMe = localStorage.getItem('remember_me') === 'true';
-        return savedRememberMe ? (localStorage.getItem('remembered_password') || '') : '';
-    });
+    const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(() => {
         return localStorage.getItem('remember_me') === 'true';
     });
 
     const [loading, setLoading] = useState(false);
-    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
@@ -34,15 +30,11 @@ const Login: React.FC = () => {
             const from = location.state?.from;
             if (from) {
                 navigate(from, { replace: true });
-            } else if (user.role === 'teacher') {
-                navigate('/teacher/dashboard', { replace: true });
-            } else if (user.role === 'superuser') {
-                navigate('/superuser', { replace: true });
-            } else if (user.role === 'admin') {
-                navigate('/admin', { replace: true });
+            } else {
+                navigate(defaultPortalRoute(user, effectiveAccess), { replace: true });
             }
         }
-    }, [isAuthenticated, user, navigate, location]);
+    }, [isAuthenticated, user, effectiveAccess, navigate, location]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -51,15 +43,15 @@ const Login: React.FC = () => {
         try {
             await login(email, password);
 
-            // Handle Remember Me logic in LocalStorage (saving both email & password)
+            // Handle Remember Me logic in LocalStorage (saving only email)
             if (rememberMe) {
                 localStorage.setItem('remembered_email', email);
-                localStorage.setItem('remembered_password', password);
                 localStorage.setItem('remember_me', 'true');
+                localStorage.removeItem('remembered_password'); // clear any previously saved password
             } else {
                 localStorage.removeItem('remembered_email');
-                localStorage.removeItem('remembered_password');
                 localStorage.removeItem('remember_me');
+                localStorage.removeItem('remembered_password');
             }
 
             toast.success('Login successful!');
@@ -268,18 +260,6 @@ const Login: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* Header Actions */}
-                    <div className="flex justify-center mt-3 items-center w-full">
-                        <button
-                            type="button"
-                            onClick={() => setIsQrModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-sm font-semibold transition-all shadow-sm group cursor-pointer"
-                        >
-                            <QrCode className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
-                            <span>Student Registration QR</span>
-                        </button>
-                    </div>
-
                 </div>
 
                 {/* Footer text for mobile layout */}
@@ -288,66 +268,6 @@ const Login: React.FC = () => {
                 </div>
             </div>
 
-            {/* Registration QR Code Modal */}
-            {isQrModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div
-                        className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in zoom-in-95 duration-200"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Close Button */}
-                        <button
-                            onClick={() => setIsQrModalOpen(false)}
-                            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                            aria-label="Close modal"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-
-                        {/* Modal Header */}
-                        <div className="text-center space-y-1 pr-6">
-                            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
-                                <QrCode className="w-5 h-5" />
-                            </div>
-                            <h3 className="text-lg font-bold text-slate-900">
-                                Student Registration
-                            </h3>
-                            <p className="text-xs text-slate-500">
-                                Scan this QR code or click below to fill out the official registration form.
-                            </p>
-                        </div>
-
-                        {/* QR Image Display */}
-                        <div className="flex justify-center p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                            <img
-                                src={registerQr}
-                                alt="Registration QR Code"
-                                className="w-48 h-48 object-cover rounded-xl shadow-xs"
-                            />
-                        </div>
-
-                        {/* Modal Actions */}
-                        <div className="flex flex-col gap-2.5 pt-1">
-                            <Link
-                                to="/registration-form"
-                                onClick={() => setIsQrModalOpen(false)}
-                                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-sm"
-                            >
-                                <ExternalLink className="w-4 h-4" />
-                                <span>Open Online Form</span>
-                            </Link>
-                            <a
-                                href={registerQr}
-                                download="Registration-QR.jpeg"
-                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold transition-colors"
-                            >
-                                <Download className="w-4 h-4 text-slate-500" />
-                                <span>Download QR Image</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

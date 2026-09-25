@@ -1,0 +1,33 @@
+{
+  "approved_by_admin_email": "admin-owner@example.invalid",
+  "users": [
+    {
+      "email": "staff-user@example.invalid",
+      "school_ids": [1],
+      "module_permissions": {
+        "patient-info": {
+          "can_view": true,
+          "can_create": true,
+          "can_edit": true,
+          "can_approve_registration": true,
+          "can_report": true,
+          "can_export": false
+        }
+      }
+    },
+    {
+      "email": "province-user@example.invalid",
+      "school_ids": [],
+      "module_permissions": {
+        "oral-health": {
+          "can_view": true,
+          "can_create": false,
+          "can_edit": false,
+          "can_approve_registration": false,
+          "can_report": true,
+          "can_export": false
+        }
+      }
+    }
+  ]
+}

@@ -16,42 +16,60 @@ import {
   ChevronRight,
   ChevronLeft
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
+import { hasModulePermission } from '../../lib/access';
 
 interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
 }
 
+interface NavLink {
+  name: string;
+  path: string;
+  icon: LucideIcon;
+}
+
 export const Sidebar = ({ onClose }: SidebarProps) => {
-  const { user, logout } = useAuth();
+  const { user, effectiveAccess, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   if (!user) return null;
 
-  const role = user.role;
+  const role = user.portal_role;
 
   // Define links based on roles
   const getNavLinks = () => {
     switch (role) {
-      case 'teacher':
-        return [
-          { name: 'Dashboard', path: '/teacher', icon: LayoutDashboard },
-          { name: 'Students', path: '/teacher/students', icon: Users },
-        ];
-      case 'superuser':
-        return [
-          { name: 'Overview', path: '/superuser/dashboard', icon: LayoutDashboard },
-          { name: 'Students', path: '/superuser/students', icon: Users },
-          { name: 'Patients', path: '/superuser/patient-info', icon: FileText },
-          { name: 'Oral Health', path: '/superuser/oral-health', icon: Heart },
-          { name: 'Deworming', path: '/superuser/deworming', icon: Droplets },
-          { name: 'Immunization', path: '/superuser/immunization', icon: Syringe },
-          { name: 'Vitals', path: '/superuser/vital-signs', icon: Activity },
-        ];
+      case 'school_staff': {
+        const staffLinks: NavLink[] = [];
+        if (hasModulePermission(effectiveAccess, 'patient-info', 'can_view')) {
+          staffLinks.push(
+            { name: 'Dashboard', path: '/teacher', icon: LayoutDashboard },
+            { name: 'Students', path: '/teacher/students', icon: Users },
+          );
+        }
+        return staffLinks;
+      }
+      case 'superuser': {
+        const superLinks: NavLink[] = [];
+        if (hasModulePermission(effectiveAccess, 'patient-info', 'can_view')) {
+          superLinks.push(
+            { name: 'Overview', path: '/superuser/dashboard', icon: LayoutDashboard },
+            { name: 'Students', path: '/superuser/students', icon: Users },
+            { name: 'Patients', path: '/superuser/patient-info', icon: FileText },
+          );
+        }
+        if (hasModulePermission(effectiveAccess, 'oral-health', 'can_view')) superLinks.push({ name: 'Oral Health', path: '/superuser/oral-health', icon: Heart });
+        if (hasModulePermission(effectiveAccess, 'deworming', 'can_view')) superLinks.push({ name: 'Deworming', path: '/superuser/deworming', icon: Droplets });
+        if (hasModulePermission(effectiveAccess, 'immunization', 'can_view')) superLinks.push({ name: 'Immunization', path: '/superuser/immunization', icon: Syringe });
+        if (hasModulePermission(effectiveAccess, 'vital-signs', 'can_view')) superLinks.push({ name: 'Vitals', path: '/superuser/vital-signs', icon: Activity });
+        return superLinks;
+      }
       case 'admin':
         return [
           { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
@@ -158,7 +176,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
           {/* View User Profile Card */}
           <button
             onClick={handleViewProfile}
-            title={isCollapsed ? `${user.email} (${user.role})` : undefined}
+            title={isCollapsed ? `${user.email} (${user.portal_role})` : undefined}
             className={cn(
               "w-full text-left bg-white hover:bg-slate-50 rounded-xl p-3 border border-slate-200 transition-colors flex items-center justify-between group shadow-sm cursor-pointer",
               isCollapsed && "justify-center p-2"
@@ -172,7 +190,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-slate-500 font-medium">Logged in as</p>
                   <p className="text-sm font-semibold text-black truncate">{user.email}</p>
-                  <p className="text-xs text-emerald-600 font-medium capitalize">{user.role}</p>
+                  <p className="text-xs text-emerald-600 font-medium capitalize">{user.portal_role}</p>
                 </div>
               )}
             </div>

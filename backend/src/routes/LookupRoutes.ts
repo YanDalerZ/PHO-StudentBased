@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { getMunicipalities, getBarangays, getSchools, getModules } from '../controllers/LookupController.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
-// Routes are public/lookup endpoints
+router.use(authenticate);
+
 router.get('/municipalities', getMunicipalities);
 router.get('/barangays/:munId', getBarangays);
 router.get('/schools/:bgyId', getSchools);

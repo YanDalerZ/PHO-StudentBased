@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import { AuditService } from '../services/AuditService.js';
 import {
     dashboardFiltersSchema,
     validateGeographyHierarchy,
@@ -119,7 +120,7 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -137,8 +138,8 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record deworming for students you registered' });
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(student.school_id)) {
+            res.status(403).json({ message: 'Access forbidden: Student is outside your assigned schools' });
             return;
         }
 
@@ -168,7 +169,7 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
             }
 
             // Teachers cannot override record to a school outside the student's authorized school
-            if (req.user.role === 'teacher' && student.school_id && validated.school_id !== student.school_id) {
+            if (req.user.portal_role === 'school_staff' && student.school_id && validated.school_id !== student.school_id) {
                 res.status(403).json({ message: 'Access forbidden: Teachers cannot assign records to a different school' });
                 return;
             }
@@ -192,29 +193,52 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
             ) RETURNING *
         `;
 
-        const insertResult = await pool.query<DewormingDbRow>(insertSql, [
-            validated.student_id,
-            dateDewormedStr,
-            ageGroup || null,
-            validated.medication_given ?? null,
-            validated.is_dewormed ?? true,
-            validated.school_type ?? null,
-            validated.in_school ?? true,
-            schoolId,
-            validated.remarks ?? null,
-            req.user.id,
-        ]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const insertResult = await client.query<DewormingDbRow>(insertSql, [
+                validated.student_id,
+                dateDewormedStr,
+                ageGroup || null,
+                validated.medication_given ?? null,
+                validated.is_dewormed ?? true,
+                validated.school_type ?? null,
+                validated.in_school ?? true,
+                schoolId,
+                validated.remarks ?? null,
+                req.user.id,
+            ]);
 
-        const createdRow = insertResult.rows[0];
-        if (!createdRow) {
-            res.status(500).json({ message: 'Failed to create deworming record' });
-            return;
+            const createdRow = insertResult.rows[0];
+            if (!createdRow) {
+                await client.query('ROLLBACK');
+                res.status(500).json({ message: 'Failed to create deworming record' });
+                return;
+            }
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'DEWORMING_RECORD_CREATED',
+                entity_type: 'deworming',
+                entity_id: String(createdRow.id),
+                school_id: schoolId ?? undefined,
+                details: { student_id: validated.student_id, date_dewormed: dateDewormedStr },
+                ip_address: req.ip,
+            }, client);
+
+            await client.query('COMMIT');
+
+            res.status(201).json({
+                message: 'Deworming record created successfully',
+                data: mapDewormingRow(createdRow),
+            });
+        } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+        } finally {
+            client.release();
         }
-
-        res.status(201).json({
-            message: 'Deworming record created successfully',
-            data: mapDewormingRow(createdRow),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -236,7 +260,7 @@ export const getDewormingByStudent = async (req: Request, res: Response): Promis
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -248,15 +272,15 @@ export const getDewormingByStudent = async (req: Request, res: Response): Promis
         }
 
         // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
+        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [studentId]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(student.school_id)) {
+            res.status(403).json({ message: 'Access forbidden: Student is outside your assigned schools' });
             return;
         }
 
@@ -291,7 +315,7 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -316,8 +340,8 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(existingRecord.student_school_id)) {
+            res.status(403).json({ message: 'Access forbidden: Student record is outside your assigned schools' });
             return;
         }
 
@@ -358,7 +382,7 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
                     return;
                 }
 
-                if (req.user.role === 'teacher' && existingRecord.student_school_id && validated.school_id !== existingRecord.student_school_id) {
+                if (req.user.portal_role === 'school_staff' && existingRecord.student_school_id && validated.school_id !== existingRecord.student_school_id) {
                     res.status(403).json({ message: 'Access forbidden: Teachers cannot assign records to a different school' });
                     return;
                 }
@@ -390,28 +414,51 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
             RETURNING *
         `;
 
-        const updateResult = await pool.query<DewormingDbRow>(updateSql, [
-            dateDewormed,
-            ageGroup || null,
-            medicationGiven,
-            isDewormed,
-            schoolType,
-            inSchool,
-            schoolId,
-            remarks,
-            id,
-        ]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const updateResult = await client.query<DewormingDbRow>(updateSql, [
+                dateDewormed,
+                ageGroup || null,
+                medicationGiven,
+                isDewormed,
+                schoolType,
+                inSchool,
+                schoolId,
+                remarks,
+                id,
+            ]);
 
-        const updatedRow = updateResult.rows[0];
-        if (!updatedRow) {
-            res.status(500).json({ message: 'Failed to update deworming record' });
-            return;
+            const updatedRow = updateResult.rows[0];
+            if (!updatedRow) {
+                await client.query('ROLLBACK');
+                res.status(500).json({ message: 'Failed to update deworming record' });
+                return;
+            }
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'DEWORMING_RECORD_UPDATED',
+                entity_type: 'deworming',
+                entity_id: String(updatedRow.id),
+                school_id: schoolId ?? existingRecord.student_school_id ?? undefined,
+                details: { student_id: existingRecord.student_id, updated_fields: Object.keys(validated) },
+                ip_address: req.ip,
+            }, client);
+
+            await client.query('COMMIT');
+
+            res.status(200).json({
+                message: 'Deworming record updated successfully',
+                data: mapDewormingRow(updatedRow),
+            });
+        } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+        } finally {
+            client.release();
         }
-
-        res.status(200).json({
-            message: 'Deworming record updated successfully',
-            data: mapDewormingRow(updatedRow),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -438,7 +485,10 @@ export const getDewormingDashboard = async (req: Request, res: Response): Promis
             return;
         }
 
-        const filters = parseResult.data;
+        const filters = {
+            ...parseResult.data,
+            ...(req.authorizedSchoolIds !== undefined ? { school_ids: req.authorizedSchoolIds } : {}),
+        };
 
         const geoValidation = await validateGeographyHierarchy(filters);
         if (!geoValidation.valid) {

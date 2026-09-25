@@ -18,9 +18,12 @@ import {
 import { cn } from '../../lib/utils';
 import { FilterBar } from '../../components/common/FilterBar';
 import { getDashboardOverview } from '../../services/api';
-import type { DashboardFilters, DashboardOverviewResponse } from '../../types';
+import type { DashboardFilters, DashboardOverviewResponse, ModuleSlug } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasModulePermission } from '../../lib/access';
 
 export const NurseDashboard: React.FC = () => {
+    const { effectiveAccess } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -82,7 +85,15 @@ export const NurseDashboard: React.FC = () => {
     };
 
     // Quick access modules (only the 5 approved modules)
-    const quickAccessModules = [
+    const quickAccessCandidates: Array<{
+        title: string;
+        subtitle: string;
+        desc: string;
+        icon: typeof FileText;
+        iconBg: string;
+        btnBg: string;
+        route: ModuleSlug;
+    }> = [
         {
             title: 'Patient Info',
             subtitle: 'Client Registry',
@@ -129,6 +140,9 @@ export const NurseDashboard: React.FC = () => {
             route: 'vital-signs',
         },
     ];
+    const quickAccessModules = quickAccessCandidates.filter((module) =>
+        hasModulePermission(effectiveAccess, module.route, 'can_view')
+    );
 
     // ─── Loading State ──────────────────────────────────────────────
     if (loading && !data) {

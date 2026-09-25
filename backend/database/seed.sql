@@ -23,12 +23,9 @@ INSERT INTO BARANGAYS (name, municipality_id) VALUES
 ('Mabilo', 7), ('Mobo', 7), ('Nalook', 7), 
 ('Poblacion', 7), ('Pook', 7), ('Tigayon', 7), ('Tinigaw', 7);
 
--- 2. Users (Passwords are 'password123' hashed with bcrypt, round 10: $2a$10$X13z0wBOnUqJ.Xo24zI2dOYU2mX6x3K/s5B84y4N3r4zK7Zt0GZ5W)
--- I am inserting an admin, superuser, and a teacher
-INSERT INTO USERS (email, password_hash, role, first_name, last_name, is_active) VALUES 
-('admin@pho.gov.ph', '$2b$10$BT3iHLjxOkdQ3apKbAhZVuJllbRBZX07SdECFZWDRnma2hzJ0EvUO', 'admin', 'System', 'Admin', true),
-('super@pho.gov.ph', '$2b$10$BT3iHLjxOkdQ3apKbAhZVuJllbRBZX07SdECFZWDRnma2hzJ0EvUO', 'superuser', 'PHO', 'Doctor', true),
-('teacher@pho.gov.ph', '$2b$10$BT3iHLjxOkdQ3apKbAhZVuJllbRBZX07SdECFZWDRnma2hzJ0EvUO', 'teacher', 'Juan', 'Dela Cruz', true);
+-- 2. Users
+-- Intentionally empty. Accounts and passwords are provisioned through the
+-- controlled admin workflow or disposable test fixtures, never seed data.
 
 -- 3. Schools
 INSERT INTO SCHOOLS (name, address, barangay_id, district) VALUES 

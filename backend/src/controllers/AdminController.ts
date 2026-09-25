@@ -7,7 +7,7 @@ import { AdminServiceError } from '../services/admin.service.js';
 // ERROR RESPONSE HELPER
 // ─────────────────────────────────────────────────────────────────────────────
 
-function handleControllerError(error: unknown, res: Response, defaultMessage: string): void {
+export function handleControllerError(error: unknown, res: Response, defaultMessage: string): void {
   if (error instanceof z.ZodError) {
     res.status(400).json({ error: error.flatten() });
     return;
@@ -32,7 +32,7 @@ function handleControllerError(error: unknown, res: Response, defaultMessage: st
   res.status(500).json({ error: defaultMessage });
 }
 
-function parseIdParam(req: Request, paramName = 'id'): number | null {
+export function parseIdParam(req: Request, paramName = 'id'): number | null {
   const raw = req.params[paramName];
   const paramStr = Array.isArray(raw) ? raw[0] : raw;
   const id = parseInt(paramStr ?? '', 10);
@@ -61,7 +61,7 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
 
 const listUsersQuerySchema = z.object({
   search: z.string().optional(),
-  role: z.enum(['teacher', 'superuser', 'admin']).optional(),
+  portal_role: z.enum(['school_staff', 'superuser', 'admin']).optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().optional().default(10),
 });
@@ -71,7 +71,7 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
     const filters = listUsersQuerySchema.parse(req.query);
     const result = await adminService.listUsers({
       search: filters.search,
-      role: filters.role,
+      portal_role: filters.portal_role,
       page: filters.page,
       limit: filters.limit,
     });
@@ -89,7 +89,7 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
 const createUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.'),
   password: z.string().min(8, 'Password must be at least 8 characters long.'),
-  role: z.enum(['teacher', 'superuser']),
+  role: z.enum(['school_staff', 'superuser']),
   first_name: z.string().trim().min(1, 'First name is required.'),
   last_name: z.string().trim().min(1, 'Last name is required.'),
   contact_no: z.string().trim().optional().nullable(),
@@ -115,7 +115,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
 const updateUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.').optional(),
   password: z.string().min(8, 'Password must be at least 8 characters long.').optional(),
-  role: z.enum(['teacher', 'superuser']).optional(),
+  role: z.enum(['school_staff', 'superuser']).optional(),
 
   first_name: z.string().trim().min(1).optional(),
   last_name: z.string().trim().min(1).optional(),

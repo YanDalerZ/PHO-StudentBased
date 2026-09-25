@@ -22,5 +22,10 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/pages/public/**/*",
+    "src/pages/teacher/RegistrationReviewQueue.tsx",
+    "src/services/phase2Api.ts"
+  ]
 }

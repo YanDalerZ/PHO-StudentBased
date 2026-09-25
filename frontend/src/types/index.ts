@@ -3,14 +3,37 @@
 export interface User {
   id: number;
   email: string;
-  role: 'teacher' | 'superuser' | 'admin';
+  portal_role: 'school_staff' | 'superuser' | 'admin';
+  job_title: string;
   first_name: string;
   last_name: string;
+}
+
+export interface ModulePermissions {
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_approve_registration: boolean;
+  can_report: boolean;
+  can_export: boolean;
+}
+
+export type ModuleSlug =
+  | 'patient-info'
+  | 'oral-health'
+  | 'deworming'
+  | 'immunization'
+  | 'vital-signs';
+
+export interface EffectiveAccess {
+  assignedSchoolIds: number[];
+  modulePermissions: Partial<Record<ModuleSlug, ModulePermissions>>;
 }
 
 export interface AuthResponse {
   token: string;
   user: User;
+  effectiveAccess: EffectiveAccess;
 }
 
 export interface Student {
@@ -740,7 +763,8 @@ export interface ImmunizationDashboardResponse {
 export interface AdminUserSummary {
   id: number;
   email: string;
-  role: 'teacher' | 'superuser' | 'admin';
+  portal_role: 'school_staff' | 'superuser' | 'admin';
+  job_title: string;
   first_name: string;
   last_name: string;
   contact_no: string | null;
@@ -752,7 +776,7 @@ export interface AdminUserSummary {
 
 export interface AdminDashboardStats {
   users_by_role: {
-    teacher: number;
+    school_staff: number;
     superuser: number;
     admin: number;
     total: number;
@@ -764,7 +788,7 @@ export interface AdminDashboardStats {
 
 export interface GetAdminUsersParams {
   search?: string;
-  role?: 'teacher' | 'superuser' | 'admin';
+  portal_role?: 'school_staff' | 'superuser' | 'admin';
   page?: number;
   limit?: number;
 }
@@ -776,12 +800,12 @@ export interface AdminUserListResponse {
   limit: number;
 }
 
-export type CreatableAdminUserRole = 'teacher' | 'superuser';
+export type CreatableAdminUserRole = 'school_staff' | 'superuser';
 
 export interface CreateAdminUserPayload {
   email: string;
   password: string;
-  role: CreatableAdminUserRole;
+  portal_role: CreatableAdminUserRole;
   first_name: string;
   last_name: string;
   contact_no?: string | null;
@@ -790,7 +814,7 @@ export interface CreateAdminUserPayload {
 export interface UpdateAdminUserPayload {
   email?: string;
   password?: string;
-  role?: CreatableAdminUserRole;
+  portal_role?: CreatableAdminUserRole;
   first_name?: string;
   last_name?: string;
   contact_no?: string | null;

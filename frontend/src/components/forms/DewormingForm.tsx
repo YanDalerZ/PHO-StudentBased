@@ -22,6 +22,8 @@ import {
     updateDeworming,
 } from '../../services/api';
 import type { Student, Deworming, CreateDewormingPayload } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { canWriteModuleRecord } from '../../lib/access';
 import { cn } from '../../lib/utils';
 
 const calculateDerivedAgeGroup = (dobStr: string, dewormDateStr: string): string => {
@@ -46,6 +48,7 @@ const calculateDerivedAgeGroup = (dobStr: string, dewormDateStr: string): string
 };
 
 const DewormingForm: React.FC = () => {
+    const { effectiveAccess } = useAuth();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
@@ -140,6 +143,10 @@ const DewormingForm: React.FC = () => {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!student || !id) return;
+        if (!canWriteModuleRecord(effectiveAccess, 'deworming', Boolean(existingRecord))) {
+            toast.error('Your current access allows viewing this record, but not saving this change.');
+            return;
+        }
 
         // Validate date vs DOB
         if (student.date_of_birth && dateDewormed) {
@@ -234,6 +241,7 @@ const DewormingForm: React.FC = () => {
     }
 
     const isCompleted = existingRecord !== null;
+    const canSave = canWriteModuleRecord(effectiveAccess, 'deworming', isCompleted);
     const inputClasses = "w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all outline-hidden";
     const labelClasses = "block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5";
     const sectionClasses = "pt-6 border-t border-slate-100";
@@ -451,6 +459,7 @@ const DewormingForm: React.FC = () => {
 
                 {/* Footer Controls */}
                 <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
+                    {!canSave && <p className="text-xs text-amber-700">Read-only: your current access does not allow this record to be created or edited.</p>}
                     <Link
                         to={`${basePath}/students/${id}`}
                         className="px-4 py-2.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-sm font-medium transition-colors cursor-pointer"
@@ -460,7 +469,7 @@ const DewormingForm: React.FC = () => {
 
                     <button
                         type="submit"
-                        disabled={isSaving}
+                        disabled={isSaving || !canSave}
                         className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm rounded-xl shadow-xs transition-all flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                     >
                         {isSaving ? (

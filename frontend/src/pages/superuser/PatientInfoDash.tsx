@@ -24,6 +24,8 @@ import type {
     DashboardFilters,
     PatientInfoDashboardResponse,
 } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasModulePermission } from '../../lib/access';
 
 // Lazy load RegistrationForm for optimized bundle splitting
 const RegistrationForm = lazy(() => import('../RegistrationForm'));
@@ -32,6 +34,8 @@ const PAGE_SIZE = 5;
 
 export const PatientInfoDash: React.FC = () => {
     const navigate = useNavigate();
+    const { effectiveAccess } = useAuth();
+    const canCreateStudent = hasModulePermission(effectiveAccess, 'patient-info', 'can_create');
 
     // Dashboard State
     const [filters, setFilters] = useState<DashboardFilters>({});
@@ -286,14 +290,14 @@ export const PatientInfoDash: React.FC = () => {
                         Client registry demographics, animal bite tracking, and health insurance coverage.
                     </p>
                 </div>
-                <button
+                {canCreateStudent && <button
                     type="button"
                     onClick={handleOpenModal}
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition-colors shadow-sm cursor-pointer shrink-0"
                 >
                     <UserPlus className="w-4 h-4" />
                     <span>Register New Student</span>
-                </button>
+                </button>}
             </div>
 
             {/* Filter Bar */}
@@ -563,7 +567,7 @@ export const PatientInfoDash: React.FC = () => {
             </div>
 
             {/* Register New Student Modal */}
-            {isRegisterModalOpen && (
+            {canCreateStudent && isRegisterModalOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-6 overflow-y-auto"
                     role="dialog"

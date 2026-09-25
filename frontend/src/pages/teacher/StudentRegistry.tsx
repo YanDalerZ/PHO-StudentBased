@@ -5,6 +5,8 @@ import { DataTable } from '../../components/common/DataTable';
 import type { Student, School } from '../../types';
 import { getStudents, getMunicipalities, getBarangays, getSchools } from '../../services/api';
 import RegistrationForm from '../RegistrationForm';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasModulePermission } from '../../lib/access';
 
 const GRADE_OPTIONS = [
     'Kindergarten',
@@ -13,6 +15,8 @@ const GRADE_OPTIONS = [
 ];
 
 const StudentRegistry: React.FC = () => {
+    const { effectiveAccess } = useAuth();
+    const canCreateStudent = hasModulePermission(effectiveAccess, 'patient-info', 'can_create');
     const [students, setStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -142,14 +146,14 @@ const StudentRegistry: React.FC = () => {
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Student Registry</h1>
                     <p className="text-sm text-slate-500">Manage and view all registered students.</p>
                 </div>
-                <button
+                {canCreateStudent && <button
                     type="button"
                     onClick={() => setIsRegisterModalOpen(true)}
                     className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-xl shadow-xs transition-colors self-start md:self-auto flex items-center space-x-2 cursor-pointer"
                 >
                     <UserPlus className="w-4 h-4" />
                     <span>Register Student</span>
-                </button>
+                </button>}
             </div>
 
             {/* Filter Bar */}
@@ -237,7 +241,7 @@ const StudentRegistry: React.FC = () => {
             </div>
 
             {/* Registration Form Modal */}
-            {isRegisterModalOpen && (
+            {canCreateStudent && isRegisterModalOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 md:p-6 overflow-y-auto"
                     role="dialog"
@@ -288,4 +292,4 @@ const StudentRegistry: React.FC = () => {
     );
 };
 
-export default StudentRegistry;
+export default StudentRegistry;

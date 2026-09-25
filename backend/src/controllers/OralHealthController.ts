@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import { AuditService } from '../services/AuditService.js';
 import {
     dashboardFiltersSchema,
     validateGeographyHierarchy,
@@ -192,25 +193,21 @@ export const createOralHealth = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
 
         const validated = createOralHealthSchema.parse(req.body);
 
-        // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [validated.student_id]);
+        // Verify student existence
+        const studentRes = await pool.query('SELECT id, school_id FROM STUDENTS WHERE id = $1', [validated.student_id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record oral health for students you registered' });
-            return;
-        }
 
         // Auto-calculate DMFT totals if not explicitly provided
         const totalDmft = validated.total_dmft !== undefined && validated.total_dmft !== null
@@ -266,52 +263,75 @@ export const createOralHealth = async (req: Request, res: Response): Promise<voi
             RETURNING *
         `;
 
-        const result = await pool.query<OralHealthDbRow>(insertSql, [
-            validated.student_id,
-            formatDate(validated.date_examined),
-            validated.is_pregnant ?? false,
-            validated.has_oral_screening ?? false,
-            validated.has_risk_assessment ?? false,
-            validated.has_oral_prophylaxis ?? false,
-            validated.has_counseling ?? false,
-            validated.has_fluoride_varnish ?? false,
-            validated.is_rpoc_complete ?? false,
-            validated.service_location || null,
-            validated.visit_type || null,
-            validated.administered_by || null,
-            validated.remarks || null,
-            req.user.id,
-            validated.tooth_chart_upper ? JSON.stringify(validated.tooth_chart_upper) : null,
-            validated.tooth_chart_lower ? JSON.stringify(validated.tooth_chart_lower) : null,
-            validated.oral_health_condition || null,
-            validated.no_of_perm_teeth ?? null,
-            validated.no_of_perm_sound_teeth ?? null,
-            validated.no_of_decayed_teeth ?? null,
-            validated.no_of_missing_teeth ?? null,
-            validated.no_of_filled_teeth ?? null,
-            totalDmft,
-            validated.no_of_primary_teeth ?? null,
-            validated.no_of_primary_sound_teeth ?? null,
-            validated.no_of_primary_decayed ?? null,
-            validated.no_of_primary_missing ?? null,
-            validated.no_of_primary_filled ?? null,
-            totalDmftPrimary,
-            validated.remarks_diagnosis || null,
-            validated.recommended_treatment || null,
-            validated.treatment_type || null,
-            validated.consent_given ?? false,
-            validated.consent_notes || null,
-        ]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await client.query<OralHealthDbRow>(insertSql, [
+                validated.student_id,
+                formatDate(validated.date_examined),
+                validated.is_pregnant ?? false,
+                validated.has_oral_screening ?? false,
+                validated.has_risk_assessment ?? false,
+                validated.has_oral_prophylaxis ?? false,
+                validated.has_counseling ?? false,
+                validated.has_fluoride_varnish ?? false,
+                validated.is_rpoc_complete ?? false,
+                validated.service_location || null,
+                validated.visit_type || null,
+                validated.administered_by || null,
+                validated.remarks || null,
+                req.user.id,
+                validated.tooth_chart_upper ? JSON.stringify(validated.tooth_chart_upper) : null,
+                validated.tooth_chart_lower ? JSON.stringify(validated.tooth_chart_lower) : null,
+                validated.oral_health_condition || null,
+                validated.no_of_perm_teeth ?? null,
+                validated.no_of_perm_sound_teeth ?? null,
+                validated.no_of_decayed_teeth ?? null,
+                validated.no_of_missing_teeth ?? null,
+                validated.no_of_filled_teeth ?? null,
+                totalDmft,
+                validated.no_of_primary_teeth ?? null,
+                validated.no_of_primary_sound_teeth ?? null,
+                validated.no_of_primary_decayed ?? null,
+                validated.no_of_primary_missing ?? null,
+                validated.no_of_primary_filled ?? null,
+                totalDmftPrimary,
+                validated.remarks_diagnosis || null,
+                validated.recommended_treatment || null,
+                validated.treatment_type || null,
+                validated.consent_given ?? false,
+                validated.consent_notes || null,
+            ]);
 
-        const createdRow = result.rows[0];
-        if (!createdRow) {
-            throw new Error('Failed to insert oral health record');
+            const createdRow = result.rows[0];
+            if (!createdRow) {
+                await client.query('ROLLBACK');
+                throw new Error('Failed to insert oral health record');
+            }
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'ORAL_HEALTH_CREATED',
+                entity_type: 'oral_health',
+                entity_id: String(createdRow.id),
+                school_id: student.school_id ?? undefined,
+                details: { student_id: validated.student_id },
+                ip_address: req.ip,
+            }, client);
+
+            await client.query('COMMIT');
+
+            res.status(201).json({
+                message: 'Oral health record created successfully',
+                data: mapOralHealthRow(createdRow),
+            });
+        } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+        } finally {
+            client.release();
         }
-
-        res.status(201).json({
-            message: 'Oral health record created successfully',
-            data: mapOralHealthRow(createdRow),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -333,7 +353,7 @@ export const getOralHealthByStudent = async (req: Request, res: Response): Promi
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -344,16 +364,10 @@ export const getOralHealthByStudent = async (req: Request, res: Response): Promi
             return;
         }
 
-        // Verify student existence and permissions
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
+        // Verify student existence
+        const studentRes = await pool.query('SELECT id FROM STUDENTS WHERE id = $1', [studentId]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
-            return;
-        }
-
-        const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
             return;
         }
 
@@ -388,7 +402,7 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -399,9 +413,9 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        // Verify record existence and check teacher ownership of the student
+        // Verify record existence
         const checkSql = `
-            SELECT oh.*, s.registered_by
+            SELECT oh.*
             FROM ORAL_HEALTH oh
             JOIN STUDENTS s ON oh.student_id = s.id
             WHERE oh.id = $1
@@ -413,10 +427,6 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
-            return;
-        }
 
         const validated = updateOralHealthSchema.parse(req.body);
 
@@ -507,51 +517,74 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
             RETURNING *
         `;
 
-        const result = await pool.query<OralHealthDbRow>(updateSql, [
-            dateExamined,
-            isPregnant,
-            hasOralScreening,
-            hasRiskAssessment,
-            hasOralProphylaxis,
-            hasCounseling,
-            hasFluorideVarnish,
-            isRpocComplete,
-            serviceLocation,
-            visitType,
-            administeredBy,
-            remarks,
-            toothChartUpper,
-            toothChartLower,
-            oralHealthCondition,
-            noOfPermTeeth,
-            noOfPermSoundTeeth,
-            noOfDecayedTeeth,
-            noOfMissingTeeth,
-            noOfFilledTeeth,
-            totalDmft,
-            noOfPrimaryTeeth,
-            noOfPrimarySoundTeeth,
-            noOfPrimaryDecayed,
-            noOfPrimaryMissing,
-            noOfPrimaryFilled,
-            totalDmftPrimary,
-            remarksDiagnosis,
-            recommendedTreatment,
-            treatmentType,
-            consentGiven,
-            consentNotes,
-            id,
-        ]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await client.query<OralHealthDbRow>(updateSql, [
+                dateExamined,
+                isPregnant,
+                hasOralScreening,
+                hasRiskAssessment,
+                hasOralProphylaxis,
+                hasCounseling,
+                hasFluorideVarnish,
+                isRpocComplete,
+                serviceLocation,
+                visitType,
+                administeredBy,
+                remarks,
+                toothChartUpper,
+                toothChartLower,
+                oralHealthCondition,
+                noOfPermTeeth,
+                noOfPermSoundTeeth,
+                noOfDecayedTeeth,
+                noOfMissingTeeth,
+                noOfFilledTeeth,
+                totalDmft,
+                noOfPrimaryTeeth,
+                noOfPrimarySoundTeeth,
+                noOfPrimaryDecayed,
+                noOfPrimaryMissing,
+                noOfPrimaryFilled,
+                totalDmftPrimary,
+                remarksDiagnosis,
+                recommendedTreatment,
+                treatmentType,
+                consentGiven,
+                consentNotes,
+                id,
+            ]);
 
-        const updatedRow = result.rows[0];
-        if (!updatedRow) {
-            throw new Error('Failed to update oral health record');
+            const updatedRow = result.rows[0];
+            if (!updatedRow) {
+                await client.query('ROLLBACK');
+                throw new Error('Failed to update oral health record');
+            }
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'ORAL_HEALTH_UPDATED',
+                entity_type: 'oral_health',
+                entity_id: String(updatedRow.id),
+                school_id: existingRecord.student_school_id ?? undefined,
+                details: { student_id: existingRecord.student_id, updated_fields: Object.keys(validated) },
+                ip_address: req.ip,
+            }, client);
+
+            await client.query('COMMIT');
+
+            res.status(200).json({
+                message: 'Oral health record updated successfully',
+                data: mapOralHealthRow(updatedRow),
+            });
+        } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+        } finally {
+            client.release();
         }
-
-        res.status(200).json({
-            message: 'Oral health record updated successfully',
-            data: mapOralHealthRow(updatedRow),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -578,7 +611,10 @@ export const getOralHealthDashboard = async (req: Request, res: Response): Promi
             return;
         }
 
-        const filters = parseResult.data;
+        const filters = {
+            ...parseResult.data,
+            ...(req.authorizedSchoolIds !== undefined ? { school_ids: req.authorizedSchoolIds } : {}),
+        };
 
         // Validate geographic hierarchy
         const geoValidation = await validateGeographyHierarchy(filters);

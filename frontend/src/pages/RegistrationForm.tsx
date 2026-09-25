@@ -14,15 +14,23 @@ import {
     INDIGENOUS_GROUP_OPTIONS, PWD_TYPE_OPTIONS,
     PHILHEALTH_STATUS_OPTIONS, PHILHEALTH_CATEGORY_OPTIONS
 } from '../utils/constants';
-import { getMunicipalities, getBarangays, getSchools, createStudent, updateStudent } from '../services/api';
+import {
+    getMunicipalities,
+    getBarangays,
+    getSchools,
+    createStudent,
+    updateStudent,
+} from '../services/api';
 import type { Student, Municipality, Barangay, School } from '../types';
 import { cn } from '../lib/utils';
+import { hasModulePermission } from '../lib/access';
+import { useAuth } from '../contexts/AuthContext';
 import logo from '../assets/images/logo.jpg';
 
-interface RegistrationFormProps {
+export interface RegistrationFormProps {
     onClose?: () => void;
-    onSuccess?: (student?: Student) => void;
-    initialData?: Student | null;
+    onSuccess?: (data?: Student) => void;
+    initialData?: Partial<Student>;
     mode?: 'create' | 'edit';
     studentId?: number;
 }
@@ -146,7 +154,7 @@ const INITIAL_STATE: StudentFormData = {
     philhealth_category: ''
 };
 
-const normalizeStudentData = (data?: Student | null): StudentFormData => {
+const normalizeStudentData = (data?: Partial<Student> | null): StudentFormData => {
     if (!data) return INITIAL_STATE;
     return {
         ...INITIAL_STATE,
@@ -258,6 +266,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
     studentId
 }) => {
     const navigate = useNavigate();
+    const { effectiveAccess } = useAuth();
+    const canSubmit = hasModulePermission(
+        effectiveAccess,
+        'patient-info',
+        mode === 'edit' ? 'can_edit' : 'can_create',
+    );
+
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState<StudentFormData>(() => normalizeStudentData(initialData));
     const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
@@ -502,6 +517,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!canSubmit) {
+            toast.error(`You do not have permission to ${mode === 'edit' ? 'edit' : 'register'} student records.`);
+            return;
+        }
         if (!validateStep(3)) return;
 
         setLoading(true);
@@ -534,7 +553,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     iconTheme: { primary: '#16a34a', secondary: '#fff' }
                 });
                 if (onSuccess) {
-                    onSuccess({ ...formData, id: res.id });
+                    onSuccess({ ...formData, id: res.id } as Student);
                 }
                 setTimeout(() => {
                     if (onClose) {
@@ -550,7 +569,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
         } finally {
             setLoading(false);
         }
-    }, [validateStep, mode, studentId, formData, initialData, onSuccess, onClose, navigate]);
+    }, [canSubmit, validateStep, mode, studentId, formData, initialData, onSuccess, onClose, navigate]);
 
     return (
         <div className={cn(
@@ -597,6 +616,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     <StepIndicator step={step} />
 
 
+                    {!canSubmit && (
+                        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                            You can view this record, but your current access does not allow this change.
+                        </div>
+                    )}
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* STEP 1: Personal Information */}
                         {step === 1 && (
@@ -1392,7 +1416,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                             ) : (
                                 <button
                                     type="submit"
-                                    disabled={loading}
+                                    disabled={loading || !canSubmit}
                                     className="inline-flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                 >
                                     {loading ? (

@@ -27,12 +27,20 @@ export const getBarangays = async (req: Request, res: Response) => {
 
 export const getSchools = async (req: Request, res: Response) => {
     try {
-        const { bgyId } = req.params;
-        const includeInactive = req.query.includeInactive === 'true';
-        const query = includeInactive
-            ? 'SELECT * FROM SCHOOLS WHERE barangay_id = $1 ORDER BY name ASC'
-            : 'SELECT * FROM SCHOOLS WHERE barangay_id = $1 AND is_active = TRUE ORDER BY name ASC';
-        const result = await pool.query(query, [bgyId]);
+        const rawBarangayId = req.params.bgyId;
+        const bgyId = Array.isArray(rawBarangayId) ? rawBarangayId[0] : rawBarangayId;
+        const includeInactive = req.user?.portal_role === 'admin' && req.query.includeInactive === 'true';
+        const conditions = ['barangay_id = $1'];
+        const params: Array<string | number[]> = [bgyId ?? ''];
+        if (!includeInactive) conditions.push('is_active = TRUE');
+        if (req.user?.portal_role === 'school_staff') {
+            conditions.push('id = ANY($2::int[])');
+            params.push(req.effectiveAccess?.assignedSchoolIds ?? []);
+        }
+        const result = await pool.query(
+            `SELECT * FROM SCHOOLS WHERE ${conditions.join(' AND ')} ORDER BY name ASC`,
+            params,
+        );
         res.json(result.rows);
     } catch (error) {
         console.error(error);

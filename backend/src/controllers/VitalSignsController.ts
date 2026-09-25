@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import { AuditService } from '../services/AuditService.js';
 import {
     dashboardFiltersSchema,
     validateGeographyHierarchy,
@@ -135,16 +136,16 @@ export const createVitalSigns = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
 
         const validated = createVitalSignsSchema.parse(req.body);
 
-        // Verify student existence and authorization
+        // Verify student existence and get DOB for validation
         const studentRes = await pool.query(
-            'SELECT id, registered_by, date_of_birth FROM STUDENTS WHERE id = $1',
+            'SELECT id, date_of_birth, school_id FROM STUDENTS WHERE id = $1',
             [validated.student_id]
         );
         if (studentRes.rows.length === 0) {
@@ -153,10 +154,6 @@ export const createVitalSigns = async (req: Request, res: Response): Promise<voi
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record vital signs for students you registered' });
-            return;
-        }
 
         const dateCheckedStr = formatDate(validated.date_checked);
         const dobStr = formatDate(student.date_of_birth);
@@ -198,31 +195,54 @@ export const createVitalSigns = async (req: Request, res: Response): Promise<voi
             ) RETURNING *
         `;
 
-        const insertResult = await pool.query<VitalSignsDbRow>(insertSql, [
-            validated.student_id,
-            dateCheckedStr,
-            validated.blood_pressure_systolic ?? null,
-            validated.blood_pressure_diastolic ?? null,
-            validated.heart_rate ?? null,
-            validated.respiratory_rate ?? null,
-            validated.temperature ?? null,
-            validated.weight_kg ?? null,
-            validated.height_cm ?? null,
-            serverComputedBmi,
-            validated.remarks ?? null,
-            req.user.id,
-        ]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const insertResult = await client.query<VitalSignsDbRow>(insertSql, [
+                validated.student_id,
+                dateCheckedStr,
+                validated.blood_pressure_systolic ?? null,
+                validated.blood_pressure_diastolic ?? null,
+                validated.heart_rate ?? null,
+                validated.respiratory_rate ?? null,
+                validated.temperature ?? null,
+                validated.weight_kg ?? null,
+                validated.height_cm ?? null,
+                serverComputedBmi,
+                validated.remarks ?? null,
+                req.user.id,
+            ]);
 
-        const createdRow = insertResult.rows[0];
-        if (!createdRow) {
-            res.status(500).json({ message: 'Failed to create vital signs record' });
-            return;
+            const createdRow = insertResult.rows[0];
+            if (!createdRow) {
+                await client.query('ROLLBACK');
+                res.status(500).json({ message: 'Failed to create vital signs record' });
+                return;
+            }
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'VITAL_SIGNS_CREATED',
+                entity_type: 'vital_signs',
+                entity_id: String(createdRow.id),
+                school_id: student.school_id ?? undefined,
+                details: { student_id: validated.student_id },
+                ip_address: req.ip,
+            }, client);
+
+            await client.query('COMMIT');
+
+            res.status(201).json({
+                message: 'Vital signs record created successfully',
+                data: mapVitalSignsRow(createdRow),
+            });
+        } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+        } finally {
+            client.release();
         }
-
-        res.status(201).json({
-            message: 'Vital signs record created successfully',
-            data: mapVitalSignsRow(createdRow),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -244,7 +264,7 @@ export const getVitalSignsByStudent = async (req: Request, res: Response): Promi
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -252,19 +272,6 @@ export const getVitalSignsByStudent = async (req: Request, res: Response): Promi
         const studentId = Number(req.params.studentId);
         if (isNaN(studentId)) {
             res.status(400).json({ message: 'Invalid student ID' });
-            return;
-        }
-
-        // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
-        if (studentRes.rows.length === 0) {
-            res.status(404).json({ message: 'Student not found' });
-            return;
-        }
-
-        const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
             return;
         }
 
@@ -299,7 +306,7 @@ export const updateVitalSigns = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -310,9 +317,9 @@ export const updateVitalSigns = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        // Verify record existence and check teacher ownership
+        // Verify record existence and get DOB for validation
         const checkSql = `
-            SELECT vs.*, s.registered_by, s.date_of_birth
+            SELECT vs.*, s.date_of_birth, s.school_id AS student_school_id
             FROM VITAL_SIGNS vs
             JOIN STUDENTS s ON vs.student_id = s.id
             WHERE vs.id = $1
@@ -324,10 +331,6 @@ export const updateVitalSigns = async (req: Request, res: Response): Promise<voi
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
-            return;
-        }
 
         const validated = updateVitalSignsSchema.parse(req.body);
 
@@ -392,7 +395,10 @@ export const updateVitalSigns = async (req: Request, res: Response): Promise<voi
             RETURNING *
         `;
 
-        const updateResult = await pool.query<VitalSignsDbRow>(updateSql, [
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const updateResult = await client.query<VitalSignsDbRow>(updateSql, [
             dateChecked,
             systolic,
             diastolic,
@@ -404,18 +410,29 @@ export const updateVitalSigns = async (req: Request, res: Response): Promise<voi
             bmi,
             remarks,
             id,
-        ]);
+            ]);
 
-        const updatedRow = updateResult.rows[0];
-        if (!updatedRow) {
-            res.status(500).json({ message: 'Failed to update vital signs record' });
-            return;
+            const updatedRow = updateResult.rows[0];
+            if (!updatedRow) throw new Error('Failed to update vital signs record');
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'VITAL_SIGNS_UPDATED',
+                entity_type: 'vital_signs',
+                entity_id: String(id),
+                school_id: existingRecord.student_school_id ?? undefined,
+                details: { student_id: existingRecord.student_id },
+                ip_address: req.ip,
+            }, client);
+            await client.query('COMMIT');
+            res.status(200).json({ message: 'Vital signs record updated successfully', data: mapVitalSignsRow(updatedRow) });
+        } catch (txError) {
+            await client.query('ROLLBACK');
+            throw txError;
+        } finally {
+            client.release();
         }
-
-        res.status(200).json({
-            message: 'Vital signs record updated successfully',
-            data: mapVitalSignsRow(updatedRow),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -442,7 +459,10 @@ export const getVitalSignsDashboard = async (req: Request, res: Response): Promi
             return;
         }
 
-        const filters = parseResult.data;
+        const filters = {
+            ...parseResult.data,
+            ...(req.authorizedSchoolIds !== undefined ? { school_ids: req.authorizedSchoolIds } : {}),
+        };
 
         const geoValidation = await validateGeographyHierarchy(filters);
         if (!geoValidation.valid) {

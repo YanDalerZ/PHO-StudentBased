@@ -24,6 +24,8 @@ import {
     updateVitalSigns,
 } from '../../services/api';
 import type { Student, VitalSigns, CreateVitalSignsPayload } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { canWriteModuleRecord } from '../../lib/access';
 import { cn } from '../../lib/utils';
 
 // Helper to compute BMI
@@ -68,6 +70,7 @@ const getBmiCategory = (bmi: number | null): BmiCategory | null => {
 };
 
 const VitalSignsForm: React.FC = () => {
+    const { effectiveAccess } = useAuth();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
@@ -197,6 +200,10 @@ const VitalSignsForm: React.FC = () => {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!student || !id) return;
+        if (!canWriteModuleRecord(effectiveAccess, 'vital-signs', Boolean(existingRecord))) {
+            toast.error('Your current access allows viewing this record, but not saving this change.');
+            return;
+        }
 
         // Date of birth vs check date validation
         if (student.date_of_birth && dateChecked) {
@@ -301,6 +308,7 @@ const VitalSignsForm: React.FC = () => {
     }
 
     const isCompleted = existingRecord !== null;
+    const canSave = canWriteModuleRecord(effectiveAccess, 'vital-signs', isCompleted);
     const inputClasses =
         'w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all outline-hidden';
     const labelClasses = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
@@ -583,6 +591,7 @@ const VitalSignsForm: React.FC = () => {
 
                 {/* ACTION BUTTONS */}
                 <div className="pt-6 border-t border-slate-100 flex items-center justify-end space-x-3">
+                    {!canSave && <p className="text-xs text-amber-700">Read-only: your current access does not allow this record to be created or edited.</p>}
                     <Link
                         to={`${basePath}/students/${id}`}
                         className="px-5 py-2.5 border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold rounded-xl text-sm transition-colors"
@@ -592,7 +601,7 @@ const VitalSignsForm: React.FC = () => {
 
                     <button
                         type="submit"
-                        disabled={isSaving}
+                        disabled={isSaving || !canSave}
                         className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center shadow-xs disabled:opacity-60 cursor-pointer"
                     >
                         {isSaving ? (

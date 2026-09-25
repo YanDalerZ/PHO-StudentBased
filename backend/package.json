@@ -7,7 +7,17 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && tsc",
-    "start": "node dist/src/server.js",
+    "test:phase1:safety": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/test_phase1_database_safety.js",
+    "inspect:phase1:database": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/inspect_phase1_database.js",
+    "migrate:phase1:reconcile": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/run_phase1_reconciliation.js",
+    "verify:phase1:schema": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/verify_phase1_schema.js",
+    "test:phase1:fresh-schema": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/test_phase1_fresh_schema.js",
+    "test:phase1:permission-management": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/test_phase1_permission_management.js",
+    "test:phase1:authorization": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/test_phase1_authorization.js",
+    "test:phase1:upgrade-paths": "npm run build && node dist/scripts/test_phase1_upgrade_paths.js",
+    "preflight:production:phase1": "npm run build && node dist/scripts/preflight_phase1_production.js",
+    "migrate:production:phase1": "npm run build && node dist/scripts/migrate_phase1_production.js",
+    "start": "node dist/index.js",
     "go": "concurrently \"npm run dev\" \"cd ../frontend && npm run dev\"",
     "render-build": "npm install && npm run build && cd ../frontend && npm install && npm run build"
   },

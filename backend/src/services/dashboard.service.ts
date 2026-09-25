@@ -6,6 +6,7 @@ export interface DashboardFilters {
   municipality_id?: number | undefined;
   barangay_id?: number | undefined;
   school_id?: number | undefined;
+  school_ids?: number[] | undefined;
   date_from?: string | undefined;
   date_to?: string | undefined;
 }
@@ -126,6 +127,13 @@ export function buildWhereClause(
   if (filters.school_id) {
     conditions.push(`sc.id = $${idx++}`);
     params.push(filters.school_id);
+  } else if (filters.school_ids !== undefined) {
+    if (filters.school_ids.length === 0) {
+      conditions.push('FALSE');
+    } else {
+      conditions.push(`sc.id = ANY($${idx++})`);
+      params.push(filters.school_ids);
+    }
   }
   if (filters.date_from) {
     conditions.push(`${dateColumn} >= $${idx++}`);

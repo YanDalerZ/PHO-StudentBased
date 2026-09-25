@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import { AuditService } from '../services/AuditService.js';
 import {
     dashboardFiltersSchema,
     validateGeographyHierarchy,
@@ -178,25 +179,21 @@ export const createPatientInfo = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
 
         const validated = createPatientInfoSchema.parse(req.body);
 
-        // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [validated.student_id]);
+        // Verify student existence
+        const studentRes = await pool.query('SELECT id, school_id FROM STUDENTS WHERE id = $1', [validated.student_id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record information for students you registered' });
-            return;
-        }
 
         const client = await pool.connect();
         try {
@@ -273,6 +270,17 @@ export const createPatientInfo = async (req: Request, res: Response): Promise<vo
                 }
             }
 
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'PATIENT_INFO_CREATED',
+                entity_type: 'patient_info',
+                entity_id: String(createdPatientInfo.id),
+                school_id: student.school_id ?? undefined,
+                details: { student_id: validated.student_id },
+                ip_address: req.ip,
+            }, client);
+
             await client.query('COMMIT');
 
             res.status(201).json({
@@ -309,7 +317,7 @@ export const getPatientInfoByStudent = async (req: Request, res: Response): Prom
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -320,18 +328,14 @@ export const getPatientInfoByStudent = async (req: Request, res: Response): Prom
             return;
         }
 
-        // Verify student existence and permissions
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
+        // Verify student existence
+        const studentRes = await pool.query('SELECT id FROM STUDENTS WHERE id = $1', [studentId]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
-            return;
-        }
 
         const [patientInfoRes, animalBitesRes] = await Promise.all([
             pool.query<PatientInfoDbRow>('SELECT * FROM PATIENT_INFO WHERE student_id = $1 ORDER BY created_at DESC', [studentId]),
@@ -365,7 +369,7 @@ export const updatePatientInfo = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -376,9 +380,9 @@ export const updatePatientInfo = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        // Verify patient info exists and get student ownership
+        // Verify patient info exists
         const existingQuery = `
-            SELECT pi.*, s.registered_by
+            SELECT pi.*, s.school_id AS student_school_id
             FROM PATIENT_INFO pi
             JOIN STUDENTS s ON pi.student_id = s.id
             WHERE pi.id = $1
@@ -390,10 +394,6 @@ export const updatePatientInfo = async (req: Request, res: Response): Promise<vo
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
-            return;
-        }
 
         const validated = updatePatientInfoSchema.parse(req.body);
 
@@ -578,6 +578,17 @@ export const updatePatientInfo = async (req: Request, res: Response): Promise<vo
                 }
             }
 
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'PATIENT_INFO_UPDATED',
+                entity_type: 'patient_info',
+                entity_id: String(id),
+                school_id: existingRecord.student_school_id ?? undefined,
+                details: { student_id: existingRecord.student_id },
+                ip_address: req.ip,
+            }, client);
+
             await client.query('COMMIT');
 
             res.status(200).json({
@@ -614,25 +625,21 @@ export const createAnimalBite = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
 
         const validated = standaloneAnimalBiteSchema.parse(req.body);
 
-        // Verify student and ownership
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [validated.student_id]);
+        // Verify student
+        const studentRes = await pool.query('SELECT id, school_id FROM STUDENTS WHERE id = $1', [validated.student_id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record information for students you registered' });
-            return;
-        }
 
         // Verify patient info exists and matches student
         const patientInfoRes = await pool.query('SELECT id, student_id FROM PATIENT_INFO WHERE id = $1', [validated.patient_info_id]);
@@ -670,7 +677,10 @@ export const createAnimalBite = async (req: Request, res: Response): Promise<voi
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
             RETURNING *
         `;
-        const result = await pool.query<AnimalBiteDbRow>(insertSql, [
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await client.query<AnimalBiteDbRow>(insertSql, [
             validated.patient_info_id,
             validated.student_id,
             validated.rabies_exposure_category || null,
@@ -691,17 +701,29 @@ export const createAnimalBite = async (req: Request, res: Response): Promise<voi
             validated.rig_date ? formatDate(validated.rig_date) : null,
             validated.is_active_case ?? false,
             req.user.id,
-        ]);
+            ]);
 
-        const createdBite = result.rows[0];
-        if (!createdBite) {
-            throw new Error('Failed to create animal bite record');
+            const createdBite = result.rows[0];
+            if (!createdBite) throw new Error('Failed to create animal bite record');
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'ANIMAL_BITE_CREATED',
+                entity_type: 'animal_bite',
+                entity_id: String(createdBite.id),
+                school_id: student.school_id ?? undefined,
+                details: { student_id: validated.student_id, patient_info_id: validated.patient_info_id },
+                ip_address: req.ip,
+            }, client);
+            await client.query('COMMIT');
+            res.status(201).json({ message: 'Animal bite record created successfully', data: mapAnimalBiteRow(createdBite) });
+        } catch (txError) {
+            await client.query('ROLLBACK');
+            throw txError;
+        } finally {
+            client.release();
         }
-
-        res.status(201).json({
-            message: 'Animal bite record created successfully',
-            data: mapAnimalBiteRow(createdBite),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -723,7 +745,7 @@ export const updateAnimalBite = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -735,7 +757,7 @@ export const updateAnimalBite = async (req: Request, res: Response): Promise<voi
         }
 
         const existingQuery = `
-            SELECT ab.*, s.registered_by
+            SELECT ab.*, s.school_id AS student_school_id
             FROM ANIMAL_BITES ab
             JOIN STUDENTS s ON ab.student_id = s.id
             WHERE ab.id = $1
@@ -747,10 +769,6 @@ export const updateAnimalBite = async (req: Request, res: Response): Promise<voi
         }
 
         const existing = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existing.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
-            return;
-        }
 
         const validated = animalBiteSchema.parse(req.body);
 
@@ -776,7 +794,10 @@ export const updateAnimalBite = async (req: Request, res: Response): Promise<voi
             WHERE id = $18
             RETURNING *
         `;
-        const result = await pool.query<AnimalBiteDbRow>(updateSql, [
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await client.query<AnimalBiteDbRow>(updateSql, [
             validated.rabies_exposure_category || null,
             validated.anatomical_locations ? JSON.stringify(validated.anatomical_locations) : null,
             validated.animal_type || null,
@@ -795,17 +816,29 @@ export const updateAnimalBite = async (req: Request, res: Response): Promise<voi
             validated.rig_date ? formatDate(validated.rig_date) : null,
             validated.is_active_case !== undefined ? validated.is_active_case : null,
             id,
-        ]);
+            ]);
 
-        const updatedBite = result.rows[0];
-        if (!updatedBite) {
-            throw new Error('Failed to update animal bite record');
+            const updatedBite = result.rows[0];
+            if (!updatedBite) throw new Error('Failed to update animal bite record');
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'ANIMAL_BITE_UPDATED',
+                entity_type: 'animal_bite',
+                entity_id: String(id),
+                school_id: existing.student_school_id ?? undefined,
+                details: { student_id: existing.student_id, patient_info_id: existing.patient_info_id },
+                ip_address: req.ip,
+            }, client);
+            await client.query('COMMIT');
+            res.status(200).json({ message: 'Animal bite record updated successfully', data: mapAnimalBiteRow(updatedBite) });
+        } catch (txError) {
+            await client.query('ROLLBACK');
+            throw txError;
+        } finally {
+            client.release();
         }
-
-        res.status(200).json({
-            message: 'Animal bite record updated successfully',
-            data: mapAnimalBiteRow(updatedBite),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -832,7 +865,10 @@ export const getPatientInfoDashboard = async (req: Request, res: Response): Prom
             return;
         }
 
-        const filters = parseResult.data;
+        const filters = {
+            ...parseResult.data,
+            ...(req.authorizedSchoolIds !== undefined ? { school_ids: req.authorizedSchoolIds } : {}),
+        };
 
         // Validate geographic hierarchy
         const geoValidation = await validateGeographyHierarchy(filters);

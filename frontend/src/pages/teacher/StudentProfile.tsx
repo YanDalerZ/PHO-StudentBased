@@ -25,10 +25,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getStudent, getLookupModules } from '../../services/api';
-import type { Student, AdminModule } from '../../types';
+import type { Student, AdminModule, ModuleSlug } from '../../types';
 import RegistrationForm from '../RegistrationForm';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasModulePermission } from '../../lib/access';
 
 const StudentProfile: React.FC = () => {
+    const { effectiveAccess } = useAuth();
+    const canEditStudent = hasModulePermission(effectiveAccess, 'patient-info', 'can_edit');
     const { id } = useParams<{ id: string }>();
     const [student, setStudent] = useState<Student | null>(null);
     const [moduleConfigs, setModuleConfigs] = useState<AdminModule[]>([]);
@@ -201,6 +205,9 @@ const StudentProfile: React.FC = () => {
             color: 'indigo'
         }
     ];
+    const visibleModules = modules.filter((module) =>
+        hasModulePermission(effectiveAccess, module.id as ModuleSlug, 'can_view')
+    );
 
     return (
         <div className="space-y-6">
@@ -257,14 +264,14 @@ const StudentProfile: React.FC = () => {
                         </div>
                     </div>
 
-                    <button
+                    {canEditStudent && <button
                         type="button"
                         onClick={() => setIsEditModalOpen(true)}
                         className="px-4 py-2 bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-sm font-medium transition-all w-full md:w-auto flex items-center justify-center space-x-2 cursor-pointer shadow-xs"
                     >
                         <Edit3 className="w-4 h-4 text-slate-600" />
                         <span>Edit Profile</span>
-                    </button>
+                    </button>}
                 </div>
             </div>
 
@@ -276,7 +283,7 @@ const StudentProfile: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {modules.map((mod) => {
+                    {visibleModules.map((mod) => {
                         const Icon = mod.icon;
                         const config = moduleConfigs.find((c) => c.slug === mod.id);
                         const isActive = config ? config.is_active : true;
@@ -363,7 +370,7 @@ const StudentProfile: React.FC = () => {
             </div>
 
             {/* Edit Student Modal */}
-            {isEditModalOpen && student && (
+            {canEditStudent && isEditModalOpen && student && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 md:p-6 overflow-y-auto"
                     role="dialog"

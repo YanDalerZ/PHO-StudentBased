@@ -38,11 +38,26 @@ const getCaCert = (): string => {
     throw new Error('SSL CA Certificate (ca.pem) not found locally or in Render secrets.');
 };
 
-const caCert = getCaCert();
+const getIsLocal = (urlStr?: string): boolean => {
+    if (!urlStr) return false;
+    try {
+        const parsed = new URL(urlStr);
+        return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    } catch {
+        // A legacy local .env may contain an unescaped reserved character in
+        // the password. Never use this fallback to classify a remote target.
+        return /@(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\//i.test(urlStr);
+    }
+};
+
+const isLocal = getIsLocal(process.env.DATABASE_URL);
+
+// Only try to load the CA cert if we are connecting to a remote DB (SSL required)
+const caCert = isLocal ? undefined : getCaCert();
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
+    ssl: isLocal ? false : {
         rejectUnauthorized: true,
         ca: caCert,
     },

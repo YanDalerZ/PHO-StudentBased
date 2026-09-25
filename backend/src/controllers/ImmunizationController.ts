@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../database/db.js';
+import { AuditService } from '../services/AuditService.js';
 import {
     dashboardFiltersSchema,
     validateGeographyHierarchy,
@@ -240,7 +241,7 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -258,8 +259,8 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only record immunization for students you registered' });
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(student.school_id)) {
+            res.status(403).json({ message: 'Access forbidden: Student is outside your assigned schools' });
             return;
         }
 
@@ -288,7 +289,7 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
                 return;
             }
 
-            if (req.user.role === 'teacher' && student.school_id && validated.school_id !== student.school_id) {
+            if (req.user.portal_role === 'school_staff' && student.school_id && validated.school_id !== student.school_id) {
                 res.status(403).json({ message: 'Access forbidden: Teachers cannot assign records to a different school' });
                 return;
             }
@@ -331,7 +332,10 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
             ) RETURNING *
         `;
 
-        const insertResult = await pool.query<ImmunizationDbRow>(insertSql, [
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const insertResult = await client.query<ImmunizationDbRow>(insertSql, [
             validated.student_id,
             immunizationDateStr,
             validated.immunization_type ?? 'SCHOOL & COMMUNITY BASED IMMUNIZATION',
@@ -359,18 +363,29 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
             validated.remarks ?? null,
             schoolId,
             req.user.id,
-        ]);
+            ]);
 
-        const createdRow = insertResult.rows[0];
-        if (!createdRow) {
-            res.status(500).json({ message: 'Failed to create immunization record' });
-            return;
+            const createdRow = insertResult.rows[0];
+            if (!createdRow) throw new Error('Failed to create immunization record');
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'IMMUNIZATION_CREATED',
+                entity_type: 'immunization',
+                entity_id: String(createdRow.id),
+                school_id: student.school_id ?? undefined,
+                details: { student_id: validated.student_id },
+                ip_address: req.ip,
+            }, client);
+            await client.query('COMMIT');
+            res.status(201).json({ message: 'Immunization record created successfully', data: mapImmunizationRow(createdRow) });
+        } catch (txError) {
+            await client.query('ROLLBACK');
+            throw txError;
+        } finally {
+            client.release();
         }
-
-        res.status(201).json({
-            message: 'Immunization record created successfully',
-            data: mapImmunizationRow(createdRow),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -392,7 +407,7 @@ export const getImmunizationByStudent = async (req: Request, res: Response): Pro
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -404,15 +419,15 @@ export const getImmunizationByStudent = async (req: Request, res: Response): Pro
         }
 
         // Verify student existence and authorization
-        const studentRes = await pool.query('SELECT id, registered_by FROM STUDENTS WHERE id = $1', [studentId]);
+        const studentRes = await pool.query('SELECT id, registered_by, school_id FROM STUDENTS WHERE id = $1', [studentId]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ message: 'Student not found' });
             return;
         }
 
         const student = studentRes.rows[0];
-        if (req.user.role === 'teacher' && student.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only view records for students you registered' });
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(student.school_id)) {
+            res.status(403).json({ message: 'Access forbidden: Student is outside your assigned schools' });
             return;
         }
 
@@ -447,7 +462,7 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
             return;
         }
 
-        if (req.user.role === 'admin') {
+        if (req.user.portal_role === 'admin') {
             res.status(403).json({ message: 'Access forbidden: Admins cannot access module records' });
             return;
         }
@@ -472,8 +487,8 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
         }
 
         const existingRecord = existingRes.rows[0];
-        if (req.user.role === 'teacher' && existingRecord.registered_by !== req.user.id) {
-            res.status(403).json({ message: 'Access forbidden: You can only update records for students you registered' });
+        if (req.user.portal_role === 'school_staff' && !req.effectiveAccess?.assignedSchoolIds.includes(existingRecord.student_school_id)) {
+            res.status(403).json({ message: 'Access forbidden: Student record is outside your assigned schools' });
             return;
         }
 
@@ -523,7 +538,7 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
                     return;
                 }
 
-                if (req.user.role === 'teacher' && existingRecord.student_school_id && validated.school_id !== existingRecord.student_school_id) {
+                if (req.user.portal_role === 'school_staff' && existingRecord.student_school_id && validated.school_id !== existingRecord.student_school_id) {
                     res.status(403).json({ message: 'Access forbidden: Teachers cannot assign records to a different school' });
                     return;
                 }
@@ -577,7 +592,10 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
             RETURNING *
         `;
 
-        const updateResult = await pool.query<ImmunizationDbRow>(updateSql, [
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const updateResult = await client.query<ImmunizationDbRow>(updateSql, [
             immunizationDate,
             immunizationType,
             merged.vaccine_td1,
@@ -604,18 +622,29 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
             remarks,
             schoolId,
             id,
-        ]);
+            ]);
 
-        const updatedRow = updateResult.rows[0];
-        if (!updatedRow) {
-            res.status(500).json({ message: 'Failed to update immunization record' });
-            return;
+            const updatedRow = updateResult.rows[0];
+            if (!updatedRow) throw new Error('Failed to update immunization record');
+
+            await AuditService.logEvent({
+                actor_id: req.user.id,
+                portal_role: req.user.portal_role,
+                action: 'IMMUNIZATION_UPDATED',
+                entity_type: 'immunization',
+                entity_id: String(id),
+                school_id: existingRecord.student_school_id ?? undefined,
+                details: { student_id: existingRecord.student_id },
+                ip_address: req.ip,
+            }, client);
+            await client.query('COMMIT');
+            res.status(200).json({ message: 'Immunization record updated successfully', data: mapImmunizationRow(updatedRow) });
+        } catch (txError) {
+            await client.query('ROLLBACK');
+            throw txError;
+        } finally {
+            client.release();
         }
-
-        res.status(200).json({
-            message: 'Immunization record updated successfully',
-            data: mapImmunizationRow(updatedRow),
-        });
     } catch (error: unknown) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ message: 'Validation failed', errors: error.issues });
@@ -642,7 +671,10 @@ export const getImmunizationDashboard = async (req: Request, res: Response): Pro
             return;
         }
 
-        const filters = parseResult.data;
+        const filters = {
+            ...parseResult.data,
+            ...(req.authorizedSchoolIds !== undefined ? { school_ids: req.authorizedSchoolIds } : {}),
+        };
 
         const geoValidation = await validateGeographyHierarchy(filters);
         if (!geoValidation.valid) {

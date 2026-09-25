@@ -14,8 +14,12 @@ import {
 import { getStudents } from '../../services/api';
 import type { Student } from '../../types';
 import RegistrationForm from '../RegistrationForm';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasModulePermission } from '../../lib/access';
 
 const TeacherDashboard: React.FC = () => {
+    const { effectiveAccess } = useAuth();
+    const canCreateStudent = hasModulePermission(effectiveAccess, 'patient-info', 'can_create');
     const [students, setStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -129,14 +133,14 @@ const TeacherDashboard: React.FC = () => {
                     <h1 className="text-2xl font-bold text-black tracking-tight">Teacher Dashboard</h1>
                     <p className="text-sm text-slate-600">Overview of student registrations and module completion.</p>
                 </div>
-                <button
+                {canCreateStudent && <button
                     type="button"
                     onClick={() => setIsRegisterModalOpen(true)}
                     className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-xl shadow-xs transition-colors self-start md:self-auto flex items-center space-x-2 cursor-pointer"
                 >
                     <UserPlus className="w-4 h-4" />
                     <span>Register Student</span>
-                </button>
+                </button>}
             </div>
 
             {error && (
@@ -220,7 +224,9 @@ const TeacherDashboard: React.FC = () => {
                                     )) : (
                                         <tr>
                                             <td colSpan={4} className="py-8 text-center text-slate-600 text-sm">
-                                                No students registered yet. Click &quot;Register Student&quot; to begin.
+                                                {canCreateStudent
+                                                    ? 'No students registered yet. Click "Register Student" to begin.'
+                                                    : 'No students are available in your current scope.'}
                                             </td>
                                         </tr>
                                     )}
@@ -257,7 +263,7 @@ const TeacherDashboard: React.FC = () => {
             </div>
 
             {/* Registration Form Modal */}
-            {isRegisterModalOpen && (
+            {canCreateStudent && isRegisterModalOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 md:p-6 overflow-y-auto"
                     role="dialog"
@@ -301,4 +307,4 @@ const TeacherDashboard: React.FC = () => {
     );
 };
 
-export default TeacherDashboard;
+export default TeacherDashboard;
