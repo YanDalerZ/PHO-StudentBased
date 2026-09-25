@@ -63,12 +63,11 @@ app.use('/api/v1', apiRouter);
 // Compatibility alias
 app.use('/api', apiRouter);
 
-
 // Serving static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Serving frontend static files
-const frontendPath = path.resolve(process.cwd(), '../frontend/dist');
+const frontendPath = path.resolve(process.cwd(), 'frontend/dist');
 app.use(express.static(frontendPath));
 
 app.get(/^((?!\/api).)*$/, (req, res) => {
