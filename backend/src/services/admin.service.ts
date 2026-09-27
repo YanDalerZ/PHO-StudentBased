@@ -199,7 +199,7 @@ export interface CreateUserInput {
 export async function createUser(input: CreateUserInput): Promise<AdminUserSummary> {
   // Prevent admin creation through API
   if (input.role !== 'school_staff' && input.role !== 'superuser') {
-    throw new AdminServiceError(400, "Invalid role. Only 'teacher' and 'superuser' roles can be created via this API.");
+    throw new AdminServiceError(400, "Invalid portal role. Only 'school_staff' and 'superuser' accounts can be created via this API.");
   }
 
   const normalizedEmail = input.email.trim().toLowerCase();

@@ -89,7 +89,7 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
 const createUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.'),
   password: z.string().min(8, 'Password must be at least 8 characters long.'),
-  role: z.enum(['school_staff', 'superuser']),
+  portal_role: z.enum(['school_staff', 'superuser']),
   first_name: z.string().trim().min(1, 'First name is required.'),
   last_name: z.string().trim().min(1, 'Last name is required.'),
   contact_no: z.string().trim().optional().nullable(),
@@ -101,7 +101,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
     const user = await adminService.createUser({
       email: validated.email,
       password: validated.password,
-      role: validated.role,
+      role: validated.portal_role,
       first_name: validated.first_name,
       last_name: validated.last_name,
       contact_no: validated.contact_no,
@@ -115,7 +115,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
 const updateUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.').optional(),
   password: z.string().min(8, 'Password must be at least 8 characters long.').optional(),
-  role: z.enum(['school_staff', 'superuser']).optional(),
+  portal_role: z.enum(['school_staff', 'superuser']).optional(),
 
   first_name: z.string().trim().min(1).optional(),
   last_name: z.string().trim().min(1).optional(),
@@ -135,7 +135,7 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
     const user = await adminService.updateUser(id, {
       email: validated.email,
       password: validated.password,
-      role: validated.role,
+      role: validated.portal_role,
       first_name: validated.first_name,
       last_name: validated.last_name,
       contact_no: validated.contact_no,
