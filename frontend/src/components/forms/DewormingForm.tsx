@@ -1,3 +1,5 @@
+import StudentContextPanel from '../common/StudentContextPanel';
+import type { StudentModuleContext } from '../../types/moduleContext';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -16,12 +18,12 @@ import {
     FileText,
 } from 'lucide-react';
 import {
-    getStudent,
+    getStudentModuleContext,
     getDewormingByStudent,
     createDeworming,
     updateDeworming,
 } from '../../services/api';
-import type { Student, Deworming, CreateDewormingPayload } from '../../types';
+import type { Deworming, CreateDewormingPayload } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { canWriteModuleRecord } from '../../lib/access';
 import { cn } from '../../lib/utils';
@@ -61,7 +63,7 @@ const DewormingForm: React.FC = () => {
     const [errorStatus, setErrorStatus] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const [student, setStudent] = useState<Student | null>(null);
+    const [student, setStudent] = useState<StudentModuleContext | null>(null);
     const [existingRecord, setExistingRecord] = useState<Deworming | null>(null);
 
     // Form states
@@ -79,7 +81,7 @@ const DewormingForm: React.FC = () => {
         if (!id) return;
 
         Promise.all([
-            getStudent(id),
+            getStudentModuleContext(id, 'deworming'),
             getDewormingByStudent(id).catch((err: unknown) => {
                 if (axios.isAxiosError(err) && err.response?.status === 404) {
                     return { data: { deworming: null, records: [] } };
@@ -313,6 +315,7 @@ const DewormingForm: React.FC = () => {
             </div>
 
             {/* Main Form */}
+            <StudentContextPanel student={student} />
             <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-8">
                 {/* Administration Details */}
                 <div>

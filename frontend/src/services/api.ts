@@ -1,4 +1,11 @@
 import axios from 'axios';
+import type { StudentModuleContext } from '../types/moduleContext';
+
+export const getStudentModuleContext = async (
+    id: number | string,
+    module: 'oral-health' | 'deworming' | 'immunization' | 'vital-signs',
+): Promise<{ data: StudentModuleContext }> =>
+    (await api.get<{ data: StudentModuleContext }>(`/students/${encodeURIComponent(id)}/module-context`, { params: { module } })).data;
 import type {
     Student,
     Municipality,
@@ -58,7 +65,7 @@ import type {
 
 
 
-const getBaseUrl = () => {
+export const getApiBaseUrl = () => {
     const configured = import.meta.env?.VITE_API_URL?.trim();
     if (!configured) return '/api/v1';
 
@@ -72,8 +79,12 @@ const getBaseUrl = () => {
 };
 
 const api = axios.create({
-    baseURL: getBaseUrl(),
+    baseURL: getApiBaseUrl(),
 });
+
+// Public registration deliberately uses a client with no authentication
+// interceptor so a signed-in browser never sends its portal token to a QR URL.
+export const publicApi = axios.create({ baseURL: getApiBaseUrl() });
 
 // Request interceptor to attach JWT token
 api.interceptors.request.use(

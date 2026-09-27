@@ -1,3 +1,5 @@
+import StudentContextPanel from '../common/StudentContextPanel';
+import type { StudentModuleContext } from '../../types/moduleContext';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -18,12 +20,12 @@ import {
     User,
 } from 'lucide-react';
 import {
-    getStudent,
+    getStudentModuleContext,
     getVitalSignsByStudent,
     createVitalSigns,
     updateVitalSigns,
 } from '../../services/api';
-import type { Student, VitalSigns, CreateVitalSignsPayload } from '../../types';
+import type { VitalSigns, CreateVitalSignsPayload } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { canWriteModuleRecord } from '../../lib/access';
 import { cn } from '../../lib/utils';
@@ -83,7 +85,7 @@ const VitalSignsForm: React.FC = () => {
     const [errorStatus, setErrorStatus] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const [student, setStudent] = useState<Student | null>(null);
+    const [student, setStudent] = useState<StudentModuleContext | null>(null);
     const [existingRecord, setExistingRecord] = useState<VitalSigns | null>(null);
 
     // Form inputs
@@ -105,7 +107,7 @@ const VitalSignsForm: React.FC = () => {
         if (!id) return;
 
         Promise.all([
-            getStudent(id),
+            getStudentModuleContext(id, 'vital-signs'),
             getVitalSignsByStudent(id).catch((err: unknown) => {
                 if (axios.isAxiosError(err) && err.response?.status === 404) {
                     return { data: { vital_signs: null, records: [] } };
@@ -375,6 +377,7 @@ const VitalSignsForm: React.FC = () => {
             </div>
 
             {/* Form */}
+            <StudentContextPanel student={student} />
             <form onSubmit={handleSave} className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-xs space-y-8">
                 {/* SECTION 1: EXAMINATION DATE */}
                 <div>

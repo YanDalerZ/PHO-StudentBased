@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:phase1:effective-access": "node --experimental-strip-types scripts/test-effective-access.ts",
+    "test:phase2:contracts": "node --experimental-strip-types scripts/test-phase2-contracts.ts",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import pool from './database/db.js';
 
 import AllRoutes from './routes/AllRoutes.js';
+import { publicRegistrationPageHeaders } from './middleware/publicRegistrationSecurity.js';
 
 const app: Application = express();
 
@@ -44,9 +45,10 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '256kb' }));
 
 const apiRouter = express.Router();
+apiRouter.use('/', AllRoutes.RegistrationRoutes);
 apiRouter.use('/students', AllRoutes.StudentRoutes);
 apiRouter.use('/auth', AllRoutes.AuthRoutes);
 apiRouter.use('/lookup', AllRoutes.LookupRoutes);
@@ -69,10 +71,19 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Serving frontend static files
 const frontendPath = path.resolve(process.cwd(), '../frontend/dist');
+app.use(/^\/register\/[a-f0-9]{32}\/?$/i, publicRegistrationPageHeaders);
 app.use(express.static(frontendPath));
 
 app.get(/^((?!\/api).)*$/, (req, res) => {
     res.sendFile(path.resolve(frontendPath, "index.html"));
+});
+
+app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (error && typeof error === 'object' && 'type' in error && error.type === 'entity.too.large') {
+        res.status(413).json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body is too large' } });
+        return;
+    }
+    next(error);
 });
 
 // Export express app for HTTP integration tests

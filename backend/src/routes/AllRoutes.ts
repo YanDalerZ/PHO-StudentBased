@@ -9,6 +9,7 @@ import ImmunizationRoutes from './ImmunizationRoutes.js';
 import VitalSignsRoutes from './VitalSignsRoutes.js';
 import DashboardRoutes from './DashboardRoutes.js';
 import AdminRoutes from './AdminRoutes.js';
+import RegistrationRoutes from './RegistrationRoutes.js';
 
 export default {
     UserRoutes,
@@ -22,6 +23,7 @@ export default {
     VitalSignsRoutes,
     DashboardRoutes,
     AdminRoutes,
+    RegistrationRoutes,
 };
 
 

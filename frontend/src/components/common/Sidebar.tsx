@@ -14,7 +14,9 @@ import {
   LogOut,
   User as UserIcon,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  QrCode,
+  ClipboardCheck
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,6 +54,12 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
             { name: 'Dashboard', path: '/teacher', icon: LayoutDashboard },
             { name: 'Students', path: '/teacher/students', icon: Users },
           );
+        }
+        if (hasModulePermission(effectiveAccess, 'patient-info', 'can_create')) {
+          staffLinks.push({ name: 'QR Invitations', path: '/teacher/registration-invitations', icon: QrCode });
+        }
+        if (hasModulePermission(effectiveAccess, 'patient-info', 'can_approve_registration')) {
+          staffLinks.push({ name: 'Review Queue', path: '/teacher/registration-reviews', icon: ClipboardCheck });
         }
         return staffLinks;
       }
