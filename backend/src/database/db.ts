@@ -52,15 +52,36 @@ const getIsLocal = (urlStr?: string): boolean => {
 
 const isLocal = getIsLocal(process.env.DATABASE_URL);
 
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required.');
+}
+
+let parsedDatabaseUrl: URL;
+try {
+    parsedDatabaseUrl = new URL(databaseUrl);
+} catch {
+    throw new Error('DATABASE_URL is invalid. URL-encode reserved characters in the credentials.');
+}
+
 // Only try to load the CA cert if we are connecting to a remote DB (SSL required)
 const caCert = isLocal ? undefined : getCaCert();
 
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    // Use structured connection properties instead of connectionString here.
+    // pg-connection-string lets URL SSL parameters override the explicit CA
+    // object, and sslnegotiation=direct in a URL also replaces it with `true`.
+    // Aiven's endpoint requires direct TLS while still verifying its CA.
+    host: parsedDatabaseUrl.hostname,
+    port: parsedDatabaseUrl.port ? Number(parsedDatabaseUrl.port) : 5432,
+    user: decodeURIComponent(parsedDatabaseUrl.username),
+    password: decodeURIComponent(parsedDatabaseUrl.password),
+    database: decodeURIComponent(parsedDatabaseUrl.pathname.replace(/^\//, '')),
     ssl: isLocal ? false : {
         rejectUnauthorized: true,
         ca: caCert,
     },
+    sslnegotiation: isLocal ? 'postgres' : 'direct',
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 20000,
