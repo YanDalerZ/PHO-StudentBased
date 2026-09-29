@@ -8,6 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:phase1:effective-access": "node --experimental-strip-types scripts/test-effective-access.ts",
+    "test:phase2:contracts": "node --experimental-strip-types scripts/test-phase2-contracts.ts",
+    "test:phase4a:permission-matrix": "node --experimental-strip-types scripts/test-phase4a-permission-matrix.ts",
+    "test:phase4a:effective-access-preview": "node --experimental-strip-types scripts/test-phase4a-effective-access-preview.ts",
     "preview": "vite preview"
   },
   "dependencies": {

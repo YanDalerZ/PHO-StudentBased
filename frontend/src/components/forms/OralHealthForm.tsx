@@ -1,3 +1,5 @@
+import StudentContextPanel from '../common/StudentContextPanel';
+import type { StudentModuleContext } from '../../types/moduleContext';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -14,12 +16,12 @@ import {
     FileText,
 } from 'lucide-react';
 import {
-    getStudent,
+    getStudentModuleContext,
     getOralHealthByStudent,
     createOralHealth,
     updateOralHealth,
 } from '../../services/api';
-import type { Student, OralHealth } from '../../types';
+import type { OralHealth } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { canWriteModuleRecord } from '../../lib/access';
 
@@ -65,7 +67,7 @@ const OralHealthForm: React.FC = () => {
     const [errorStatus, setErrorStatus] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const [student, setStudent] = useState<Student | null>(null);
+    const [student, setStudent] = useState<StudentModuleContext | null>(null);
     const [existingRecord, setExistingRecord] = useState<OralHealth | null>(null);
 
     // Examination Metadata
@@ -120,7 +122,7 @@ const OralHealthForm: React.FC = () => {
             try {
                 setLoading(true);
                 const [studentRes, oralHealthRes] = await Promise.all([
-                    getStudent(id),
+                    getStudentModuleContext(id, 'oral-health'),
                     getOralHealthByStudent(id).catch((err: unknown) => {
                         if (axios.isAxiosError(err) && err.response?.status === 404) {
                             return { data: { oral_health: null, records: [] } };
@@ -235,18 +237,7 @@ const OralHealthForm: React.FC = () => {
         };
     }, [id]);
 
-    const calculateAge = (dob: string) => {
-        const birthDate = new Date(dob);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        return age;
-    };
-
-    const age = student?.date_of_birth ? calculateAge(student.date_of_birth) : 0;
+    const age = student?.age ?? 0;
     const showPrimary = age <= 9;
     const showPermanent = age >= 5;
 
@@ -445,6 +436,7 @@ const OralHealthForm: React.FC = () => {
                 )}
             </div>
 
+            <StudentContextPanel student={student} />
             <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
 
                 {/* Section 1: Examination Info & Service Metadata */}

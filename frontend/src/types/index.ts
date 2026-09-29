@@ -828,6 +828,29 @@ export interface UpdateAdminUserStatusPayload {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ADMIN ACCESS PROVISIONING TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AdminModulePermission extends ModulePermissions {
+  module_id: number;
+  module_slug: ModuleSlug;
+  module_name: string;
+}
+
+export interface AdminModulePermissionReplacement extends ModulePermissions {
+  module_id: number;
+}
+
+export interface AdminSchoolAssignment {
+  school_id: number;
+  school_name: string;
+}
+
+export interface UpdateAdminSchoolAssignmentsPayload {
+  school_ids: number[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ADMIN MODULE MANAGEMENT TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 

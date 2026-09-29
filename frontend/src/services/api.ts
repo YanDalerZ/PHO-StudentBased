@@ -1,4 +1,11 @@
 import axios from 'axios';
+import type { StudentModuleContext } from '../types/moduleContext';
+
+export const getStudentModuleContext = async (
+    id: number | string,
+    module: 'oral-health' | 'deworming' | 'immunization' | 'vital-signs',
+): Promise<{ data: StudentModuleContext }> =>
+    (await api.get<{ data: StudentModuleContext }>(`/students/${encodeURIComponent(id)}/module-context`, { params: { module } })).data;
 import type {
     Student,
     Municipality,
@@ -45,6 +52,11 @@ import type {
     CreateAdminUserPayload,
     UpdateAdminUserPayload,
     UpdateAdminUserStatusPayload,
+    AdminModulePermission,
+    AdminModulePermissionReplacement,
+    AdminSchoolAssignment,
+    UpdateAdminSchoolAssignmentsPayload,
+    EffectiveAccess,
     AdminModule,
     CreateAdminModulePayload,
     UpdateAdminModulePayload,
@@ -58,7 +70,7 @@ import type {
 
 
 
-const getBaseUrl = () => {
+export const getApiBaseUrl = () => {
     const configured = import.meta.env?.VITE_API_URL?.trim();
     if (!configured) return '/api/v1';
 
@@ -72,8 +84,12 @@ const getBaseUrl = () => {
 };
 
 const api = axios.create({
-    baseURL: getBaseUrl(),
+    baseURL: getApiBaseUrl(),
 });
+
+// Public registration deliberately uses a client with no authentication
+// interceptor so a signed-in browser never sends its portal token to a QR URL.
+export const publicApi = axios.create({ baseURL: getApiBaseUrl() });
 
 // Request interceptor to attach JWT token
 api.interceptors.request.use(
@@ -382,6 +398,44 @@ export const updateAdminUser = async (id: number, payload: UpdateAdminUserPayloa
 
 export const updateAdminUserStatus = async (id: number, payload: UpdateAdminUserStatusPayload): Promise<AdminUserSummary> => {
     const response = await api.patch<{ data: AdminUserSummary }>(`/admin/users/${id}/status`, payload);
+    return response.data.data;
+};
+
+// Admin Access Provisioning
+export const getAdminUserModulePermissions = async (id: number): Promise<AdminModulePermission[]> => {
+    const response = await api.get<{ data: AdminModulePermission[] }>(`/admin/users/${id}/module-permissions`);
+    return response.data.data;
+};
+
+export const updateAdminUserModulePermissions = async (
+    id: number,
+    payload: AdminModulePermissionReplacement[],
+): Promise<AdminModulePermission[]> => {
+    const response = await api.put<{ data: AdminModulePermission[] }>(
+        `/admin/users/${id}/module-permissions`,
+        payload,
+    );
+    return response.data.data;
+};
+
+export const getAdminUserSchoolAssignments = async (id: number): Promise<AdminSchoolAssignment[]> => {
+    const response = await api.get<{ data: AdminSchoolAssignment[] }>(`/admin/users/${id}/school-assignments`);
+    return response.data.data;
+};
+
+export const updateAdminUserSchoolAssignments = async (
+    id: number,
+    payload: UpdateAdminSchoolAssignmentsPayload,
+): Promise<AdminSchoolAssignment[]> => {
+    const response = await api.put<{ data: AdminSchoolAssignment[] }>(
+        `/admin/users/${id}/school-assignments`,
+        payload,
+    );
+    return response.data.data;
+};
+
+export const getAdminUserEffectiveAccess = async (id: number): Promise<EffectiveAccess> => {
+    const response = await api.get<{ data: EffectiveAccess }>(`/admin/users/${id}/effective-access`);
     return response.data.data;
 };
 

@@ -11,7 +11,19 @@ import { requirePortalRole, requirePermission, requireSchoolScope } from '../mid
 import { resolveSchoolScope } from '../middleware/resolveScope.js';
 import { requireActiveModule } from '../middleware/activeModule.js';
 
+import { getStudentModuleContext, requireContextPermission } from '../controllers/ModuleContextController.js';
+
 const router = Router();
+
+router.get(
+    '/:id/module-context',
+    authenticate,
+    requirePortalRole('school_staff', 'superuser'),
+    requireContextPermission,
+    resolveSchoolScope({ tableName: 'STUDENTS' }),
+    requireSchoolScope(req => req.targetSchoolId),
+    getStudentModuleContext,
+);
 
 // GET /api/students — List students (Teacher: assigned schools; SuperUser: province-wide)
 router.get(

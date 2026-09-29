@@ -14,12 +14,16 @@ import {
   Stethoscope,
   ShieldCheck,
   CheckCircle2,
+  Building2,
+  KeyRound,
 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { DataTable, type Column } from '../../components/common/DataTable';
 import { Modal } from '../../components/common/Modal';
 import { FormField } from '../../components/common/FormField';
+import { SchoolAssignmentDrawer } from '../../components/admin/SchoolAssignmentDrawer';
+import { PermissionMatrixModal } from '../../components/admin/PermissionMatrixModal';
 import {
   getAdminUsers,
   createAdminUser,
@@ -85,6 +89,8 @@ export const UserManagement: React.FC = () => {
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [schoolAssignmentUser, setSchoolAssignmentUser] = useState<AdminUserSummary | null>(null);
+  const [permissionMatrixUser, setPermissionMatrixUser] = useState<AdminUserSummary | null>(null);
 
   // Status mutation loading tracking (userId -> boolean)
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
@@ -440,6 +446,28 @@ export const UserManagement: React.FC = () => {
                 </button>
               )}
 
+              {/* School Assignment Action */}
+              <button
+                onClick={() => setSchoolAssignmentUser(user)}
+                disabled={user.portal_role !== 'school_staff'}
+                className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                title={user.portal_role === 'school_staff' ? 'Manage school assignments' : 'School assignments apply only to school staff'}
+                aria-label={`Manage school assignments for ${user.first_name}`}
+              >
+                <Building2 className="w-4 h-4" />
+              </button>
+
+              {/* Module Permission Action */}
+              <button
+                onClick={() => setPermissionMatrixUser(user)}
+                disabled={user.portal_role === 'admin'}
+                className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                title={user.portal_role === 'admin' ? 'Administrators cannot receive clinical module permissions' : 'Manage module permissions'}
+                aria-label={`Manage module permissions for ${user.first_name}`}
+              >
+                <KeyRound className="w-4 h-4" />
+              </button>
+
               {/* Edit Profile Action */}
               <button
                 onClick={() => openEditModal(user)}
@@ -700,6 +728,20 @@ export const UserManagement: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {schoolAssignmentUser && (
+        <SchoolAssignmentDrawer
+          user={schoolAssignmentUser}
+          onClose={() => setSchoolAssignmentUser(null)}
+        />
+      )}
+
+      {permissionMatrixUser && (
+        <PermissionMatrixModal
+          user={permissionMatrixUser}
+          onClose={() => setPermissionMatrixUser(null)}
+        />
+      )}
     </div>
   );
 };

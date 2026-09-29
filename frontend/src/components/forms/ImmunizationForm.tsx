@@ -1,3 +1,5 @@
+import StudentContextPanel from '../common/StudentContextPanel';
+import type { StudentModuleContext } from '../../types/moduleContext';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -17,12 +19,12 @@ import {
     AlertCircle,
 } from 'lucide-react';
 import {
-    getStudent,
+    getStudentModuleContext,
     getImmunizationByStudent,
     createImmunization,
     updateImmunization,
 } from '../../services/api';
-import type { Student, Immunization, CreateImmunizationPayload } from '../../types';
+import type { Immunization, CreateImmunizationPayload } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { canWriteModuleRecord } from '../../lib/access';
 import { cn } from '../../lib/utils';
@@ -78,7 +80,7 @@ const ImmunizationForm: React.FC = () => {
     const [errorStatus, setErrorStatus] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const [student, setStudent] = useState<Student | null>(null);
+    const [student, setStudent] = useState<StudentModuleContext | null>(null);
     const [existingRecord, setExistingRecord] = useState<Immunization | null>(null);
 
     // Form states
@@ -123,7 +125,7 @@ const ImmunizationForm: React.FC = () => {
         if (!id) return;
 
         Promise.all([
-            getStudent(id),
+            getStudentModuleContext(id, 'immunization'),
             getImmunizationByStudent(id).catch((err: unknown) => {
                 if (axios.isAxiosError(err) && err.response?.status === 404) {
                     return { data: { immunization: null, records: [] } };
@@ -416,6 +418,7 @@ const ImmunizationForm: React.FC = () => {
             </div>
 
             {/* Main Form */}
+            <StudentContextPanel student={student} />
             <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-8">
                 {/* General Information */}
                 <div>

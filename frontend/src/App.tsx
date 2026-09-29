@@ -34,6 +34,9 @@ import ModuleManagement from './pages/admin/ModuleManagement';
 import SchoolManagement from './pages/admin/SchoolManagement';
 import SystemSettings from './pages/admin/SystemSettings';
 import AccessDenied from './pages/AccessDenied';
+import PublicRegistration from './pages/public/PublicRegistration';
+import InvitationManagement from './pages/teacher/InvitationManagement';
+import RegistrationReviewQueue from './pages/teacher/RegistrationReviewQueue';
 
 // Dashboard Layout Wrapper to manage Sidebar and Page Content
 const DashboardLayout = () => {
@@ -78,6 +81,7 @@ const App: React.FC = () => {
 
             {/* Public Routes */}
             <Route path="/Login" element={<Login />} />
+            <Route path="/register/:token" element={<PublicRegistration />} />
             <Route path="/forbidden" element={<ProtectedRoute><AccessDenied /></ProtectedRoute>} />
 
             {/* Student Registration Route (Teacher / SuperUser Staff Only) */}
@@ -108,6 +112,16 @@ const App: React.FC = () => {
               <Route path="students" element={
                 <ProtectedRoute requiredModule="patient-info" requiredAction="can_view">
                   <StudentRegistry />
+                </ProtectedRoute>
+              } />
+              <Route path="registration-invitations" element={
+                <ProtectedRoute requiredModule="patient-info" requiredAction="can_create">
+                  <InvitationManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="registration-reviews" element={
+                <ProtectedRoute requiredModule="patient-info" requiredAction="can_approve_registration">
+                  <RegistrationReviewQueue />
                 </ProtectedRoute>
               } />
               <Route path="students/:id" element={
