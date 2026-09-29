@@ -143,6 +143,22 @@ try {
         () => updateModulePermissions(staffId, [permission(patientInfoId)], actor.id),
         /at least one action grant/i,
     );
+    await expectAdminError(
+        () => updateModulePermissions(staffId, [permission(patientInfoId, { can_create: true })], actor.id),
+        /requires can_view when can_create or can_edit/i,
+    );
+    await expectAdminError(
+        () => updateModulePermissions(staffId, [permission(patientInfoId, { can_edit: true })], actor.id),
+        /requires can_view when can_create or can_edit/i,
+    );
+    await expectAdminError(
+        () => updateModulePermissions(staffId, [permission(patientInfoId, { can_export: true })], actor.id),
+        /requires can_report or can_view when can_export/i,
+    );
+    await updateModulePermissions(staffId, [
+        permission(patientInfoId, { can_report: true, can_export: true }),
+    ], actor.id);
+    assert.equal((await getModulePermissions(staffId))[0]?.can_export, true);
 
     await updateModulePermissions(superuserId, [
         permission(oralHealthId, { can_view: true, can_report: true }),

@@ -905,6 +905,18 @@ export async function updateModulePermissions(
       if (actions.length === 0) {
         throw new AdminServiceError(400, `Module ${module.slug} must include at least one action grant.`);
       }
+      if ((permission.can_create || permission.can_edit) && !permission.can_view) {
+        throw new AdminServiceError(
+          400,
+          `Module ${module.slug} requires can_view when can_create or can_edit is granted.`,
+        );
+      }
+      if (permission.can_export && !permission.can_report && !permission.can_view) {
+        throw new AdminServiceError(
+          400,
+          `Module ${module.slug} requires can_report or can_view when can_export is granted.`,
+        );
+      }
       if (permission.can_approve_registration
         && (target.portal_role !== 'school_staff' || module.slug !== 'patient-info')) {
         throw new AdminServiceError(
