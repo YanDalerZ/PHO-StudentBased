@@ -71,7 +71,6 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Serving frontend static files
 const frontendPath = path.resolve(process.cwd(), '../frontend/dist');
 app.use(/^\/register\/[a-f0-9]{32}\/?$/i, publicRegistrationPageHeaders);
-const frontendPath = path.resolve(process.cwd(), 'frontend/dist');
 app.use(express.static(frontendPath));
 
 app.get(/^((?!\/api).)*$/, (req, res) => {
