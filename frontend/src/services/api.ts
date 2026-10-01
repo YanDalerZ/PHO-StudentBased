@@ -1,5 +1,11 @@
 import axios from 'axios';
 import type { StudentModuleContext } from '../types/moduleContext';
+import type { ModuleSlug } from '../types';
+import type {
+    ConsolidatedReportPreview,
+    ReportExportJob,
+    ReportRequestFilters,
+} from '../types/reports';
 
 export const getStudentModuleContext = async (
     id: number | string,
@@ -134,9 +140,66 @@ export const getSchools = async (barangayId: string | number): Promise<School[]>
     return response.data;
 };
 
+export const getAllLookupSchools = async (): Promise<School[]> => {
+    const response = await api.get<School[]>('/lookup/schools');
+    return response.data;
+};
+
 export const getLookupModules = async (): Promise<AdminModule[]> => {
     const response = await api.get<AdminModule[]>('/lookup/modules');
     return response.data;
+};
+
+// Consolidated reports
+export const getConsolidatedReport = async (
+    moduleSlug: ModuleSlug,
+    filters: ReportRequestFilters,
+): Promise<ConsolidatedReportPreview> => {
+    const response = await api.get<{ data: ConsolidatedReportPreview }>(
+        `/reports/${moduleSlug}`,
+        { params: filters },
+    );
+    return response.data.data;
+};
+
+export const recordReportPrint = async (
+    moduleSlug: ModuleSlug,
+    filters: ReportRequestFilters,
+): Promise<void> => {
+    await api.post(`/reports/${moduleSlug}/print-events`, filters);
+};
+
+export const requestReportExport = async (
+    moduleSlug: ModuleSlug,
+    format: 'csv' | 'xlsx',
+    filters: ReportRequestFilters,
+): Promise<ReportExportJob> => {
+    const response = await api.post<{ data: ReportExportJob }>(
+        `/reports/${moduleSlug}/exports`,
+        { format, filters },
+    );
+    return response.data.data;
+};
+
+export const getReportExport = async (id: number): Promise<ReportExportJob> => {
+    const response = await api.get<{ data: ReportExportJob }>(`/report-exports/${id}`);
+    return response.data.data;
+};
+
+export const downloadReportExport = async (job: ReportExportJob): Promise<void> => {
+    if (!job.download_token) throw new Error('The export download credential is unavailable.');
+    const response = await api.get<Blob>(`/report-exports/${job.id}/download`, {
+        params: { token: job.download_token },
+        responseType: 'blob',
+    });
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${job.module_slug}-report.${job.format}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 };
 
 // Students CRUD

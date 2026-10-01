@@ -45,6 +45,17 @@ assert.equal(defaultPortalRoute(superUser, {
   assignedSchoolIds: [], modulePermissions: { 'oral-health': access.modulePermissions['oral-health'] },
 }), '/superuser/oral-health');
 assert.equal(defaultPortalRoute(adminUser, null), '/admin/dashboard');
+const reportOnlyAccess: EffectiveAccess = {
+  assignedSchoolIds: [101],
+  modulePermissions: {
+    deworming: {
+      can_view: false, can_create: false, can_edit: false,
+      can_approve_registration: false, can_report: true, can_export: false,
+    },
+  },
+};
+assert.equal(defaultPortalRoute(staffUser, reportOnlyAccess), '/teacher/reports/deworming');
+assert.equal(defaultPortalRoute(superUser, reportOnlyAccess), '/superuser/reports/deworming');
 
 const browserEvents = new EventTarget();
 const storage = new Map<string, string>([['token', 'test-token'], ['user', '{}']]);
@@ -59,7 +70,7 @@ Object.assign(globalThis, {
   },
 });
 
-const { default: api, createOralHealth } = await import('../src/services/api.ts');
+const { default: api, createOralHealth, getAllLookupSchools, recordReportPrint, requestReportExport } = await import('../src/services/api.ts');
 
 api.defaults.adapter = async (config) => Promise.reject({ response: { status: 403 }, config });
 await assert.rejects(() => api.get('/protected'));
@@ -74,5 +85,26 @@ await createOralHealth({ student_id: 55, date_examined: '2026-09-24' });
 const oralPayload = JSON.parse(capturedBody) as Record<string, unknown>;
 assert.equal(oralPayload.student_id, 55);
 assert.equal('school_id' in oralPayload, false, 'Oral Health creation must remain valid without a body school_id.');
+
+let capturedUrl = '';
+api.defaults.adapter = async (config) => {
+  capturedUrl = String(config.url ?? '');
+  capturedBody = String(config.data ?? '');
+  return { data: { data: { id: 1, status: 'pending' } }, status: 202, statusText: 'Accepted', headers: {}, config };
+};
+const reportFilters = { school_id: 101, period: '2026-SY-R1', page: 1, pageSize: 25 };
+await recordReportPrint('deworming', reportFilters);
+assert.equal(capturedUrl, '/reports/deworming/print-events');
+assert.deepEqual(JSON.parse(capturedBody), reportFilters, 'Print audit requests must contain filters only.');
+await requestReportExport('deworming', 'csv', reportFilters);
+assert.equal(capturedUrl, '/reports/deworming/exports');
+assert.deepEqual(JSON.parse(capturedBody), { format: 'csv', filters: reportFilters });
+
+api.defaults.adapter = async (config) => {
+  capturedUrl = String(config.url ?? '');
+  return { data: [], status: 200, statusText: 'OK', headers: {}, config };
+};
+await getAllLookupSchools();
+assert.equal(capturedUrl, '/lookup/schools', 'The province-wide registry must use the complete authorized-school lookup.');
 
 console.log('Frontend effective-access checks passed.');

@@ -171,6 +171,10 @@ export interface School {
   name: string;
   barangay_id: string | number;
   district?: string;
+  is_active?: boolean;
+  barangay_name?: string;
+  municipality_id?: string | number;
+  municipality_name?: string;
 }
 
 export interface Module {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { Menu } from 'lucide-react';
 
@@ -37,6 +37,23 @@ import AccessDenied from './pages/AccessDenied';
 import PublicRegistration from './pages/public/PublicRegistration';
 import InvitationManagement from './pages/teacher/InvitationManagement';
 import RegistrationReviewQueue from './pages/teacher/RegistrationReviewQueue';
+import ConsolidatedReportPage from './pages/reports/ConsolidatedReportPage';
+import type { ModuleSlug } from './types';
+
+const REPORT_MODULES = new Set<ModuleSlug>(['patient-info', 'oral-health', 'deworming', 'immunization', 'vital-signs']);
+
+const ModuleReportRoute = () => {
+  const { moduleSlug } = useParams();
+  if (!moduleSlug || !REPORT_MODULES.has(moduleSlug as ModuleSlug)) {
+    return <Navigate to="/forbidden" replace />;
+  }
+  const typedModule = moduleSlug as ModuleSlug;
+  return (
+    <ProtectedRoute requiredModule={typedModule} requiredAction="can_report">
+      <ConsolidatedReportPage moduleSlug={typedModule} />
+    </ProtectedRoute>
+  );
+};
 
 // Dashboard Layout Wrapper to manage Sidebar and Page Content
 const DashboardLayout = () => {
@@ -154,6 +171,7 @@ const App: React.FC = () => {
                   <VitalSignsForm />
                 </ProtectedRoute>
               } />
+              <Route path="reports/:moduleSlug" element={<ModuleReportRoute />} />
             </Route>
 
             {/* Super User Portal Routes */}
@@ -232,6 +250,7 @@ const App: React.FC = () => {
                   <VitalSignsDash />
                 </ProtectedRoute>
               } />
+              <Route path="reports/:moduleSlug" element={<ModuleReportRoute />} />
             </Route>
 
             {/* Admin Portal Routes */}

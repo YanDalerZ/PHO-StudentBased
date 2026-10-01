@@ -10,6 +10,7 @@ import VitalSignsRoutes from './VitalSignsRoutes.js';
 import DashboardRoutes from './DashboardRoutes.js';
 import AdminRoutes from './AdminRoutes.js';
 import RegistrationRoutes from './RegistrationRoutes.js';
+import ReportRoutes from './ReportRoutes.js';
 
 export default {
     UserRoutes,
@@ -24,6 +25,7 @@ export default {
     DashboardRoutes,
     AdminRoutes,
     RegistrationRoutes,
+    ReportRoutes,
 };
 
 
