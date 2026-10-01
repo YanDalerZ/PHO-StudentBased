@@ -51,14 +51,14 @@ export const uploadStudentPhoto = async (
     }
 
     // 2. Read Cloudinary frontend environment variables
-    const cloudName = 'lajydhvy';
-    const uploadPreset = 'pho_student_photos';
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME?.trim();
+    const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim();
 
-    // if (!cloudName || !uploadPreset) {
-    //     throw new Error(
-    //         'Cloudinary configuration missing. Please set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in frontend/.env.'
-    //     );
-    // }
+    if (!cloudName || !uploadPreset) {
+        throw new Error(
+            'Cloudinary configuration missing. Please set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in frontend/.env.'
+        );
+    }
 
     // 3. Prepare Multipart Form Data
     const formData = new FormData();

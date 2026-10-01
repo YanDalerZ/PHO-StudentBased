@@ -336,14 +336,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
             return;
         }
 
-        // const cloudName = 'lajydhvy';
-        // const uploadPreset = 'pho_student_photos';
+        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+        const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
-        // // if (!cloudName || !uploadPreset) {
-        // //     toast.error('Cloudinary configuration missing. Please verify VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in frontend/.env.');
-        // //     inputElem.value = '';
-        // //     return;
-        // // }
+        if (!cloudName || !uploadPreset) {
+            toast.error('Cloudinary configuration missing. Please verify VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in frontend/.env.');
+            inputElem.value = '';
+            return;
+        }
 
         setIsUploadingPhoto(true);
         setUploadProgress(0);
