@@ -44,18 +44,3 @@ export interface ConsolidatedReportPreview {
   empty_message: string | null;
   privacy: Record<string, unknown>;
 }
-
-export interface ReportExportJob {
-  id: number;
-  module_slug: ModuleSlug;
-  format: 'csv' | 'xlsx';
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'expired';
-  row_count: number | null;
-  error_code: string | null;
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  expires_at: string | null;
-  download_token?: string;
-  download_token_expires_at?: string;
-}

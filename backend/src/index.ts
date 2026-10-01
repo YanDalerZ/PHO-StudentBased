@@ -8,7 +8,6 @@ import pool from './database/db.js';
 
 import AllRoutes from './routes/AllRoutes.js';
 import { publicRegistrationPageHeaders } from './middleware/publicRegistrationSecurity.js';
-import { startReportExportMaintenance } from './services/report-export.service.js';
 
 const app: Application = express();
 
@@ -56,6 +55,7 @@ const corsOptions: cors.CorsOptions = {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    exposedHeaders: ["Content-Disposition"],
 };
 
 app.use(cors(corsOptions));
@@ -105,7 +105,6 @@ export { app };
 
 // Start Server and Verify PostgreSQL Connection
 if (process.env.NODE_ENV !== 'test') {
-    startReportExportMaintenance();
     app.listen(PORT, '0.0.0.0', async () => {
         try {
             const result = await pool.query('SELECT NOW() as current_time, current_setting(\'TIMEZONE\') as tz');

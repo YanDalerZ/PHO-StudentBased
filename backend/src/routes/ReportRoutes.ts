@@ -1,11 +1,6 @@
 import { Router } from 'express';
 import { getConsolidatedReportPreview, recordConsolidatedReportPrint } from '../controllers/ReportController.js';
-import {
-    downloadReportExportFile,
-    readReportExport,
-    removeReportExport,
-    requestReportExport,
-} from '../controllers/ReportExportController.js';
+import { requestReportExport } from '../controllers/ReportExportController.js';
 import { authenticate } from '../middleware/auth.js';
 import {
     requireDashboardSchoolScope,
@@ -31,10 +26,6 @@ router.post(
     requireParamModulePermission('can_report'),
     recordConsolidatedReportPrint,
 );
-
-router.get('/report-exports/:id', authenticate, requirePortalRole('school_staff', 'superuser'), readReportExport);
-router.get('/report-exports/:id/download', authenticate, requirePortalRole('school_staff', 'superuser'), downloadReportExportFile);
-router.delete('/report-exports/:id', authenticate, requirePortalRole('school_staff', 'superuser'), removeReportExport);
 
 router.get(
     '/reports/:moduleSlug',
