@@ -3,7 +3,6 @@ import type { StudentModuleContext } from '../types/moduleContext';
 import type { ModuleSlug } from '../types';
 import type {
     ConsolidatedReportPreview,
-    ReportExportJob,
     ReportRequestFilters,
 } from '../types/reports';
 
@@ -173,29 +172,31 @@ export const requestReportExport = async (
     moduleSlug: ModuleSlug,
     format: 'csv' | 'xlsx',
     filters: ReportRequestFilters,
-): Promise<ReportExportJob> => {
-    const response = await api.post<{ data: ReportExportJob }>(
+): Promise<{ data: Blob; contentDisposition: string | undefined }> => {
+    const response = await api.post<Blob>(
         `/reports/${moduleSlug}/exports`,
         { format, filters },
+        { responseType: 'blob' },
     );
-    return response.data.data;
+    const header = response.headers['content-disposition'];
+    return {
+        data: response.data,
+        contentDisposition: typeof header === 'string' ? header : undefined,
+    };
 };
 
-export const getReportExport = async (id: number): Promise<ReportExportJob> => {
-    const response = await api.get<{ data: ReportExportJob }>(`/report-exports/${id}`);
-    return response.data.data;
-};
-
-export const downloadReportExport = async (job: ReportExportJob): Promise<void> => {
-    if (!job.download_token) throw new Error('The export download credential is unavailable.');
-    const response = await api.get<Blob>(`/report-exports/${job.id}/download`, {
-        params: { token: job.download_token },
-        responseType: 'blob',
-    });
+export const downloadReportExport = async (
+    moduleSlug: ModuleSlug,
+    format: 'csv' | 'xlsx',
+    filters: ReportRequestFilters,
+): Promise<void> => {
+    const response = await requestReportExport(moduleSlug, format, filters);
+    const filenameMatch = /filename="?([^";]+)"?/i.exec(response.contentDisposition ?? '');
+    const filename = filenameMatch?.[1] ?? `${moduleSlug}-report.${format}`;
     const url = URL.createObjectURL(response.data);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${job.module_slug}-report.${job.format}`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     link.remove();

@@ -3,7 +3,7 @@ import { AlertCircle, ChevronLeft, ChevronRight, Download, FileDown, FileSpreads
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasModulePermission } from '../../lib/access';
-import { downloadReportExport, getBarangays, getConsolidatedReport, getMunicipalities, getReportExport, getSchools, recordReportPrint, requestReportExport } from '../../services/api';
+import { downloadReportExport, getBarangays, getConsolidatedReport, getMunicipalities, getSchools, recordReportPrint } from '../../services/api';
 import type { Barangay, ModuleSlug, Municipality, School } from '../../types';
 import type { ConsolidatedReportPreview, ProtectedReportCount, ReportBreakdownRow, ReportRequestFilters } from '../../types/reports';
 
@@ -38,10 +38,6 @@ function errorMessage(error: unknown, fallback: string): string {
   }
   return error instanceof Error ? error.message : fallback;
 }
-function wait(milliseconds: number): Promise<void> {
-  return new Promise(resolve => window.setTimeout(resolve, milliseconds));
-}
-
 export default function ConsolidatedReportPage({ moduleSlug }: { moduleSlug: ModuleSlug }) {
   const { user, effectiveAccess } = useAuth();
   const canExport = hasModulePermission(effectiveAccess, moduleSlug, 'can_export');
@@ -143,13 +139,7 @@ export default function ConsolidatedReportPage({ moduleSlug }: { moduleSlug: Mod
   const handleExport = async (format: 'csv' | 'xlsx') => {
     setExporting(format);
     try {
-      let job = await requestReportExport(moduleSlug, format, appliedFilters ?? filters);
-      for (let attempt = 0; attempt < 45 && (job.status === 'pending' || job.status === 'running'); attempt += 1) {
-        await wait(1_000);
-        job = await getReportExport(job.id);
-      }
-      if (job.status !== 'completed') throw new Error(job.status === 'failed' ? `Export failed (${job.error_code ?? 'unknown error'}).` : 'The export is still processing. Try again shortly.');
-      await downloadReportExport(job);
+      await downloadReportExport(moduleSlug, format, appliedFilters ?? filters);
       toast.success(`${format.toUpperCase()} report downloaded.`);
     } catch (requestError) { toast.error(errorMessage(requestError, 'The report export failed.')); }
     finally { setExporting(null); }

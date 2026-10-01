@@ -21,8 +21,10 @@ assert.match(reportPage, /hasModulePermission\(effectiveAccess, moduleSlug, 'can
   'Export controls must be derived from the separate can_export grant.');
 assert.match(reportPage, /await recordReportPrint[\s\S]*window\.print\(\)/,
   'Printing must be audited successfully before opening the print dialog.');
-assert.match(reportPage, /await requestReportExport[\s\S]*await getReportExport[\s\S]*await downloadReportExport/,
-  'The UI must create, poll, and download an export job.');
+assert.match(reportPage, /await downloadReportExport\(moduleSlug, format, appliedFilters \?\? filters\)/,
+  'The UI must download the generated export directly from the canonical endpoint.');
+assert.doesNotMatch(reportPage, /getReportExport|setTimeout|job\.status/,
+  'The UI must not poll an asynchronous export job.');
 assert.match(api, /`\/reports\/\$\{moduleSlug\}`/,
   'The UI must call the canonical report preview endpoint.');
 assert.match(api, /`\/reports\/\$\{moduleSlug\}\/exports`/,

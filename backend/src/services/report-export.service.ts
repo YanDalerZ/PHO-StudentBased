@@ -1,58 +1,20 @@
-import jwt from 'jsonwebtoken';
-import { z } from 'zod';
 import pool from '../database/db.js';
-import { AuditService } from './AuditService.js';
-import { getEffectiveAccess } from './admin.service.js';
-import { createPrivateExportStorage, type ExportFileFormat, type PrivateExportStorage } from './report-export-storage.service.js';
-import { createXlsxWorkbook } from './xlsx-writer.service.js';
+import type { ModuleSlug } from '../types/auth.types.js';
 import {
     buildReportQueryParts,
     REPORT_EXPORT_MAX_ROWS,
-    resolveReportSchoolScope,
     type NormalizedReportFilters,
     type ReportSchoolScope,
 } from './report.service.js';
-import type { ModuleSlug, PortalRole } from '../types/auth.types.js';
+import { createXlsxWorkbook } from './xlsx-writer.service.js';
 
-export const REPORT_EXPORT_RETENTION_HOURS = 24;
-export const REPORT_DOWNLOAD_TOKEN_MINUTES = 15;
+export type ExportFileFormat = 'csv' | 'xlsx';
 
-export interface StoredExportFilters extends NormalizedReportFilters {
-    scope_mode: ReportSchoolScope['mode'];
-    authorized_school_ids: number[] | null;
-}
-
-export interface ReportExportJob {
-    id: number;
-    module_slug: ModuleSlug;
-    format: ExportFileFormat;
-    status: 'pending' | 'running' | 'completed' | 'failed' | 'expired';
-    row_count: number | null;
-    error_code: string | null;
-    created_at: string;
-    started_at: string | null;
-    completed_at: string | null;
-    expires_at: string | null;
-    download_token?: string;
-    download_token_expires_at?: string;
-}
-
-interface ExportDatabaseRow {
-    id: number;
-    requested_by: number;
-    module_id: number;
-    module_slug: ModuleSlug;
-    module_active?: boolean;
-    format: ExportFileFormat;
-    filters: unknown;
-    status: ReportExportJob['status'];
-    row_count: number | null;
-    storage_reference: string | null;
-    error_code: string | null;
-    created_at: Date | string;
-    started_at: Date | string | null;
-    completed_at: Date | string | null;
-    expires_at: Date | string | null;
+export interface DirectReportExport {
+    data: Buffer;
+    filename: string;
+    contentType: string;
+    rowCount: number;
 }
 
 export class ReportExportError extends Error {
@@ -64,73 +26,6 @@ export class ReportExportError extends Error {
         super(message);
         this.name = 'ReportExportError';
     }
-}
-
-const storedFiltersSchema = z.object({
-    municipality_id: z.number().int().positive().optional(),
-    barangay_id: z.number().int().positive().optional(),
-    school_id: z.number().int().positive().optional(),
-    requested_period: z.string().optional(),
-    period_source: z.enum(['default', 'named', 'explicit']),
-    date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    date_span_days: z.number().int().positive(),
-    page: z.number().int().positive(),
-    pageSize: z.number().int().positive(),
-    offset: z.number().int().nonnegative(),
-    timezone: z.literal('Asia/Manila'),
-    scope_mode: z.enum(['province', 'restricted']),
-    authorized_school_ids: z.array(z.number().int().positive()).nullable(),
-}).strict();
-
-let storageInstance: PrivateExportStorage | undefined;
-const activeJobs = new Set<number>();
-let maintenanceTimer: NodeJS.Timeout | undefined;
-
-function storage(): PrivateExportStorage {
-    storageInstance ??= createPrivateExportStorage();
-    return storageInstance;
-}
-
-export function setReportExportStorageForTests(value: PrivateExportStorage | undefined): void {
-    storageInstance = value;
-}
-
-function asIso(value: Date | string | null): string | null {
-    if (value === null) return null;
-    return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
-function publicJob(row: ExportDatabaseRow, includeToken = false): ReportExportJob {
-    const result: ReportExportJob = {
-        id: Number(row.id),
-        module_slug: row.module_slug,
-        format: row.format,
-        status: row.status,
-        row_count: row.row_count === null ? null : Number(row.row_count),
-        error_code: row.error_code,
-        created_at: asIso(row.created_at)!,
-        started_at: asIso(row.started_at),
-        completed_at: asIso(row.completed_at),
-        expires_at: asIso(row.expires_at),
-    };
-    if (includeToken && row.status === 'completed') {
-        const secret = process.env.JWT_SECRET;
-        if (!secret) throw new Error('JWT_SECRET is required.');
-        result.download_token = jwt.sign(
-            { purpose: 'report-export-download', export_id: row.id, requested_by: row.requested_by },
-            secret,
-            { expiresIn: `${REPORT_DOWNLOAD_TOKEN_MINUTES}m`, audience: 'report-export-download' },
-        );
-        result.download_token_expires_at = new Date(Date.now() + REPORT_DOWNLOAD_TOKEN_MINUTES * 60_000).toISOString();
-    }
-    return result;
-}
-
-function scopeFromStored(filters: StoredExportFilters): ReportSchoolScope {
-    return filters.scope_mode === 'province'
-        ? { mode: 'province' }
-        : { mode: 'restricted', schoolIds: filters.authorized_school_ids ?? [] };
 }
 
 export function sanitizeSpreadsheetString(value: string): string {
@@ -156,7 +51,12 @@ function createCsv(headers: readonly string[], rows: readonly Record<string, unk
     return Buffer.from(`\ufeff${lines.join('\r\n')}\r\n`, 'utf8');
 }
 
-function createXlsx(moduleSlug: ModuleSlug, filters: StoredExportFilters, headers: readonly string[], rows: readonly Record<string, unknown>[]): Buffer {
+function createXlsx(
+    moduleSlug: ModuleSlug,
+    filters: NormalizedReportFilters,
+    headers: readonly string[],
+    rows: readonly Record<string, unknown>[],
+): Buffer {
     const summaryRows: Array<Array<string | number | boolean | null>> = [
         ['Module', moduleSlug],
         ['Date from', filters.date_from],
@@ -229,8 +129,12 @@ function exportSelect(moduleSlug: ModuleSlug, dateToPosition: number): { headers
     }
 }
 
-async function loadExportRows(moduleSlug: ModuleSlug, filters: StoredExportFilters): Promise<{ headers: string[]; rows: Record<string, unknown>[] }> {
-    const parts = buildReportQueryParts(moduleSlug, filters, scopeFromStored(filters));
+async function loadExportRows(
+    moduleSlug: ModuleSlug,
+    filters: NormalizedReportFilters,
+    scope: ReportSchoolScope,
+): Promise<{ headers: string[]; rows: Record<string, unknown>[] }> {
+    const parts = buildReportQueryParts(moduleSlug, filters, scope);
     const params = [...parts.params, filters.date_to, REPORT_EXPORT_MAX_ROWS + 1];
     const dateToPosition = parts.params.length + 1;
     const limitPosition = parts.params.length + 2;
@@ -248,245 +152,31 @@ async function loadExportRows(moduleSlug: ModuleSlug, filters: StoredExportFilte
     return { headers: definition.headers, rows: result.rows };
 }
 
-async function logExportAudit(action: string, row: Pick<ExportDatabaseRow, 'id' | 'requested_by' | 'module_slug' | 'format'>, details: Record<string, unknown>): Promise<void> {
-    const actor = await pool.query<{ portal_role: PortalRole }>('SELECT portal_role FROM USERS WHERE id = $1', [row.requested_by]);
-    await AuditService.logEvent({
-        actor_id: row.requested_by,
-        portal_role: actor.rows[0]?.portal_role ?? null,
-        action,
-        entity_type: 'REPORT_EXPORT',
-        entity_id: String(row.id),
-        details: { module_slug: row.module_slug, format: row.format, ...details },
-    });
-}
-
-export async function createReportExportJob(input: {
-    requestedBy: number;
-    portalRole: PortalRole;
+export async function generateDirectReportExport(input: {
     moduleSlug: ModuleSlug;
     format: ExportFileFormat;
     filters: NormalizedReportFilters;
     scope: ReportSchoolScope;
-    ipAddress?: string | undefined;
-}): Promise<ReportExportJob> {
-    const storedFilters: StoredExportFilters = {
-        ...input.filters,
-        scope_mode: input.scope.mode,
-        authorized_school_ids: input.scope.mode === 'province' ? null : [...input.scope.schoolIds],
-    };
-    const result = await pool.query<ExportDatabaseRow>(`
-        INSERT INTO REPORT_EXPORTS (requested_by, module_id, format, filters)
-        SELECT $1, id, $3, $4::jsonb FROM MODULES WHERE slug = $2 AND is_active = TRUE
-        RETURNING *, $2::text AS module_slug
-    `, [input.requestedBy, input.moduleSlug, input.format, JSON.stringify(storedFilters)]);
-    const row = result.rows[0];
-    if (!row) throw new ReportExportError('MODULE_DISABLED', 422, 'The selected module is unavailable.');
-    await AuditService.logEvent({
-        actor_id: input.requestedBy,
-        portal_role: input.portalRole,
-        action: 'REPORT_EXPORT_REQUESTED',
-        entity_type: 'REPORT_EXPORT',
-        entity_id: String(row.id),
-        school_id: input.filters.school_id ?? null,
-        details: { module_slug: input.moduleSlug, format: input.format, filters: input.filters, scope_mode: input.scope.mode },
-        ip_address: input.ipAddress,
-    });
-    queueReportExport(row.id);
-    return publicJob(row);
-}
-
-async function currentExportAuthorized(row: ExportDatabaseRow): Promise<StoredExportFilters> {
-    if (!row.module_active) throw new ReportExportError('MODULE_DISABLED', 422, 'The selected module is unavailable.');
-    const user = await pool.query<{ portal_role: PortalRole; is_active: boolean }>(
-        'SELECT portal_role, is_active FROM USERS WHERE id = $1',
-        [row.requested_by],
+}): Promise<DirectReportExport> {
+    const moduleResult = await pool.query<{ is_active: boolean }>(
+        'SELECT is_active FROM MODULES WHERE slug = $1',
+        [input.moduleSlug],
     );
-    const account = user.rows[0];
-    if (!account?.is_active || account.portal_role === 'admin') throw new ReportExportError('FORBIDDEN', 403, 'Export access is no longer authorized.');
-    const access = await getEffectiveAccess(row.requested_by);
-    if (!access.modulePermissions[row.module_slug]?.can_export) throw new ReportExportError('FORBIDDEN', 403, 'Export access is no longer authorized.');
-    const parsed = storedFiltersSchema.safeParse(row.filters);
-    if (!parsed.success) throw new ReportExportError('INVALID_STORED_FILTERS', 409, 'Stored export filters are invalid.');
-    const filters = parsed.data as StoredExportFilters;
-    if (filters.scope_mode === 'province' && account.portal_role !== 'superuser') {
-        throw new ReportExportError('FORBIDDEN', 403, 'Province export scope is no longer authorized.');
+    if (!moduleResult.rows[0]?.is_active) {
+        throw new ReportExportError('MODULE_DISABLED', 422, 'The selected module is unavailable.');
     }
-    if (filters.scope_mode === 'restricted' && account.portal_role === 'school_staff') {
-        const current = new Set(access.assignedSchoolIds);
-        if (!(filters.authorized_school_ids ?? []).every(id => current.has(id))) {
-            throw new ReportExportError('FORBIDDEN', 403, 'Export school scope is no longer authorized.');
-        }
-    }
-    return filters;
-}
 
-async function fetchExport(id: number, requesterId?: number): Promise<ExportDatabaseRow> {
-    const result = await pool.query<ExportDatabaseRow>(`
-        SELECT re.*, m.slug AS module_slug, m.is_active AS module_active
-        FROM REPORT_EXPORTS re
-        JOIN MODULES m ON m.id = re.module_id
-        WHERE re.id = $1 AND ($2::int IS NULL OR re.requested_by = $2)
-    `, [id, requesterId ?? null]);
-    const row = result.rows[0];
-    if (!row) throw new ReportExportError('REPORT_EXPORT_NOT_FOUND', 404, 'Report export not found.');
-    return row;
-}
+    const exported = await loadExportRows(input.moduleSlug, input.filters, input.scope);
+    const data = input.format === 'csv'
+        ? createCsv(exported.headers, exported.rows)
+        : createXlsx(input.moduleSlug, input.filters, exported.headers, exported.rows);
 
-export async function processReportExportJob(id: number): Promise<void> {
-    if (activeJobs.has(id)) return;
-    activeJobs.add(id);
-    let storedReference: string | undefined;
-    try {
-        const claim = await pool.query<ExportDatabaseRow>(`
-            UPDATE REPORT_EXPORTS re
-            SET status = 'running', started_at = CURRENT_TIMESTAMP, error_code = NULL
-            FROM MODULES m
-            WHERE re.id = $1 AND re.status = 'pending' AND m.id = re.module_id
-            RETURNING re.*, m.slug AS module_slug, m.is_active AS module_active
-        `, [id]);
-        const row = claim.rows[0];
-        if (!row) return;
-        try {
-            const filters = await currentExportAuthorized(row);
-            const exportData = await loadExportRows(row.module_slug, filters);
-            const buffer = row.format === 'csv'
-                ? createCsv(exportData.headers, exportData.rows)
-                : createXlsx(row.module_slug, filters, exportData.headers, exportData.rows);
-            const stored = await storage().write(row.format, buffer);
-            storedReference = stored.reference;
-            const completed = await pool.query(`
-                UPDATE REPORT_EXPORTS
-                SET status = 'completed', row_count = $2, storage_reference = $3,
-                    completed_at = CURRENT_TIMESTAMP,
-                    expires_at = CURRENT_TIMESTAMP + INTERVAL '${REPORT_EXPORT_RETENTION_HOURS} hours'
-                WHERE id = $1 AND status = 'running'
-            `, [id, exportData.rows.length, stored.reference]);
-            if (!completed.rowCount) {
-                await storage().remove(stored.reference).catch(() => undefined);
-                storedReference = undefined;
-                return;
-            }
-            await logExportAudit('REPORT_EXPORT_COMPLETED', row, { row_count: exportData.rows.length, status: 'completed' });
-        } catch (error: unknown) {
-            if (storedReference) await storage().remove(storedReference).catch(() => undefined);
-            const errorCode = error instanceof ReportExportError ? error.code : 'EXPORT_GENERATION_FAILED';
-            await pool.query(`
-                UPDATE REPORT_EXPORTS
-                SET status = 'failed', error_code = $2, completed_at = CURRENT_TIMESTAMP,
-                    row_count = NULL, storage_reference = NULL, expires_at = NULL
-                WHERE id = $1
-            `, [id, errorCode]);
-            await logExportAudit('REPORT_EXPORT_FAILED', row, { status: 'failed', error_code: errorCode });
-        }
-    } finally {
-        activeJobs.delete(id);
-    }
-}
-
-export function queueReportExport(id: number): void {
-    setImmediate(() => void processReportExportJob(id));
-}
-
-export async function getReportExportJob(id: number, requesterId: number): Promise<ReportExportJob> {
-    await expireReportExports();
-    const row = await fetchExport(id, requesterId);
-    await currentExportAuthorized(row);
-    return publicJob(row, true);
-}
-
-function verifyDownloadToken(token: string, row: ExportDatabaseRow): void {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error('JWT_SECRET is required.');
-    try {
-        const payload = jwt.verify(token, secret, { audience: 'report-export-download' }) as Record<string, unknown>;
-        if (payload.purpose !== 'report-export-download' || Number(payload.export_id) !== row.id || Number(payload.requested_by) !== row.requested_by) {
-            throw new Error('mismatch');
-        }
-    } catch {
-        throw new ReportExportError('INVALID_DOWNLOAD_TOKEN', 403, 'Download credential is invalid or expired.');
-    }
-}
-
-export async function downloadReportExport(id: number, requesterId: number, token: string): Promise<{ job: ReportExportJob; data: Buffer; filename: string; contentType: string }> {
-    await expireReportExports();
-    const row = await fetchExport(id, requesterId);
-    await currentExportAuthorized(row);
-    verifyDownloadToken(token, row);
-    if (row.status !== 'completed' || !row.storage_reference) throw new ReportExportError('EXPORT_NOT_READY', 409, 'Report export is not available for download.');
-    const data = await storage().read(row.storage_reference);
-    await logExportAudit('REPORT_EXPORT_DOWNLOADED', row, { status: 'completed', row_count: row.row_count });
     return {
-        job: publicJob(row),
         data,
-        filename: `${row.module_slug}-report-${row.id}.${row.format}`,
-        contentType: row.format === 'csv' ? 'text/csv; charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        filename: `${input.moduleSlug}-report-${input.filters.date_from}-to-${input.filters.date_to}.${input.format}`,
+        contentType: input.format === 'csv'
+            ? 'text/csv; charset=utf-8'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        rowCount: exported.rows.length,
     };
-}
-
-export async function deleteReportExport(id: number, requesterId: number): Promise<void> {
-    const row = await fetchExport(id, requesterId);
-    await currentExportAuthorized(row);
-    if (row.status === 'running') throw new ReportExportError('EXPORT_BUSY', 409, 'A running export cannot be deleted.');
-    if (row.storage_reference) await storage().remove(row.storage_reference);
-    await pool.query(`
-        UPDATE REPORT_EXPORTS
-        SET status = 'expired', storage_reference = NULL, expires_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-    `, [id]);
-    await logExportAudit('REPORT_EXPORT_DELETED', row, { previous_status: row.status });
-}
-
-export async function expireReportExports(now = new Date()): Promise<number> {
-    const candidates = await pool.query<ExportDatabaseRow>(`
-        SELECT re.*, m.slug AS module_slug, m.is_active AS module_active
-        FROM REPORT_EXPORTS re
-        JOIN MODULES m ON m.id = re.module_id
-        WHERE re.status = 'completed' AND re.expires_at IS NOT NULL AND re.expires_at <= $1
-        ORDER BY re.id
-        LIMIT 100
-    `, [now]);
-    let expired = 0;
-    for (const row of candidates.rows) {
-        try {
-            if (row.storage_reference) await storage().remove(row.storage_reference);
-            const update = await pool.query(`
-                UPDATE REPORT_EXPORTS
-                SET status = 'expired', storage_reference = NULL
-                WHERE id = $1 AND status = 'completed'
-            `, [row.id]);
-            if (update.rowCount) {
-                expired += 1;
-                await logExportAudit('REPORT_EXPORT_EXPIRED', row, { status: 'expired' });
-            }
-        } catch {
-            // Keep completed metadata so the next cleanup pass can retry removal.
-        }
-    }
-    return expired;
-}
-
-export async function recoverPendingReportExports(): Promise<void> {
-    await pool.query(`
-        UPDATE REPORT_EXPORTS
-        SET status = 'pending', started_at = NULL, error_code = NULL
-        WHERE status = 'running'
-          AND storage_reference IS NULL
-          AND started_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes'
-    `);
-    const pending = await pool.query<{ id: number }>('SELECT id FROM REPORT_EXPORTS WHERE status = \'pending\' ORDER BY id LIMIT 100');
-    for (const row of pending.rows) queueReportExport(row.id);
-}
-
-export function startReportExportMaintenance(): void {
-    if (maintenanceTimer) return;
-    storage();
-    void recoverPendingReportExports();
-    void expireReportExports();
-    maintenanceTimer = setInterval(() => void expireReportExports(), 15 * 60_000);
-    maintenanceTimer.unref();
-}
-
-export function stopReportExportMaintenanceForTests(): void {
-    if (maintenanceTimer) clearInterval(maintenanceTimer);
-    maintenanceTimer = undefined;
 }

@@ -3,7 +3,6 @@ import type { AddressInfo } from 'node:net';
 import jwt from 'jsonwebtoken';
 import pool from '../database/db.js';
 import { app } from '../index.js';
-import { stopReportExportMaintenanceForTests } from '../services/report-export.service.js';
 import { requireVerifiedTestDatabase } from '../utils/verifyTestDatabase.js';
 
 await requireVerifiedTestDatabase(pool);
@@ -246,7 +245,6 @@ try {
     console.log('Phase 3 Milestone 6 province-wide superuser management checks passed.');
 } finally {
     if (server) await new Promise<void>((resolve, reject) => server!.close(error => error ? reject(error) : resolve()));
-    stopReportExportMaintenanceForTests();
     if (userIds.length) await pool.query('DELETE FROM AUDIT_EVENTS WHERE actor_id = ANY($1::int[])', [userIds]);
     for (const [table, ids] of Object.entries(clinicalIds)) {
         if (ids.length) await pool.query(`DELETE FROM ${table} WHERE id = ANY($1::int[])`, [ids]);
