@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, ChevronRight, UserPlus, X, Filter, Loader2 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable';
 import type { Student, School } from '../../types';
-import { getStudents, getMunicipalities, getBarangays, getSchools } from '../../services/api';
+import { getStudents, getAllLookupSchools } from '../../services/api';
 import RegistrationForm from '../RegistrationForm';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasModulePermission } from '../../lib/access';
@@ -26,24 +26,15 @@ const StudentRegistry: React.FC = () => {
     const [availableSchools, setAvailableSchools] = useState<School[]>([]);
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
-    // Fetch schools for filter dropdown
+    // Fetch the complete authorized school list. Superusers receive every active
+    // Aklan school; school staff receive only their active assignments.
     useEffect(() => {
         let isMounted = true;
         const loadFilterSchools = async () => {
             try {
-                const municipalities = await getMunicipalities();
-                const allSchools: School[] = [];
-                for (const mun of municipalities.slice(0, 5)) {
-                    const bgys = await getBarangays(mun.id);
-                    for (const bgy of bgys.slice(0, 3)) {
-                        const schs = await getSchools(bgy.id);
-                        allSchools.push(...schs);
-                    }
-                }
+                const allSchools = await getAllLookupSchools();
                 if (isMounted) {
-                    // Deduplicate schools by id
-                    const uniqueSchools = Array.from(new Map(allSchools.map(s => [s.id, s])).values());
-                    setAvailableSchools(uniqueSchools);
+                    setAvailableSchools(allSchools);
                 }
             } catch (err) {
                 console.error('Failed to load schools for filter:', err);

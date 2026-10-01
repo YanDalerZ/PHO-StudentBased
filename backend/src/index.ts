@@ -8,8 +8,22 @@ import pool from './database/db.js';
 
 import AllRoutes from './routes/AllRoutes.js';
 import { publicRegistrationPageHeaders } from './middleware/publicRegistrationSecurity.js';
+import { startReportExportMaintenance } from './services/report-export.service.js';
 
 const app: Application = express();
+
+const trustProxyHopsRaw = process.env.TRUST_PROXY_HOPS?.trim();
+const trustProxyHops = trustProxyHopsRaw
+    ? Number(trustProxyHopsRaw)
+    : process.env.NODE_ENV === 'production' ? 1 : 0;
+if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 10) {
+    throw new Error('TRUST_PROXY_HOPS must be an integer between 0 and 10.');
+}
+if (trustProxyHops > 0) {
+    // Render terminates HTTPS at a reverse proxy. Trust only the configured
+    // number of hops so req.ip reflects the client used by QR rate limiting.
+    app.set('trust proxy', trustProxyHops);
+}
 
 if (!process.env.JWT_SECRET) {
     console.error('FATAL ERROR: JWT_SECRET is not defined in environment variables.');
@@ -49,6 +63,7 @@ app.use(express.json({ limit: '256kb' }));
 
 const apiRouter = express.Router();
 apiRouter.use('/', AllRoutes.RegistrationRoutes);
+apiRouter.use('/', AllRoutes.ReportRoutes);
 apiRouter.use('/students', AllRoutes.StudentRoutes);
 apiRouter.use('/auth', AllRoutes.AuthRoutes);
 apiRouter.use('/lookup', AllRoutes.LookupRoutes);
@@ -90,6 +105,7 @@ export { app };
 
 // Start Server and Verify PostgreSQL Connection
 if (process.env.NODE_ENV !== 'test') {
+    startReportExportMaintenance();
     app.listen(PORT, '0.0.0.0', async () => {
         try {
             const result = await pool.query('SELECT NOW() as current_time, current_setting(\'TIMEZONE\') as tz');

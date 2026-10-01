@@ -80,6 +80,44 @@ export const requirePermission = (moduleSlug: ModuleSlug, action: ActionGrant) =
     };
 };
 
+const approvedModuleSlugs = new Set<ModuleSlug>([
+    'patient-info',
+    'oral-health',
+    'deworming',
+    'immunization',
+    'vital-signs',
+]);
+
+/** Enforces an action grant when the approved module slug is supplied by a route parameter. */
+export const requireParamModulePermission = (action: ActionGrant, parameter = 'moduleSlug') => {
+    return (req: Request, res: Response, next: NextFunction) => {
+        if (!req.user || !req.effectiveAccess) {
+            return res.status(401).json({ message: 'Authentication and effective access context required' });
+        }
+
+        const rawSlug = req.params[parameter];
+        const moduleSlug = typeof rawSlug === 'string' ? rawSlug : '';
+        if (!approvedModuleSlugs.has(moduleSlug as ModuleSlug)) {
+            return res.status(404).json({
+                error: { code: 'REPORT_MODULE_NOT_FOUND', message: 'Unsupported report module.' },
+            });
+        }
+
+        const typedSlug = moduleSlug as ModuleSlug;
+        if (!req.effectiveAccess.modulePermissions[typedSlug]?.[action]) {
+            const message = `Access denied: Missing action grant '${action}' for ${typedSlug}`;
+            auditDenial(req, {
+                reason_code: 'missing_action_grant',
+                module_slug: typedSlug,
+                action,
+            });
+            return res.status(403).json({ error: { code: 'FORBIDDEN', message } });
+        }
+
+        next();
+    };
+};
+
 /**
  * Ensures the requested school_id matches the user's active school assignments.
  * Superusers with no specific school assignments have province-wide access (implicit bypass).

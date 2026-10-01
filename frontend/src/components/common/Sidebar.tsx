@@ -16,9 +16,11 @@ import {
   ChevronRight,
   ChevronLeft,
   QrCode,
-  ClipboardCheck
+  ClipboardCheck,
+  BarChart3,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { ModuleSlug } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 import { hasModulePermission } from '../../lib/access';
@@ -61,6 +63,18 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
         if (hasModulePermission(effectiveAccess, 'patient-info', 'can_approve_registration')) {
           staffLinks.push({ name: 'Review Queue', path: '/teacher/registration-reviews', icon: ClipboardCheck });
         }
+        const reportModules: Array<[ModuleSlug, string]> = [
+          ['patient-info', 'Patient Report'],
+          ['oral-health', 'Oral Health Report'],
+          ['deworming', 'Deworming Report'],
+          ['immunization', 'Immunization Report'],
+          ['vital-signs', 'Vital Signs Report'],
+        ];
+        reportModules.forEach(([module, name]) => {
+          if (hasModulePermission(effectiveAccess, module, 'can_report')) {
+            staffLinks.push({ name, path: `/teacher/reports/${module}`, icon: BarChart3 });
+          }
+        });
         return staffLinks;
       }
       case 'superuser': {
@@ -76,6 +90,18 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
         if (hasModulePermission(effectiveAccess, 'deworming', 'can_view')) superLinks.push({ name: 'Deworming', path: '/superuser/deworming', icon: Droplets });
         if (hasModulePermission(effectiveAccess, 'immunization', 'can_view')) superLinks.push({ name: 'Immunization', path: '/superuser/immunization', icon: Syringe });
         if (hasModulePermission(effectiveAccess, 'vital-signs', 'can_view')) superLinks.push({ name: 'Vitals', path: '/superuser/vital-signs', icon: Activity });
+        const reportModules: Array<[ModuleSlug, string]> = [
+          ['patient-info', 'Patient Report'],
+          ['oral-health', 'Oral Health Report'],
+          ['deworming', 'Deworming Report'],
+          ['immunization', 'Immunization Report'],
+          ['vital-signs', 'Vital Signs Report'],
+        ];
+        reportModules.forEach(([module, name]) => {
+          if (hasModulePermission(effectiveAccess, module, 'can_report')) {
+            superLinks.push({ name, path: `/superuser/reports/${module}`, icon: BarChart3 });
+          }
+        });
         return superLinks;
       }
       case 'admin':

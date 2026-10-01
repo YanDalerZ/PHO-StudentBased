@@ -1,1 +1,20 @@
 @import 'tailwindcss';
+
+@media print {
+  @page { margin: 12mm; size: A4 landscape; }
+  body { background: white !important; }
+  body * { visibility: hidden; }
+  .report-sheet, .report-sheet * { visibility: visible; }
+  .report-sheet {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: #0f172a !important;
+  }
+  .report-sheet * { color: #0f172a !important; }
+  .report-controls { display: none !important; }
+  .break-inside-avoid { break-inside: avoid; }
+}

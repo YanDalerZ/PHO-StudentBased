@@ -17,9 +17,10 @@ export const canWriteModuleRecord = (
 export const defaultPortalRoute = (user: User, access: EffectiveAccess | null): string => {
   if (user.portal_role === 'admin') return '/admin/dashboard';
   if (user.portal_role === 'school_staff') {
-    return hasModulePermission(access, 'patient-info', 'can_view')
-      ? '/teacher/dashboard'
-      : '/forbidden';
+    if (hasModulePermission(access, 'patient-info', 'can_view')) return '/teacher/dashboard';
+    const reportModule = (['patient-info', 'oral-health', 'deworming', 'immunization', 'vital-signs'] as ModuleSlug[])
+      .find(module => hasModulePermission(access, module, 'can_report'));
+    return reportModule ? `/teacher/reports/${reportModule}` : '/forbidden';
   }
 
   const routes: Array<[ModuleSlug, string]> = [
@@ -29,5 +30,8 @@ export const defaultPortalRoute = (user: User, access: EffectiveAccess | null): 
     ['immunization', '/superuser/immunization'],
     ['vital-signs', '/superuser/vital-signs'],
   ];
-  return routes.find(([module]) => hasModulePermission(access, module, 'can_view'))?.[1] ?? '/forbidden';
+  const viewRoute = routes.find(([module]) => hasModulePermission(access, module, 'can_view'))?.[1];
+  if (viewRoute) return viewRoute;
+  const reportModule = routes.find(([module]) => hasModulePermission(access, module, 'can_report'))?.[0];
+  return reportModule ? `/superuser/reports/${reportModule}` : '/forbidden';
 };

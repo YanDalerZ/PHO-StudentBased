@@ -29,12 +29,15 @@ export function formatSafeDatabaseTarget(identity: SafeDatabaseIdentity): string
     return `${identity.serverAddress ?? 'local-socket'}:${identity.serverPort ?? 'unknown'}/${identity.database}`;
 }
 
-export function requireProductionMigrationAcknowledgement(env: NodeJS.ProcessEnv = process.env): void {
+export function requireProductionMigrationAcknowledgement(
+    expectedAcknowledgement = 'APPLY_PHASE1_V5',
+    env: NodeJS.ProcessEnv = process.env,
+): void {
     if (env.NODE_ENV !== 'production') {
         throw new Error('Production migration requires NODE_ENV=production.');
     }
-    if (env.PHO_PRODUCTION_MIGRATION_ACK !== 'APPLY_PHASE1_V5') {
-        throw new Error('Set PHO_PRODUCTION_MIGRATION_ACK=APPLY_PHASE1_V5 for this explicit migration invocation.');
+    if (env.PHO_PRODUCTION_MIGRATION_ACK !== expectedAcknowledgement) {
+        throw new Error(`Set PHO_PRODUCTION_MIGRATION_ACK=${expectedAcknowledgement} for this explicit migration invocation.`);
     }
     if (!env.DATABASE_URL) throw new Error('DATABASE_URL is required.');
 }
