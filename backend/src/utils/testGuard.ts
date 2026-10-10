@@ -56,7 +56,7 @@ export function getDisposableDatabasePolicy(env: NodeJS.ProcessEnv = process.env
         throw new Error('DATABASE_URL must use the postgres or postgresql protocol.');
     }
 
-    const configuredHost = parsed.hostname.toLowerCase();
+    const configuredHost = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     const configuredPort = Number(parsed.port || '5432');
     const configuredDatabase = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
     const configuredUser = decodeURIComponent(parsed.username);

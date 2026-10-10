@@ -23,6 +23,11 @@ function expectRejectedEnvironment(overrides: NodeJS.ProcessEnv, message: string
 
 const policy = getDisposableDatabasePolicy(validEnvironment);
 assert.deepEqual(policy, { host: 'localhost', port: 5432, database: 'pho_test', user: 'postgres' });
+assert.deepEqual(getDisposableDatabasePolicy({
+    ...validEnvironment,
+    PHO_EXPECTED_DB_HOST: '::1',
+    DATABASE_URL: 'postgres://postgres:password@[::1]:5432/pho_test',
+}), { host: '::1', port: 5432, database: 'pho_test', user: 'postgres' });
 
 expectRejectedEnvironment(
     { DATABASE_URL: 'postgres://localhost:password@database.example:5432/pho_test' },

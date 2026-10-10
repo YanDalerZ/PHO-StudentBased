@@ -8,6 +8,13 @@
     "dev": "tsx watch src/index.ts",
     "build": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && tsc",
     "verify:shared:database": "npm run build && node dist/scripts/verify_shared_database.js",
+    "test:startup-readiness": "npm run build && node dist/scripts/test_startup_readiness.js",
+    "test:readiness-endpoint": "npm run build && node dist/scripts/test_readiness_endpoint.js",
+    "preflight:production:phase4b": "npm run build && node dist/scripts/preflight_phase4b_production.js",
+    "migrate:production:retention": "npm run build && node dist/scripts/migrate_retention_production.js",
+    "retention:preview": "npm run build && node dist/scripts/run_retention.js",
+    "retention:apply": "npm run build && node dist/scripts/run_retention.js --apply",
+    "test:retention": "npm run build && node dist/scripts/test_retention.js",
     "test:phase1:safety": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/test_phase1_database_safety.js",
     "inspect:phase1:database": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/inspect_phase1_database.js",
     "migrate:phase1:reconcile": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist', {recursive:true, force:true})\" && node node_modules/typescript/bin/tsc && node dist/scripts/run_phase1_reconciliation.js",
@@ -50,7 +57,7 @@
     "migrate:production:phase1": "npm run build && node dist/scripts/migrate_phase1_production.js",
     "start": "node dist/index.js",
     "go": "concurrently \"npm run dev\" \"cd ../frontend && npm run dev\"",
-    "render-build": "npm install && npm run build && cd ../frontend && npm install && npm run build"
+    "render-build": "npm ci --include=dev && npm run build && cd ../frontend && npm ci --include=dev && npm run build"
   },
   "keywords": [],
   "author": "",
