@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
+import { inflateRawSync } from 'node:zlib';
 import jwt from 'jsonwebtoken';
 import pool from '../database/db.js';
 import { app } from '../index.js';
@@ -60,6 +61,22 @@ async function request(base: string, path: string, authToken?: string): Promise<
     return { status: response.status, body: await response.json() as Record<string, unknown> };
 }
 
+function zipEntry(zip: Buffer, name: string): string {
+    let offset = 0;
+    while (offset + 30 <= zip.length && zip.readUInt32LE(offset) === 0x04034b50) {
+        const compressedSize = zip.readUInt32LE(offset + 18);
+        const nameLength = zip.readUInt16LE(offset + 26);
+        const extraLength = zip.readUInt16LE(offset + 28);
+        const path = zip.subarray(offset + 30, offset + 30 + nameLength).toString('utf8');
+        const start = offset + 30 + nameLength + extraLength;
+        const end = start + compressedSize;
+        assert.ok(end <= zip.length, 'ZIP entry must fit inside workbook');
+        if (path === name) return inflateRawSync(zip.subarray(start, end)).toString('utf8');
+        offset = end;
+    }
+    throw new Error(`Missing XLSX entry: ${name}`);
+}
+
 try {
     const protectedRows = protectBreakdown([
         { key: 'small', label: 'Small', count: 3 },
@@ -115,8 +132,8 @@ try {
         await pool.query('UPDATE MODULES SET is_active = TRUE WHERE id = $1', [module.id]);
         await pool.query(`
             INSERT INTO USER_MODULE_PERMISSIONS
-                (user_id, module_id, can_view, can_report, granted_by)
-            VALUES ($1, $2, TRUE, TRUE, $3)
+                (user_id, module_id, can_view, can_report, can_export, granted_by)
+            VALUES ($1, $2, TRUE, TRUE, TRUE, $3)
         `, [superuser.id, module.id, admin.id]);
         if (module.slug === 'patient-info') {
             for (const userId of [staff.id, unassignedStaff.id]) {
@@ -205,6 +222,61 @@ try {
     assert.equal(dewormingCoverage.status, 'available');
     assert.equal(dewormingCoverage.target, 30);
     assert.equal(dewormingCoverage.accomplishment_percentage, 6.7);
+
+    // One deterministic five-module fixture. Reconcile independent fixture SQL,
+    // previews, print-audit authorization, and both direct download formats.
+    // The explicit month excludes unrelated historical rows; school_id fixes scope.
+    const reportFilters = { date_from: '2026-08-01', date_to: '2026-08-31', school_id: schoolIds[0] };
+    const reportQuery = `?date_from=${reportFilters.date_from}&date_to=${reportFilters.date_to}&school_id=${schoolIds[0]}`;
+    const reportCases = [
+        { slug: 'patient-info', table: 'PATIENT_INFO', metric: 'official_registration_students', studentColumn: 'student_id', dateColumn: 'created_at' },
+        { slug: 'oral-health', table: 'ORAL_HEALTH', metric: 'examinations', studentColumn: 'student_id', dateColumn: 'date_examined' },
+        { slug: 'deworming', table: 'DEWORMING', metric: 'accomplished_students', studentColumn: 'student_id', dateColumn: 'date_dewormed' },
+        { slug: 'immunization', table: 'IMMUNIZATION', metric: 'records', studentColumn: 'student_id', dateColumn: 'immunization_date' },
+        { slug: 'vital-signs', table: 'VITAL_SIGNS', metric: 'screenings', studentColumn: 'student_id', dateColumn: 'date_checked' },
+    ] as const;
+    for (const item of reportCases) {
+        const dbRows = await pool.query<{ count: number }>(
+            `SELECT COUNT(*)::int AS count FROM ${item.table} WHERE ${item.studentColumn} = $1 AND ${item.dateColumn}::date BETWEEN $2::date AND $3::date`,
+            [assignedStudent, reportFilters.date_from, reportFilters.date_to],
+        );
+        const expected = dbRows.rows[0]?.count;
+        assert.equal(expected, 1, `${item.slug} fixture should have one source record`);
+
+        const preview = await request(base, `/api/v1/reports/${item.slug}${reportQuery}`, superuser.token);
+        assert.equal(preview.status, 200, `${item.slug} preview`);
+        const summary = ((preview.body.data as Record<string, unknown>).summary as Record<string, unknown>);
+        assert.equal(summary[item.metric], expected, `${item.slug} preview vs database`);
+
+        const print = await fetch(`${base}/api/v1/reports/${item.slug}/print-events`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${superuser.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(reportFilters),
+        });
+        assert.equal(print.status, 201, `${item.slug} print-audit authorization`);
+
+        for (const format of ['csv', 'xlsx'] as const) {
+            const response = await fetch(`${base}/api/v1/reports/${item.slug}/exports`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${superuser.token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ format, filters: reportFilters }),
+            });
+            assert.equal(response.status, 200, `${item.slug} ${format} download`);
+            const file = Buffer.from(await response.arrayBuffer());
+            if (format === 'csv') {
+                const lines = file.toString('utf8').replace(/^\ufeff/, '').trimEnd().split('\r\n');
+                assert.equal(lines.length - 1, expected, `${item.slug} CSV detail rows vs database`);
+                assert.ok(lines[1]?.includes(`P3M3-${stamp}-Assigned`));
+            } else {
+                const detail = zipEntry(file, 'xl/worksheets/sheet2.xml');
+                const summarySheet = zipEntry(file, 'xl/worksheets/sheet1.xml');
+                assert.equal((detail.match(/<row r="\d+">/g) ?? []).length - 1, expected, `${item.slug} XLSX detail rows vs database`);
+                assert.ok(detail.includes(`P3M3-${stamp}-Assigned`));
+                assert.match(summarySheet, /<row r="5"><c r="A5"[^>]*>.*Row count.*<\/c><c r="B5"><v>1<\/v><\/c><\/row>/);
+            }
+        }
+        console.log(`${item.slug}: DB ${expected}, preview ${summary[item.metric]}, print audit 201, CSV ${expected}, XLSX ${expected}`);
+    }
 
     const audit = await pool.query<{ count: number }>(`
         SELECT COUNT(*)::int AS count FROM AUDIT_EVENTS

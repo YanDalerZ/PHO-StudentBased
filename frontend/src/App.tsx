@@ -33,6 +33,8 @@ import UserManagement from './pages/admin/UserManagement';
 import ModuleManagement from './pages/admin/ModuleManagement';
 import SchoolManagement from './pages/admin/SchoolManagement';
 import SystemSettings from './pages/admin/SystemSettings';
+import InvitationGovernance from './pages/admin/InvitationGovernance';
+import AuditLogBrowser from './pages/admin/AuditLogBrowser';
 import AccessDenied from './pages/AccessDenied';
 import PublicRegistration from './pages/public/PublicRegistration';
 import InvitationManagement from './pages/teacher/InvitationManagement';
@@ -267,6 +269,8 @@ const App: React.FC = () => {
               <Route path="users" element={<UserManagement />} />
               <Route path="modules" element={<ModuleManagement />} />
               <Route path="schools" element={<SchoolManagement />} />
+              <Route path="invitations" element={<InvitationGovernance />} />
+              <Route path="audit-logs" element={<AuditLogBrowser />} />
               <Route path="settings" element={<SystemSettings />} />
             </Route>
 

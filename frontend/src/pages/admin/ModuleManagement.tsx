@@ -611,7 +611,7 @@ const ModuleManagement: React.FC = () => {
                 Module Active Status
               </div>
               <div className="text-xs text-slate-500 dark:text-slate-400">
-                Inactive modules are hidden from teacher data entry.
+                Inactive modules are read-only for users with view access.
               </div>
             </div>
             <button
@@ -632,6 +632,11 @@ const ModuleManagement: React.FC = () => {
               />
             </button>
           </div>
+          {editingModule?.is_active && !editFormData.is_active && (
+            <p role="alert" className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+              Deactivation blocks new records and exports immediately{editingModule.slug === 'patient-info' ? ', including registration decisions' : ''}. Existing records remain readable to users with view permission; grants are not removed.
+            </p>
+          )}
 
           {/* Modal Actions */}
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-white/10">
@@ -674,12 +679,12 @@ const ModuleManagement: React.FC = () => {
               {confirmToggleModule?.is_active ? (
                 <>
                   Are you sure you want to deactivate{' '}
-                  <span className="font-semibold">{confirmToggleModule?.name}</span>? When deactivated, teachers and school encoders across the province will not be able to enter new records or view forms for this module.
+                  <span className="font-semibold">{confirmToggleModule?.name}</span>? New records and exports will stop{confirmToggleModule?.slug === 'patient-info' ? ', including registration decisions' : ''}. Existing records remain readable to users with view permission.
                 </>
               ) : (
                 <>
                   Are you sure you want to reactivate{' '}
-                  <span className="font-semibold">{confirmToggleModule?.name}</span>? This will immediately restore data entry and reporting capabilities across all schools in Aklan.
+                  <span className="font-semibold">{confirmToggleModule?.name}</span>? This restores permitted data entry and exports{confirmToggleModule?.slug === 'patient-info' ? ', including registration decisions' : ''}. Existing user grants remain unchanged.
                 </>
               )}
             </div>

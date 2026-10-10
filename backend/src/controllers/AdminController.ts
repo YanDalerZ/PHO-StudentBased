@@ -28,15 +28,21 @@ export function handleControllerError(error: unknown, res: Response, defaultMess
     return;
   }
 
-  console.error(defaultMessage, error);
+  const safeFailure = error && typeof error === 'object'
+    ? { name: String(Reflect.get(error, 'name') ?? 'Error'), code: Reflect.get(error, 'code') ?? null }
+    : { name: 'Error', code: null };
+  console.error(defaultMessage, safeFailure);
   res.status(500).json({ error: defaultMessage });
 }
 
 export function parseIdParam(req: Request, paramName = 'id'): number | null {
   const raw = req.params[paramName];
   const paramStr = Array.isArray(raw) ? raw[0] : raw;
-  const id = parseInt(paramStr ?? '', 10);
-  if (isNaN(id) || id <= 0) {
+  if (!paramStr || !/^\d+$/.test(paramStr)) {
+    return null;
+  }
+  const id = Number(paramStr);
+  if (!Number.isSafeInteger(id) || id <= 0) {
     return null;
   }
   return id;
@@ -90,6 +96,7 @@ const createUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.'),
   password: z.string().min(8, 'Password must be at least 8 characters long.'),
   portal_role: z.enum(['school_staff', 'superuser']),
+  job_title: z.string().trim().min(1, 'Job title is required.').max(100),
   first_name: z.string().trim().min(1, 'First name is required.'),
   last_name: z.string().trim().min(1, 'Last name is required.'),
   contact_no: z.string().trim().optional().nullable(),
@@ -97,15 +104,17 @@ const createUserSchema = z.object({
 
 export const createUser = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
     const validated = createUserSchema.parse(req.body);
     const user = await adminService.createUser({
       email: validated.email,
       password: validated.password,
       role: validated.portal_role,
+      job_title: validated.job_title,
       first_name: validated.first_name,
       last_name: validated.last_name,
       contact_no: validated.contact_no,
-    });
+    }, req.user.id, req.ip);
     res.status(201).json({ data: user });
   } catch (error) {
     handleControllerError(error, res, 'Failed to create user account.');
@@ -116,6 +125,7 @@ const updateUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.').optional(),
   password: z.string().min(8, 'Password must be at least 8 characters long.').optional(),
   portal_role: z.enum(['school_staff', 'superuser']).optional(),
+  job_title: z.string().trim().min(1, 'Job title is required.').max(100).optional(),
 
   first_name: z.string().trim().min(1).optional(),
   last_name: z.string().trim().min(1).optional(),
@@ -125,6 +135,7 @@ const updateUserSchema = z.object({
 
 export const updateUser = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
     const id = parseIdParam(req);
     if (!id) {
       res.status(400).json({ error: 'Valid positive user ID is required.' });
@@ -136,11 +147,12 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
       email: validated.email,
       password: validated.password,
       role: validated.portal_role,
+      job_title: validated.job_title,
       first_name: validated.first_name,
       last_name: validated.last_name,
       contact_no: validated.contact_no,
       is_active: validated.is_active,
-    });
+    }, req.user.id, req.ip);
     res.status(200).json({ data: user });
   } catch (error) {
     handleControllerError(error, res, 'Failed to update user profile.');
@@ -158,6 +170,7 @@ const updateUserStatusSchema = z.object({
 
 export const updateUserStatus = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
     const id = parseIdParam(req);
     if (!id) {
       res.status(400).json({ error: 'Valid positive user ID is required.' });
@@ -169,7 +182,7 @@ export const updateUserStatus = async (req: Request, res: Response): Promise<voi
       is_active: validated.is_active,
       action: validated.action,
       unlock: validated.unlock,
-    });
+    }, req.user.id, req.ip);
     res.status(200).json({ data: user });
   } catch (error) {
     handleControllerError(error, res, 'Failed to update user status.');
@@ -189,51 +202,20 @@ export const getModules = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-const approvedModuleSlugs = [
-  'patient-info',
-  'oral-health',
-  'deworming',
-  'vital-signs',
-  'immunization',
-] as const;
-
-const createModuleSchema = z.object({
-  name: z.string().trim().min(1, 'Module name is required.'),
-  slug: z.enum(['patient-info', 'oral-health', 'deworming', 'vital-signs', 'immunization']),
-  description: z.string().trim().optional().nullable(),
-  icon: z.string().trim().optional().nullable(),
-  is_active: z.boolean().optional().default(true),
-  sort_order: z.number().int().min(0).optional().default(0),
-});
-
-export const createModule = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const validated = createModuleSchema.parse(req.body);
-    const newModule = await adminService.createModule({
-      name: validated.name,
-      slug: validated.slug,
-      description: validated.description,
-      icon: validated.icon,
-      is_active: validated.is_active,
-      sort_order: validated.sort_order,
-    });
-    res.status(201).json({ data: newModule });
-  } catch (error) {
-    handleControllerError(error, res, 'Failed to create module.');
-  }
+export const createModule = async (_req: Request, res: Response): Promise<void> => {
+  res.status(409).json({ error: 'The five-module catalog is fixed; modules cannot be created through this API.' });
 };
 
 const updateModuleSchema = z.object({
-  name: z.string().trim().min(1).optional(),
-  slug: z.enum(['patient-info', 'oral-health', 'deworming', 'vital-signs', 'immunization']).optional(),
-  description: z.string().trim().optional().nullable(),
-  icon: z.string().trim().optional().nullable(),
+  description: z.string().trim().max(1000).optional().nullable(),
+  icon: z.enum(['FileText', 'Heart', 'Activity', 'Droplets', 'Syringe', 'HeartPulse']).optional().nullable(),
   is_active: z.boolean().optional(),
   sort_order: z.number().int().min(0).optional(),
-});
+}).strict();
 
 export const updateModule = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
     const id = parseIdParam(req);
     if (!id) {
       res.status(400).json({ error: 'Valid positive module ID is required.' });
@@ -242,13 +224,11 @@ export const updateModule = async (req: Request, res: Response): Promise<void> =
 
     const validated = updateModuleSchema.parse(req.body);
     const updated = await adminService.updateModule(id, {
-      name: validated.name,
-      slug: validated.slug,
       description: validated.description,
       icon: validated.icon,
       is_active: validated.is_active,
       sort_order: validated.sort_order,
-    });
+    }, req.user.id, req.ip);
     res.status(200).json({ data: updated });
   } catch (error) {
     handleControllerError(error, res, 'Failed to update module.');
@@ -285,16 +265,17 @@ export const getSchools = async (req: Request, res: Response): Promise<void> => 
 };
 
 const createSchoolSchema = z.object({
-  name: z.string().trim().min(1, 'School name is required.'),
+  name: z.string().trim().min(1, 'School name is required.').max(255),
   address: z.string().trim().optional().nullable(),
   barangay_id: z.number().int().positive('A valid barangay is required.'),
   municipality_id: z.number().int().positive().optional().nullable(),
-  district: z.string().trim().optional().nullable(),
+  district: z.string().trim().max(100).optional().nullable(),
   is_active: z.boolean().optional().default(true),
 });
 
 export const createSchool = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
     const validated = createSchoolSchema.parse(req.body);
     const school = await adminService.createSchool({
       name: validated.name,
@@ -303,7 +284,7 @@ export const createSchool = async (req: Request, res: Response): Promise<void> =
       municipality_id: validated.municipality_id,
       district: validated.district,
       is_active: validated.is_active,
-    });
+    }, req.user.id, req.ip);
     res.status(201).json({ data: school });
   } catch (error) {
     handleControllerError(error, res, 'Failed to create school.');
@@ -311,16 +292,17 @@ export const createSchool = async (req: Request, res: Response): Promise<void> =
 };
 
 const updateSchoolSchema = z.object({
-  name: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   address: z.string().trim().optional().nullable(),
   barangay_id: z.number().int().positive().optional(),
   municipality_id: z.number().int().positive().optional().nullable(),
-  district: z.string().trim().optional().nullable(),
+  district: z.string().trim().max(100).optional().nullable(),
   is_active: z.boolean().optional(),
 });
 
 export const updateSchool = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
     const id = parseIdParam(req);
     if (!id) {
       res.status(400).json({ error: 'Valid positive school ID is required.' });
@@ -335,7 +317,7 @@ export const updateSchool = async (req: Request, res: Response): Promise<void> =
       municipality_id: validated.municipality_id,
       district: validated.district,
       is_active: validated.is_active,
-    });
+    }, req.user.id, req.ip);
     res.status(200).json({ data: school });
   } catch (error) {
     handleControllerError(error, res, 'Failed to update school.');

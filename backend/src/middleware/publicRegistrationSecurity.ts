@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
-import { readPublicRegistrationPolicy } from '../config/publicRegistration.js';
+import { loadInvitationPolicy } from '../config/publicRegistration.js';
 import { publicRegistrationPayloadSchema } from '../types/registration.types.js';
 
-interface Bucket { count: number; resetAt: number }
+interface Bucket { count: number; resetAt: number; windowMs: number }
 const buckets = new Map<string, Bucket>();
 
 function unavailable(res: Response): void {
@@ -32,8 +32,8 @@ export function validatePublicRegistrationInput(req: Request, res: Response, nex
 
 function consume(key: string, limit: number, windowMs: number, now: number): boolean {
     const bucket = buckets.get(key);
-    if (!bucket || bucket.resetAt <= now) {
-        buckets.set(key, { count: 1, resetAt: now + windowMs });
+    if (!bucket || bucket.resetAt <= now || bucket.windowMs !== windowMs) {
+        buckets.set(key, { count: 1, resetAt: now + windowMs, windowMs });
         return true;
     }
     if (bucket.count >= limit) return false;
@@ -66,23 +66,28 @@ export function publicRegistrationPageHeaders(_req: Request, res: Response, next
     next();
 }
 
-export function requirePublicRegistrationPolicy(_req: Request, res: Response, next: NextFunction): void {
+export async function requirePublicRegistrationPolicy(_req: Request, res: Response, next: NextFunction): Promise<void> {
     const rawToken = Array.isArray(_req.params.token) ? _req.params.token[0] : _req.params.token;
     if (!rawToken || !/^[a-f0-9]{32}$/i.test(rawToken)) {
         next();
         return;
     }
-    if (!readPublicRegistrationPolicy()) return unavailable(res);
-    next();
+    try {
+        if (!await loadInvitationPolicy()) return unavailable(res);
+        next();
+    } catch {
+        unavailable(res);
+    }
 }
 
-export function protectPublicRegistrationSubmission(req: Request, res: Response, next: NextFunction): void {
+export async function protectPublicRegistrationSubmission(req: Request, res: Response, next: NextFunction): Promise<void> {
     const rawToken = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
     if (!rawToken || !/^[a-f0-9]{32}$/i.test(rawToken)) {
         next();
         return;
     }
-    const policy = readPublicRegistrationPolicy();
+    let policy;
+    try { policy = await loadInvitationPolicy(); } catch { return unavailable(res); }
     if (!policy) return unavailable(res);
 
     const contentLength = Number(req.header('content-length') ?? 0);

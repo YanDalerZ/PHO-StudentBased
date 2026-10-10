@@ -735,7 +735,7 @@ export const SchoolManagement: React.FC = () => {
                   Active Enrollment Status
                 </span>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Allow teachers to register and enroll students under this school.
+                  Allow school staff to register and enroll students under this school.
                 </p>
               </div>
               <input
@@ -747,6 +747,11 @@ export const SchoolManagement: React.FC = () => {
               <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500 relative shrink-0 ml-4"></div>
             </label>
           </div>
+          {editingSchool?.is_active && !formData.is_active && (
+            <p role="alert" className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+              Deactivation revokes active school assignments and QR invitations. Existing student and submission records stay preserved. Reactivation requires new assignments and invitations.
+            </p>
+          )}
 
           {/* Modal Actions */}
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -802,8 +807,8 @@ export const SchoolManagement: React.FC = () => {
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                 {schoolToToggle?.is_active
-                  ? 'Deactivating this school will remove it from the teacher registration lookup cascade. Teachers will not be able to select this school for new student enrollments. Existing enrolled student records will remain preserved.'
-                  : 'Activating this school will restore it to the teacher registration lookup cascade. Teachers will be able to select it for new student enrollments.'}
+                  ? 'Deactivation revokes active school assignments and QR invitations. New registrations stop; existing student and submission records remain. Reactivation requires new assignments and invitations.'
+                  : 'Activation restores this school to the lookup. Assignments and QR invitations are not restored automatically.'}
               </p>
             </div>
           </div>

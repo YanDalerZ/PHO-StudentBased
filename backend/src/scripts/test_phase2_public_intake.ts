@@ -103,6 +103,7 @@ try {
         await pool.query('DELETE FROM REGISTRATION_INVITATIONS WHERE id = $1', [invitationId]);
     }
     if (userId) {
+        await pool.query('DELETE FROM AUDIT_EVENTS WHERE actor_id = $1', [userId]);
         await pool.query('DELETE FROM USER_MODULE_PERMISSIONS WHERE user_id = $1', [userId]);
         await pool.query('DELETE FROM USER_SCHOOL_ASSIGNMENTS WHERE user_id = $1', [userId]);
         await pool.query('DELETE FROM USERS WHERE id = $1', [userId]);

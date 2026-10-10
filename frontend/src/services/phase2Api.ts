@@ -110,7 +110,10 @@ export interface InvitationSchool {
 }
 
 export interface InvitationListResponse extends PaginatedResponse<RegistrationInvitation> {
-    meta: PaginatedResponse<RegistrationInvitation>['meta'] & { availableSchools: InvitationSchool[] };
+    meta: PaginatedResponse<RegistrationInvitation>['meta'] & {
+        availableSchools: InvitationSchool[];
+        policy: { max_expiry_days: number; max_submission_limit: number };
+    };
 }
 
 export const getPublicInvitation = async (token: string) =>

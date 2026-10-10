@@ -8,6 +8,7 @@ import pool from './database/db.js';
 
 import AllRoutes from './routes/AllRoutes.js';
 import { publicRegistrationPageHeaders } from './middleware/publicRegistrationSecurity.js';
+import { approvedRegistrationOrigins } from './config/publicRegistration.js';
 
 const app: Application = express();
 
@@ -44,6 +45,7 @@ const allowedOrigins = [
     `http://127.0.0.1:${PORT}`,
     "https://pho-studentbased.onrender.com",
     process.env.APP_ORIGIN,
+    ...approvedRegistrationOrigins(),
 ].filter((origin): origin is string => Boolean(origin));
 
 const corsOptions: cors.CorsOptions = {
