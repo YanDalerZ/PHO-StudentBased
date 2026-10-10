@@ -8,6 +8,7 @@ import pool from './database/db.js';
 
 import AllRoutes from './routes/AllRoutes.js';
 import { publicRegistrationPageHeaders } from './middleware/publicRegistrationSecurity.js';
+import { approvedRegistrationOrigins } from './config/publicRegistration.js';
 
 const app: Application = express();
 
@@ -44,6 +45,7 @@ const allowedOrigins = [
     `http://127.0.0.1:${PORT}`,
     "https://pho-studentbased.onrender.com",
     process.env.APP_ORIGIN,
+    ...approvedRegistrationOrigins(),
 ].filter((origin): origin is string => Boolean(origin));
 
 const corsOptions: cors.CorsOptions = {
@@ -60,6 +62,17 @@ const corsOptions: cors.CorsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '256kb' }));
+
+// Render may use this path as its health check. Do not expose database details.
+app.get('/healthz', async (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+        await pool.query('SELECT 1');
+        res.status(200).json({ status: 'ok' });
+    } catch {
+        res.status(503).json({ status: 'unavailable' });
+    }
+});
 
 const apiRouter = express.Router();
 apiRouter.use('/', AllRoutes.RegistrationRoutes);
@@ -103,16 +116,32 @@ app.use((error: unknown, _req: express.Request, res: express.Response, next: exp
 // Export express app for HTTP integration tests
 export { app };
 
-// Start Server and Verify PostgreSQL Connection
-if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, '0.0.0.0', async () => {
-        try {
-            const result = await pool.query('SELECT NOW() as current_time, current_setting(\'TIMEZONE\') as tz');
-            console.log(`✅ Server running on port ${PORT}`);
-            console.log('✅ Connected to PostgreSQL:', result.rows[0]);
-        } catch (err) {
-            console.error('❌ Database connection failed.');
-            console.error(err);
-        }
+// Do not accept traffic until the database is reachable. A failed startup must
+// exit non-zero so the hosting platform does not report a broken app as ready.
+async function startServer(): Promise<void> {
+    try {
+        await pool.query('SELECT 1');
+    } catch (error) {
+        const failure = error && typeof error === 'object' ? error as { code?: string; message?: string } : null;
+        console.error('Database connection failed during startup.', {
+            code: failure?.code ?? 'UNKNOWN',
+            message: failure?.message ?? 'Unknown database error',
+        });
+        await pool.end();
+        process.exitCode = 1;
+        return;
+    }
+
+    const server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on port ${PORT}; PostgreSQL connection verified.`);
     });
+    server.on('error', (error) => {
+        console.error('Server failed to listen:', error);
+        process.exitCode = 1;
+        void pool.end();
+    });
+}
+
+if (process.env.NODE_ENV !== 'test') {
+    void startServer();
 }

@@ -42,7 +42,9 @@ const getIsLocal = (urlStr?: string): boolean => {
     if (!urlStr) return false;
     try {
         const parsed = new URL(urlStr);
-        return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+        return parsed.hostname === 'localhost'
+            || parsed.hostname === '127.0.0.1'
+            || parsed.hostname === '[::1]';
     } catch {
         // A legacy local .env may contain an unescaped reserved character in
         // the password. Never use this fallback to classify a remote target.

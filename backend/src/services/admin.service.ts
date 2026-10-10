@@ -191,168 +191,152 @@ export interface CreateUserInput {
   email: string;
   password: string;
   role: CreatableUserRole;
+  job_title: string;
   first_name: string;
   last_name: string;
   contact_no?: string | null | undefined;
 }
 
-export async function createUser(input: CreateUserInput): Promise<AdminUserSummary> {
+export async function createUser(input: CreateUserInput, actorId: number, ipAddress?: string): Promise<AdminUserSummary> {
   // Prevent admin creation through API
   if (input.role !== 'school_staff' && input.role !== 'superuser') {
     throw new AdminServiceError(400, "Invalid portal role. Only 'school_staff' and 'superuser' accounts can be created via this API.");
   }
+  if (!input.job_title.trim() || input.job_title.trim().length > 100) {
+    throw new AdminServiceError(400, 'A job title of 1–100 characters is required.');
+  }
 
   const normalizedEmail = input.email.trim().toLowerCase();
 
-  // Check email conflict
-  const existing = await pool.query('SELECT id FROM USERS WHERE LOWER(email) = $1', [normalizedEmail]);
-  if (existing.rows.length > 0) {
-    throw new AdminServiceError(409, 'A user with this email address already exists.');
-  }
-
   const passwordHash = await bcrypt.hash(input.password, 10);
-
-  const insertQuery = `
-    INSERT INTO USERS (email, password_hash, role, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 0)
-    RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
-  `;
-
-  const result = await pool.query<Record<string, unknown>>(insertQuery, [
-    normalizedEmail,
-    passwordHash,
-    input.role === 'school_staff' ? 'teacher' : input.role,
-    input.role,
-    input.role === 'superuser' ? 'Administrator' : 'Teacher',
-    input.first_name.trim(),
-    input.last_name.trim(),
-    input.contact_no?.trim() || null,
-  ]);
-
-  const inserted = result.rows[0];
-  if (!inserted) {
-    throw new AdminServiceError(500, 'Failed to create user record.');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query<Record<string, unknown>>(`
+      INSERT INTO USERS (email, password_hash, role, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 0)
+      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    `, [
+      normalizedEmail, passwordHash,
+      input.role === 'school_staff' ? 'teacher' : input.role,
+      input.role, input.job_title.trim(), input.first_name.trim(),
+      input.last_name.trim(), input.contact_no?.trim() || null,
+    ]);
+    const inserted = result.rows[0];
+    if (!inserted) throw new AdminServiceError(500, 'Failed to create user record.');
+    await AuditService.logEvent({
+      actor_id: actorId, portal_role: 'admin', action: 'CREATE_USER',
+      entity_type: 'USER', entity_id: String(inserted.id), ip_address: ipAddress,
+      details: { portal_role: input.role, changed_fields: ['email', 'password', 'portal_role', 'job_title', 'first_name', 'last_name', 'contact_no'] },
+    }, client);
+    await client.query('COMMIT');
+    return mapUserSummary(inserted);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return mapUserSummary(inserted);
 }
 
 export interface UpdateUserInput {
   email?: string | undefined;
   password?: string | undefined;
   role?: CreatableUserRole | undefined;
+  job_title?: string | undefined;
   first_name?: string | undefined;
   last_name?: string | undefined;
   contact_no?: string | null | undefined;
   is_active?: boolean | undefined;
 }
 
-export async function updateUser(id: number, input: UpdateUserInput): Promise<AdminUserSummary> {
-  const existingResult = await pool.query<Record<string, unknown>>(
-    'SELECT id, email, portal_role, job_title, is_active, failed_login_attempts FROM USERS WHERE id = $1',
-    [id]
-  );
-  const currentUser = existingResult.rows[0];
-  if (!currentUser) {
-    throw new AdminServiceError(404, 'User not found.');
+export async function updateUser(id: number, input: UpdateUserInput, actorId: number, ipAddress?: string): Promise<AdminUserSummary> {
+  if (input.job_title !== undefined && (!input.job_title.trim() || input.job_title.trim().length > 100)) {
+    throw new AdminServiceError(400, 'Job title must contain 1–100 characters.');
   }
-
-  // Prevent role escalation to admin
-  if (input.role !== undefined) {
-    if (input.role !== 'school_staff' && input.role !== 'superuser') {
-      throw new AdminServiceError(400, "Role cannot be updated to 'admin'.");
-    }
-  }
-
-  // Prevent modifying an existing admin's role through this API
-  if (currentUser.portal_role === 'admin' && input.role !== undefined) {
-    throw new AdminServiceError(400, "Cannot change role of an existing administrator via this API.");
-  }
-
-  const updateFields: string[] = [];
-  const params: unknown[] = [];
-  let paramIndex = 1;
-
-  if (input.email !== undefined) {
-    const normalizedEmail = input.email.trim().toLowerCase();
-    const emailConflict = await pool.query(
-      'SELECT id FROM USERS WHERE LOWER(email) = $1 AND id != $2',
-      [normalizedEmail, id]
+  const passwordHash = input.password ? await bcrypt.hash(input.password, 10) : undefined;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query<{ portal_role: string }>(
+      'SELECT portal_role FROM USERS WHERE id = $1 FOR UPDATE', [id],
     );
-    if (emailConflict.rows.length > 0) {
-      throw new AdminServiceError(409, 'A user with this email address already exists.');
+    const currentRole = existing.rows[0]?.portal_role;
+    if (!currentRole) throw new AdminServiceError(404, 'User not found.');
+    if (currentRole === 'admin') throw new AdminServiceError(400, 'Administrator accounts cannot be edited through this endpoint.');
+    if (input.role !== undefined && input.role !== currentRole && input.job_title === undefined) {
+      throw new AdminServiceError(400, 'A job title is required when changing the portal role.');
     }
-    updateFields.push(`email = $${paramIndex++}`);
-    params.push(normalizedEmail);
+
+    const updateFields: string[] = [];
+    const params: unknown[] = [];
+    const addField = (field: string, value: unknown) => {
+      updateFields.push(`${field} = $${params.length + 1}`);
+      params.push(value);
+    };
+    if (input.email !== undefined) addField('email', input.email.trim().toLowerCase());
+    if (passwordHash !== undefined) addField('password_hash', passwordHash);
+    if (input.job_title !== undefined) addField('job_title', input.job_title.trim());
+    if (input.role !== undefined) {
+      if (input.role !== 'school_staff' && input.role !== 'superuser') {
+        throw new AdminServiceError(400, 'Invalid portal role.');
+      }
+      addField('portal_role', input.role);
+      addField('role', input.role === 'school_staff' ? 'teacher' : 'superuser');
+    }
+    if (input.first_name !== undefined) addField('first_name', input.first_name.trim());
+    if (input.last_name !== undefined) addField('last_name', input.last_name.trim());
+    if (input.contact_no !== undefined) addField('contact_no', input.contact_no?.trim() || null);
+    if (input.is_active !== undefined) addField('is_active', input.is_active);
+    if (updateFields.length === 0) {
+      const fresh = await client.query<Record<string, unknown>>(
+        'SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at FROM USERS WHERE id = $1', [id],
+      );
+      await client.query('COMMIT');
+      return mapUserSummary(fresh.rows[0]!);
+    }
+    updateFields.push('updated_at = CURRENT_TIMESTAMP');
+    params.push(id);
+    const result = await client.query<Record<string, unknown>>(`
+      UPDATE USERS SET ${updateFields.join(', ')} WHERE id = $${params.length}
+      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    `, params);
+    const updated = result.rows[0];
+    if (!updated) throw new AdminServiceError(404, 'User not found.');
+
+    const roleChanged = input.role !== undefined && input.role !== currentRole;
+    let revokedSchoolIds: number[] = [];
+    let revokedModuleIds: number[] = [];
+    if (roleChanged) {
+      const assignments = await client.query<{ school_id: number }>(
+        'UPDATE USER_SCHOOL_ASSIGNMENTS SET revoked_at = CURRENT_TIMESTAMP, revoked_by = $2 WHERE user_id = $1 AND revoked_at IS NULL RETURNING school_id', [id, actorId],
+      );
+      const grants = await client.query<{ module_id: number }>(
+        'UPDATE USER_MODULE_PERMISSIONS SET revoked_at = CURRENT_TIMESTAMP, revoked_by = $2 WHERE user_id = $1 AND revoked_at IS NULL RETURNING module_id', [id, actorId],
+      );
+      revokedSchoolIds = assignments.rows.map(row => row.school_id);
+      revokedModuleIds = grants.rows.map(row => row.module_id);
+    }
+    await AuditService.logEvent({
+      actor_id: actorId, portal_role: 'admin', action: 'UPDATE_USER',
+      entity_type: 'USER', entity_id: String(id), ip_address: ipAddress,
+      details: {
+        changed_fields: Object.keys(input).filter(key => input[key as keyof UpdateUserInput] !== undefined),
+        role_changed: roleChanged,
+        previous_role: roleChanged ? currentRole : undefined,
+        new_role: roleChanged ? input.role : undefined,
+        revoked_school_ids: revokedSchoolIds,
+        revoked_module_ids: revokedModuleIds,
+      },
+    }, client);
+    await client.query('COMMIT');
+    return mapUserSummary(updated);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-
-  if (input.password !== undefined && input.password.length > 0) {
-    const passwordHash = await bcrypt.hash(input.password, 10);
-    updateFields.push(`password_hash = $${paramIndex++}`);
-    params.push(passwordHash);
-  }
-
-  if (input.role !== undefined) {
-    updateFields.push(`portal_role = $${paramIndex}, role = CASE $${paramIndex}
-      WHEN 'school_staff' THEN 'teacher'::user_role
-      WHEN 'superuser' THEN 'superuser'::user_role
-      ELSE role END`);
-    paramIndex++;
-    params.push(input.role);
-  }
-
-  if (input.first_name !== undefined) {
-    updateFields.push(`first_name = $${paramIndex++}`);
-    params.push(input.first_name.trim());
-  }
-
-  if (input.last_name !== undefined) {
-    updateFields.push(`last_name = $${paramIndex++}`);
-    params.push(input.last_name.trim());
-  }
-
-  if (input.contact_no !== undefined) {
-    updateFields.push(`contact_no = $${paramIndex++}`);
-    params.push(input.contact_no ? input.contact_no.trim() : null);
-  }
-
-  if (input.is_active !== undefined) {
-    updateFields.push(`is_active = $${paramIndex++}`);
-    params.push(input.is_active);
-  }
-
-  if (updateFields.length === 0) {
-    const fresh = await pool.query<Record<string, unknown>>(
-      'SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at FROM USERS WHERE id = $1',
-      [id]
-    );
-    const userRow = fresh.rows[0];
-    if (!userRow) throw new AdminServiceError(404, 'User not found.');
-    return mapUserSummary(userRow);
-  }
-
-  updateFields.push('updated_at = CURRENT_TIMESTAMP');
-  params.push(id);
-
-  const updateQuery = `
-    UPDATE USERS
-    SET ${updateFields.join(', ')}
-    WHERE id = $${paramIndex}
-    RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
-  `;
-
-  const result = await pool.query<Record<string, unknown>>(updateQuery, params);
-  const updatedUser = result.rows[0];
-  if (!updatedUser) throw new AdminServiceError(404, 'User not found.');
-
-  await AuditService.logEvent({
-    action: 'UPDATE_USER',
-    entity_type: 'USER',
-    entity_id: String(id),
-    details: input
-  });
-
-  return mapUserSummary(updatedUser);
 }
 
 export interface UpdateUserStatusInput {
@@ -361,60 +345,62 @@ export interface UpdateUserStatusInput {
   unlock?: boolean | undefined;
 }
 
-export async function updateUserStatus(id: number, input: UpdateUserStatusInput): Promise<AdminUserSummary> {
-  const existingResult = await pool.query<Record<string, unknown>>(
-    'SELECT id, is_active, failed_login_attempts FROM USERS WHERE id = $1',
-    [id]
-  );
-  const currentUser = existingResult.rows[0];
-  if (!currentUser) {
-    throw new AdminServiceError(404, 'User not found.');
+export async function updateUserStatus(id: number, input: UpdateUserStatusInput, actorId: number, ipAddress?: string): Promise<AdminUserSummary> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existingResult = await client.query<{ portal_role: string; is_active: boolean; failed_login_attempts: number }>(
+      'SELECT portal_role, is_active, failed_login_attempts FROM USERS WHERE id = $1 FOR UPDATE', [id],
+    );
+    const currentUser = existingResult.rows[0];
+    if (!currentUser) throw new AdminServiceError(404, 'User not found.');
+    if (currentUser.portal_role === 'admin') throw new AdminServiceError(400, 'Administrator status cannot be changed through this endpoint.');
+    const currentActive = currentUser.is_active;
+    const currentAttempts = Number(currentUser.failed_login_attempts ?? 0);
+
+    let newActive: boolean;
+    let newAttempts: number;
+    if (input.unlock === true || input.action === 'unlock') {
+      newActive = true;
+      newAttempts = 0;
+    } else if (input.action === 'activate') {
+      newActive = true;
+      newAttempts = 0;
+    } else if (input.action === 'deactivate') {
+      newActive = false;
+      newAttempts = currentAttempts;
+    } else if (input.action === 'toggle') {
+      newActive = !currentActive;
+      newAttempts = newActive ? 0 : currentAttempts;
+    } else if (input.is_active !== undefined) {
+      newActive = input.is_active;
+      newAttempts = newActive ? 0 : currentAttempts;
+    } else {
+      throw new AdminServiceError(400, 'Must provide is_active, action, or unlock flag.');
+    }
+
+    const result = await client.query<Record<string, unknown>>(`
+      UPDATE USERS
+      SET is_active = $1, failed_login_attempts = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    `, [newActive, newAttempts, id]);
+    const updated = result.rows[0];
+    if (!updated) throw new AdminServiceError(404, 'User not found.');
+
+    await AuditService.logEvent({
+      actor_id: actorId, portal_role: 'admin', action: 'UPDATE_USER_STATUS',
+      entity_type: 'USER', entity_id: String(id), ip_address: ipAddress,
+      details: { action: input.action ?? (input.unlock ? 'unlock' : 'set_status'), is_active: newActive, failed_login_attempts: newAttempts },
+    }, client);
+    await client.query('COMMIT');
+    return mapUserSummary(updated);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-
-  const currentActive = Boolean(currentUser.is_active);
-  const currentAttempts = Number(currentUser.failed_login_attempts ?? 0);
-
-  let newActive: boolean;
-  let newAttempts: number;
-
-  if (input.unlock === true || input.action === 'unlock') {
-    newActive = true;
-    newAttempts = 0;
-  } else if (input.action === 'activate') {
-    newActive = true;
-    newAttempts = 0;
-  } else if (input.action === 'deactivate') {
-    newActive = false;
-    newAttempts = currentAttempts;
-  } else if (input.action === 'toggle') {
-    newActive = !currentActive;
-    newAttempts = newActive ? 0 : currentAttempts;
-  } else if (input.is_active !== undefined) {
-    newActive = input.is_active;
-    newAttempts = newActive ? 0 : currentAttempts;
-  } else {
-    throw new AdminServiceError(400, 'Must provide is_active, action, or unlock flag.');
-  }
-
-  const updateQuery = `
-    UPDATE USERS
-    SET is_active = $1, failed_login_attempts = $2, updated_at = CURRENT_TIMESTAMP
-    WHERE id = $3
-    RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
-  `;
-
-  const result = await pool.query<Record<string, unknown>>(updateQuery, [newActive, newAttempts, id]);
-  const updated = result.rows[0];
-  if (!updated) throw new AdminServiceError(404, 'User not found.');
-
-  await AuditService.logEvent({
-    action: 'UPDATE_USER_STATUS',
-    entity_type: 'USER',
-    entity_id: String(id),
-    details: { is_active: newActive, failed_login_attempts: newAttempts, input }
-  });
-
-  return mapUserSummary(updated);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -431,41 +417,6 @@ export async function listModules(): Promise<AdminModule[]> {
   return result.rows.map(mapModule);
 }
 
-export interface CreateModuleInput {
-  name: string;
-  slug: ApprovedModuleSlug;
-  description?: string | null | undefined;
-  icon?: string | null | undefined;
-  is_active?: boolean | undefined;
-  sort_order?: number | undefined;
-}
-
-export async function createModule(input: CreateModuleInput): Promise<AdminModule> {
-  const existing = await pool.query('SELECT id FROM MODULES WHERE slug = $1', [input.slug]);
-  if (existing.rows.length > 0) {
-    throw new AdminServiceError(409, `Module with slug '${input.slug}' already exists.`);
-  }
-
-  const query = `
-    INSERT INTO MODULES (name, slug, description, icon, is_active, sort_order)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, name, slug, description, icon, is_active, sort_order, created_at, updated_at
-  `;
-
-  const result = await pool.query<Record<string, unknown>>(query, [
-    input.name.trim(),
-    input.slug,
-    input.description ? input.description.trim() : null,
-    input.icon ? input.icon.trim() : null,
-    input.is_active ?? true,
-    input.sort_order ?? 0,
-  ]);
-
-  const inserted = result.rows[0];
-  if (!inserted) throw new AdminServiceError(500, 'Failed to create module record.');
-  return mapModule(inserted);
-}
-
 export interface UpdateModuleInput {
   name?: string | undefined;
   slug?: ApprovedModuleSlug | undefined;
@@ -475,84 +426,66 @@ export interface UpdateModuleInput {
   sort_order?: number | undefined;
 }
 
-export async function updateModule(id: number, input: UpdateModuleInput): Promise<AdminModule> {
-  const existingResult = await pool.query<Record<string, unknown>>(
-    'SELECT id, slug FROM MODULES WHERE id = $1',
-    [id]
-  );
-  const currentModule = existingResult.rows[0];
-  if (!currentModule) {
-    throw new AdminServiceError(404, 'Module not found.');
+export async function updateModule(id: number, input: UpdateModuleInput, actorId: number, ipAddress?: string): Promise<AdminModule> {
+  if (input.name !== undefined || input.slug !== undefined) {
+    throw new AdminServiceError(400, 'Core module names and slugs cannot be changed.');
   }
-
-  if (input.slug !== undefined) {
-    const slugConflict = await pool.query(
-      'SELECT id FROM MODULES WHERE slug = $1 AND id != $2',
-      [input.slug, id]
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query<{ slug: string; is_active: boolean }>(
+      'SELECT slug, is_active FROM MODULES WHERE id = $1 FOR UPDATE', [id],
     );
-    if (slugConflict.rows.length > 0) {
-      throw new AdminServiceError(409, `Module with slug '${input.slug}' already exists.`);
+    const current = existing.rows[0];
+    if (!current) throw new AdminServiceError(404, 'Module not found.');
+    if (!APPROVED_MODULE_SLUGS.includes(current.slug as ApprovedModuleSlug)) {
+      throw new AdminServiceError(409, 'Unrecognized module cannot be governed through this API.');
     }
+    const updateFields: string[] = [];
+    const params: unknown[] = [];
+    const addField = (field: string, value: unknown) => {
+      updateFields.push(`${field} = $${params.length + 1}`);
+      params.push(value);
+    };
+    if (input.description !== undefined) addField('description', input.description?.trim() || null);
+    if (input.icon !== undefined) addField('icon', input.icon?.trim() || null);
+    if (input.is_active !== undefined) addField('is_active', input.is_active);
+    if (input.sort_order !== undefined) addField('sort_order', input.sort_order);
+    if (updateFields.length === 0) {
+      const fresh = await client.query<Record<string, unknown>>(
+        'SELECT id, name, slug, description, icon, is_active, sort_order, created_at, updated_at FROM MODULES WHERE id = $1', [id],
+      );
+      await client.query('COMMIT');
+      return mapModule(fresh.rows[0]!);
+    }
+    updateFields.push('updated_at = CURRENT_TIMESTAMP');
+    params.push(id);
+    const changed = await client.query<Record<string, unknown>>(`
+      UPDATE MODULES SET ${updateFields.join(', ')} WHERE id = $${params.length}
+      RETURNING id, name, slug, description, icon, is_active, sort_order, created_at, updated_at
+    `, params);
+    const updated = changed.rows[0];
+    if (!updated) throw new AdminServiceError(404, 'Module not found.');
+    const stateChanged = input.is_active !== undefined && input.is_active !== current.is_active;
+    await AuditService.logEvent({
+      actor_id: actorId, portal_role: 'admin',
+      action: stateChanged ? (input.is_active ? 'ACTIVATE_MODULE' : 'DEACTIVATE_MODULE') : 'UPDATE_MODULE',
+      entity_type: 'MODULE', entity_id: String(id), ip_address: ipAddress,
+      details: {
+        module_slug: current.slug,
+        changed_fields: Object.keys(input).filter(key => input[key as keyof UpdateModuleInput] !== undefined),
+        previous_active: current.is_active,
+        is_active: updated.is_active,
+      },
+    }, client);
+    await client.query('COMMIT');
+    return mapModule(updated);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-
-  const updateFields: string[] = [];
-  const params: unknown[] = [];
-  let paramIndex = 1;
-
-  if (input.name !== undefined) {
-    updateFields.push(`name = $${paramIndex++}`);
-    params.push(input.name.trim());
-  }
-
-  if (input.slug !== undefined) {
-    updateFields.push(`slug = $${paramIndex++}`);
-    params.push(input.slug);
-  }
-
-  if (input.description !== undefined) {
-    updateFields.push(`description = $${paramIndex++}`);
-    params.push(input.description ? input.description.trim() : null);
-  }
-
-  if (input.icon !== undefined) {
-    updateFields.push(`icon = $${paramIndex++}`);
-    params.push(input.icon ? input.icon.trim() : null);
-  }
-
-  if (input.is_active !== undefined) {
-    updateFields.push(`is_active = $${paramIndex++}`);
-    params.push(input.is_active);
-  }
-
-  if (input.sort_order !== undefined) {
-    updateFields.push(`sort_order = $${paramIndex++}`);
-    params.push(input.sort_order);
-  }
-
-  if (updateFields.length === 0) {
-    const fresh = await pool.query<Record<string, unknown>>(
-      'SELECT id, name, slug, description, icon, is_active, sort_order, created_at, updated_at FROM MODULES WHERE id = $1',
-      [id]
-    );
-    const row = fresh.rows[0];
-    if (!row) throw new AdminServiceError(404, 'Module not found.');
-    return mapModule(row);
-  }
-
-  updateFields.push('updated_at = CURRENT_TIMESTAMP');
-  params.push(id);
-
-  const query = `
-    UPDATE MODULES
-    SET ${updateFields.join(', ')}
-    WHERE id = $${paramIndex}
-    RETURNING id, name, slug, description, icon, is_active, sort_order, created_at, updated_at
-  `;
-
-  const result = await pool.query<Record<string, unknown>>(query, params);
-  const updated = result.rows[0];
-  if (!updated) throw new AdminServiceError(404, 'Module not found.');
-  return mapModule(updated);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -635,65 +568,50 @@ export interface CreateSchoolInput {
   is_active?: boolean | undefined;
 }
 
-export async function createSchool(input: CreateSchoolInput): Promise<AdminSchoolWithGeo> {
-  // Validate barangay exists and matches municipality if provided
-  const bgyCheck = await pool.query<{ id: number; municipality_id: number }>(
-    'SELECT id, municipality_id FROM BARANGAYS WHERE id = $1',
-    [input.barangay_id]
-  );
-  const bgy = bgyCheck.rows[0];
-  if (!bgy) {
-    throw new AdminServiceError(400, 'Selected barangay does not exist.');
-  }
+const schoolWithGeoQuery = `
+  SELECT s.id, s.name, s.address, s.barangay_id, s.district, s.is_active,
+         s.created_at, s.updated_at, b.name AS barangay_name,
+         m.id AS municipality_id, m.name AS municipality_name
+  FROM SCHOOLS s
+  LEFT JOIN BARANGAYS b ON b.id = s.barangay_id
+  LEFT JOIN MUNICIPALITIES m ON m.id = b.municipality_id
+  WHERE s.id = $1
+`;
 
-  if (input.municipality_id !== undefined && input.municipality_id !== null) {
-    if (bgy.municipality_id !== input.municipality_id) {
+export async function createSchool(input: CreateSchoolInput, actorId: number, ipAddress?: string): Promise<AdminSchoolWithGeo> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const barangay = await client.query<{ municipality_id: number }>(
+      'SELECT municipality_id FROM BARANGAYS WHERE id = $1', [input.barangay_id],
+    );
+    if (!barangay.rows[0]) throw new AdminServiceError(400, 'Selected barangay does not exist.');
+    if (input.municipality_id != null && barangay.rows[0].municipality_id !== input.municipality_id) {
       throw new AdminServiceError(400, 'Selected barangay does not belong to the selected municipality.');
     }
+    const inserted = await client.query<{ id: number }>(`
+      INSERT INTO SCHOOLS (name, address, barangay_id, district, is_active)
+      VALUES ($1, $2, $3, $4, $5) RETURNING id
+    `, [input.name.trim(), input.address?.trim() || null, input.barangay_id,
+      input.district?.trim() || null, input.is_active ?? true]);
+    const schoolId = inserted.rows[0]?.id;
+    if (!schoolId) throw new AdminServiceError(500, 'Failed to create school record.');
+    await AuditService.logEvent({
+      actor_id: actorId, portal_role: 'admin', action: 'CREATE_SCHOOL',
+      entity_type: 'SCHOOL', entity_id: String(schoolId), school_id: schoolId, ip_address: ipAddress,
+      details: { barangay_id: input.barangay_id, municipality_id: barangay.rows[0].municipality_id, is_active: input.is_active ?? true },
+    }, client);
+    const fullRecord = await client.query<Record<string, unknown>>(schoolWithGeoQuery, [schoolId]);
+    const row = fullRecord.rows[0];
+    if (!row) throw new AdminServiceError(500, 'Failed to fetch newly created school record.');
+    await client.query('COMMIT');
+    return mapSchoolWithGeo(row);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-
-  const insertQuery = `
-    INSERT INTO SCHOOLS (name, address, barangay_id, district, is_active)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING id
-  `;
-
-  const insertResult = await pool.query<{ id: number }>(insertQuery, [
-    input.name.trim(),
-    input.address ? input.address.trim() : null,
-    input.barangay_id,
-    input.district ? input.district.trim() : null,
-    input.is_active ?? true,
-  ]);
-
-  const inserted = insertResult.rows[0];
-  if (!inserted) throw new AdminServiceError(500, 'Failed to create school record.');
-  const schoolId = inserted.id;
-
-  // Query joined record
-  const fetchQuery = `
-    SELECT 
-      s.id,
-      s.name,
-      s.address,
-      s.barangay_id,
-      s.district,
-      s.is_active,
-      s.created_at,
-      s.updated_at,
-      b.name AS barangay_name,
-      m.id AS municipality_id,
-      m.name AS municipality_name
-    FROM SCHOOLS s
-    LEFT JOIN BARANGAYS b ON s.barangay_id = b.id
-    LEFT JOIN MUNICIPALITIES m ON b.municipality_id = m.id
-    WHERE s.id = $1
-  `;
-
-  const fullRecord = await pool.query<Record<string, unknown>>(fetchQuery, [schoolId]);
-  const row = fullRecord.rows[0];
-  if (!row) throw new AdminServiceError(500, 'Failed to fetch newly created school record.');
-  return mapSchoolWithGeo(row);
 }
 
 export interface UpdateSchoolInput {
@@ -705,92 +623,87 @@ export interface UpdateSchoolInput {
   is_active?: boolean | undefined;
 }
 
-export async function updateSchool(id: number, input: UpdateSchoolInput): Promise<AdminSchoolWithGeo> {
-  const existingResult = await pool.query('SELECT id FROM SCHOOLS WHERE id = $1', [id]);
-  if (existingResult.rows.length === 0) {
-    throw new AdminServiceError(404, 'School not found.');
-  }
-
-  if (input.barangay_id !== undefined) {
-    const bgyCheck = await pool.query<{ id: number; municipality_id: number }>(
-      'SELECT id, municipality_id FROM BARANGAYS WHERE id = $1',
-      [input.barangay_id]
+export async function updateSchool(id: number, input: UpdateSchoolInput, actorId: number, ipAddress?: string): Promise<AdminSchoolWithGeo> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Serializes invitation creation and school assignment against deactivation
+    // while allowing foreign-key KEY SHARE checks on historical school rows.
+    const existing = await client.query<{ barangay_id: number; is_active: boolean }>(
+      'SELECT barangay_id, is_active FROM SCHOOLS WHERE id = $1 FOR NO KEY UPDATE', [id],
     );
-    const bgy = bgyCheck.rows[0];
-    if (!bgy) {
-      throw new AdminServiceError(400, 'Selected barangay does not exist.');
+    const current = existing.rows[0];
+    if (!current) throw new AdminServiceError(404, 'School not found.');
+
+    const effectiveBarangayId = input.barangay_id ?? current.barangay_id;
+    const barangay = await client.query<{ municipality_id: number }>(
+      'SELECT municipality_id FROM BARANGAYS WHERE id = $1', [effectiveBarangayId],
+    );
+    if (!barangay.rows[0]) throw new AdminServiceError(400, 'Selected barangay does not exist.');
+    if (input.municipality_id != null && barangay.rows[0].municipality_id !== input.municipality_id) {
+      throw new AdminServiceError(400, 'Selected barangay does not belong to the selected municipality.');
     }
-    if (input.municipality_id !== undefined && input.municipality_id !== null) {
-      if (bgy.municipality_id !== input.municipality_id) {
-        throw new AdminServiceError(400, 'Selected barangay does not belong to the selected municipality.');
-      }
+
+    const updateFields: string[] = [];
+    const params: unknown[] = [];
+    const addField = (field: string, value: unknown) => {
+      updateFields.push(`${field} = $${params.length + 1}`);
+      params.push(value);
+    };
+    if (input.name !== undefined) addField('name', input.name.trim());
+    if (input.address !== undefined) addField('address', input.address?.trim() || null);
+    if (input.barangay_id !== undefined) addField('barangay_id', input.barangay_id);
+    if (input.district !== undefined) addField('district', input.district?.trim() || null);
+    if (input.is_active !== undefined) addField('is_active', input.is_active);
+    const deactivating = current.is_active && input.is_active === false;
+    let revokedAssignments = 0;
+    let revokedInvitations = 0;
+    if (updateFields.length > 0) {
+      updateFields.push('updated_at = CURRENT_TIMESTAMP');
+      params.push(id);
+      await client.query(`UPDATE SCHOOLS SET ${updateFields.join(', ')} WHERE id = $${params.length}`, params);
     }
+    if (deactivating) {
+      const assignments = await client.query(`
+        UPDATE USER_SCHOOL_ASSIGNMENTS SET revoked_at = CURRENT_TIMESTAMP, revoked_by = $2
+        WHERE school_id = $1 AND revoked_at IS NULL
+      `, [id, actorId]);
+      const invitations = await client.query(`
+        UPDATE REGISTRATION_INVITATIONS
+        SET status = 'revoked', revoked_at = CURRENT_TIMESTAMP, revoked_by = $2,
+            revocation_reason = 'school_deactivated'
+        WHERE school_id = $1 AND status = 'active'
+      `, [id, actorId]);
+      revokedAssignments = assignments.rowCount ?? 0;
+      revokedInvitations = invitations.rowCount ?? 0;
+    }
+    if (updateFields.length > 0) {
+      await AuditService.logEvent({
+        actor_id: actorId, portal_role: 'admin',
+        action: deactivating ? 'DEACTIVATE_SCHOOL' : 'UPDATE_SCHOOL',
+        entity_type: 'SCHOOL', entity_id: String(id), school_id: id, ip_address: ipAddress,
+        details: {
+          changed_fields: Object.keys(input).filter(key => input[key as keyof UpdateSchoolInput] !== undefined),
+          barangay_id: effectiveBarangayId,
+          municipality_id: barangay.rows[0].municipality_id,
+          previous_active: current.is_active,
+          is_active: input.is_active ?? current.is_active,
+          revoked_assignment_count: revokedAssignments,
+          revoked_invitation_count: revokedInvitations,
+        },
+      }, client);
+    }
+    const result = await client.query<Record<string, unknown>>(schoolWithGeoQuery, [id]);
+    const row = result.rows[0];
+    if (!row) throw new AdminServiceError(404, 'School not found.');
+    await client.query('COMMIT');
+    return mapSchoolWithGeo(row);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-
-  const updateFields: string[] = [];
-  const params: unknown[] = [];
-  let paramIndex = 1;
-
-  if (input.name !== undefined) {
-    updateFields.push(`name = $${paramIndex++}`);
-    params.push(input.name.trim());
-  }
-
-  if (input.address !== undefined) {
-    updateFields.push(`address = $${paramIndex++}`);
-    params.push(input.address ? input.address.trim() : null);
-  }
-
-  if (input.barangay_id !== undefined) {
-    updateFields.push(`barangay_id = $${paramIndex++}`);
-    params.push(input.barangay_id);
-  }
-
-  if (input.district !== undefined) {
-    updateFields.push(`district = $${paramIndex++}`);
-    params.push(input.district ? input.district.trim() : null);
-  }
-
-  if (input.is_active !== undefined) {
-    updateFields.push(`is_active = $${paramIndex++}`);
-    params.push(input.is_active);
-  }
-
-  if (updateFields.length > 0) {
-    updateFields.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id);
-
-    const updateQuery = `
-      UPDATE SCHOOLS
-      SET ${updateFields.join(', ')}
-      WHERE id = $${paramIndex}
-    `;
-    await pool.query(updateQuery, params);
-  }
-
-  const fetchQuery = `
-    SELECT 
-      s.id,
-      s.name,
-      s.address,
-      s.barangay_id,
-      s.district,
-      s.is_active,
-      s.created_at,
-      s.updated_at,
-      b.name AS barangay_name,
-      m.id AS municipality_id,
-      m.name AS municipality_name
-    FROM SCHOOLS s
-    LEFT JOIN BARANGAYS b ON s.barangay_id = b.id
-    LEFT JOIN MUNICIPALITIES m ON b.municipality_id = m.id
-    WHERE s.id = $1
-  `;
-
-  const result = await pool.query<Record<string, unknown>>(fetchQuery, [id]);
-  const row = result.rows[0];
-  if (!row) throw new AdminServiceError(404, 'School not found.');
-  return mapSchoolWithGeo(row);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -993,7 +906,7 @@ export async function updateSchoolAssignments(userId: number, schoolIds: number[
     assertUniquePositiveIds(schoolIds, 'School assignments');
     if (schoolIds.length > 0) {
       const schools = await client.query<{ id: number }>(
-        'SELECT id FROM SCHOOLS WHERE id = ANY($1::int[]) AND is_active = TRUE ORDER BY id',
+        'SELECT id FROM SCHOOLS WHERE id = ANY($1::int[]) AND is_active = TRUE ORDER BY id FOR SHARE',
         [schoolIds],
       );
       if (schools.rows.length !== schoolIds.length) {

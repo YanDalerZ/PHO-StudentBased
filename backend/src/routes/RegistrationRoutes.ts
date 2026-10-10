@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, attachEffectiveAccess } from '../middleware/auth.js';
 import { requirePermission, requirePortalRole } from '../middleware/rbac.js';
+import { requireActiveModule } from '../middleware/activeModule.js';
 import {
     protectPublicRegistrationSubmission,
     publicRegistrationHeaders,
@@ -75,12 +76,14 @@ router.get(
 router.post(
     '/registration-submissions/:id/approve',
     ...authenticateStaff,
+    requireActiveModule('patient-info'),
     requirePermission('patient-info', 'can_approve_registration'),
     approveSubmission,
 );
 router.post(
     '/registration-submissions/:id/reject',
     ...authenticateStaff,
+    requireActiveModule('patient-info'),
     requirePermission('patient-info', 'can_approve_registration'),
     rejectSubmission,
 );

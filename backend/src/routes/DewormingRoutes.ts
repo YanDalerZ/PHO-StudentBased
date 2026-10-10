@@ -8,7 +8,7 @@ import {
 } from '../controllers/DewormingController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireDashboardSchoolScope, requirePortalRole, requirePermission, requireSchoolScope } from '../middleware/rbac.js';
-import { requireActiveModule } from '../middleware/activeModule.js';
+import { requireActiveModule, requireViewWhenDisabled } from '../middleware/activeModule.js';
 import { resolveSchoolScope } from '../middleware/resolveScope.js';
 
 const router = Router();
@@ -17,7 +17,7 @@ const router = Router();
 router.get('/dashboard', authenticate, requirePortalRole('school_staff', 'superuser'), requirePermission('deworming', 'can_view'), requireDashboardSchoolScope(), getDewormingDashboard);
 
 // GET /api/modules/deworming/report — Deworming municipality consolidation report [Superuser, Admin]
-router.get('/report', authenticate, requirePortalRole('superuser'), requirePermission('deworming', 'can_report'), getDewormingReport);
+router.get('/report', authenticate, requirePortalRole('superuser'), requirePermission('deworming', 'can_report'), requireViewWhenDisabled('deworming'), getDewormingReport);
 
 // POST /api/modules/deworming — Create Deworming record [Teacher, Superuser]
 router.post('/', authenticate, requirePortalRole('school_staff', 'superuser'), requireActiveModule('deworming'), requirePermission('deworming', 'can_create'), resolveSchoolScope(), requireSchoolScope(req => req.targetSchoolId), createDeworming);

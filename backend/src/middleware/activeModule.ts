@@ -47,3 +47,33 @@ export const requireActiveModule = (slug: ModuleSlug) => {
         }
     };
 };
+
+/** Disabled modules remain readable only when the caller also has can_view. */
+export const requireViewWhenDisabled = (fixedSlug?: ModuleSlug) => {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        const slug = fixedSlug ?? req.params.moduleSlug;
+        if (typeof slug !== 'string') {
+            res.status(404).json({ error: { code: 'REPORT_MODULE_NOT_FOUND', message: 'Unsupported report module.' } });
+            return;
+        }
+        try {
+            const result = await pool.query<{ is_active: boolean }>(
+                'SELECT is_active FROM MODULES WHERE slug = $1', [slug],
+            );
+            if (!result.rows[0]) {
+                res.status(404).json({ error: { code: 'REPORT_MODULE_NOT_FOUND', message: 'Unsupported report module.' } });
+                return;
+            }
+            if (!result.rows[0].is_active && !req.effectiveAccess?.modulePermissions[slug as ModuleSlug]?.can_view) {
+                res.status(403).json({ error: { code: 'FORBIDDEN', message: 'View permission is required for disabled module records.' } });
+                return;
+            }
+            next();
+        } catch (error) {
+            console.error('Failed to check module read availability', error && typeof error === 'object'
+                ? { name: String(Reflect.get(error, 'name') ?? 'Error'), code: Reflect.get(error, 'code') ?? null }
+                : { name: 'Error', code: null });
+            res.status(500).json({ error: { code: 'MODULE_STATUS_CHECK_FAILED', message: 'Unable to check module availability.' } });
+        }
+    };
+};

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getConsolidatedReportPreview, recordConsolidatedReportPrint } from '../controllers/ReportController.js';
 import { requestReportExport } from '../controllers/ReportExportController.js';
 import { authenticate } from '../middleware/auth.js';
+import { requireViewWhenDisabled } from '../middleware/activeModule.js';
 import {
     requireDashboardSchoolScope,
     requireParamModulePermission,
@@ -24,6 +25,7 @@ router.post(
     authenticate,
     requirePortalRole('school_staff', 'superuser'),
     requireParamModulePermission('can_report'),
+    requireViewWhenDisabled(),
     recordConsolidatedReportPrint,
 );
 
@@ -32,6 +34,7 @@ router.get(
     authenticate,
     requirePortalRole('school_staff', 'superuser'),
     requireParamModulePermission('can_report'),
+    requireViewWhenDisabled(),
     requireDashboardSchoolScope(),
     getConsolidatedReportPreview,
 );

@@ -110,6 +110,8 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
           { name: 'Users', path: '/admin/users', icon: Users },
           { name: 'Modules', path: '/admin/modules', icon: Settings },
           { name: 'Schools', path: '/admin/schools', icon: School },
+          { name: 'QR invitations', path: '/admin/invitations', icon: QrCode },
+          { name: 'Audit log', path: '/admin/audit-logs', icon: ClipboardCheck },
           { name: 'Settings', path: '/admin/settings', icon: Building2 },
         ];
       default:

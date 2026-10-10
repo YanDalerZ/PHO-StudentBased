@@ -34,17 +34,6 @@ export async function getConsolidatedReportPreview(req: Request, res: Response):
             return;
         }
 
-        const activeResult = await pool.query<{ is_active: boolean }>(
-            'SELECT is_active FROM MODULES WHERE slug = $1',
-            [moduleSlug],
-        );
-        if (!activeResult.rows[0]?.is_active) {
-            res.status(422).json({
-                error: { code: 'MODULE_DISABLED', message: `The '${moduleSlug}' module is unavailable.` },
-            });
-            return;
-        }
-
         const filters = normalizeReportFilters(req.query, { purpose: 'preview' });
         const scope = resolveReportSchoolScope(
             user.portal_role,
@@ -103,17 +92,6 @@ export async function recordConsolidatedReportPrint(req: Request, res: Response)
         const moduleSlug = typeof rawModuleSlug === 'string' ? rawModuleSlug : '';
         if (!isModuleSlug(moduleSlug)) {
             res.status(404).json({ error: { code: 'REPORT_MODULE_NOT_FOUND', message: 'Unsupported report module.' } });
-            return;
-        }
-
-        const activeResult = await pool.query<{ is_active: boolean }>(
-            'SELECT is_active FROM MODULES WHERE slug = $1',
-            [moduleSlug],
-        );
-        if (!activeResult.rows[0]?.is_active) {
-            res.status(422).json({
-                error: { code: 'MODULE_DISABLED', message: `The '${moduleSlug}' module is unavailable.` },
-            });
             return;
         }
 

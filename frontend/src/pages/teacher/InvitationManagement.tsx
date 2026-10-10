@@ -19,6 +19,7 @@ export default function InvitationManagement() {
     const [schoolId, setSchoolId] = useState('');
     const [expiresInDays, setExpiresInDays] = useState(7);
     const [submissionLimit, setSubmissionLimit] = useState(100);
+    const [policyCaps, setPolicyCaps] = useState({ max_expiry_days: 7, max_submission_limit: 100 });
     const [created, setCreated] = useState<CreatedRegistrationInvitation | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -30,6 +31,9 @@ export default function InvitationManagement() {
             const response = await getRegistrationInvitations({ pageSize: 100 });
             setInvitations(response.data);
             setSchools(response.meta.availableSchools);
+            setPolicyCaps(response.meta.policy);
+            setExpiresInDays((value) => Math.min(value, response.meta.policy.max_expiry_days));
+            setSubmissionLimit((value) => Math.min(value, response.meta.policy.max_submission_limit));
         } catch { toast.error('Unable to load registration invitations.'); }
         finally { setLoading(false); }
     }, []);
@@ -77,7 +81,7 @@ export default function InvitationManagement() {
             <form onSubmit={create} className="xl:col-span-2 bg-white dark:bg-surface-card border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-xl space-y-5">
                 <div className="flex items-center gap-3"><div className="p-3 rounded-2xl bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400"><Plus className="w-6 h-6" /></div><div><h2 className="font-bold text-slate-900 dark:text-white">Create invitation</h2><p className="text-xs text-slate-500">The server controls the registration host.</p></div></div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Assigned school<select className={inputClasses} required value={schoolId} onChange={(e) => setSchoolId(e.target.value)}><option value="">Select a school</option>{schools.map((school) => <option key={school.id} value={school.id} disabled={activeSchools.has(school.id)}>{school.name}{activeSchools.has(school.id) ? ' — active QR exists' : ''}</option>)}</select></label>
-                <div className="grid grid-cols-2 gap-4"><label className="text-sm font-medium text-slate-700 dark:text-slate-300">Days<input className={inputClasses} type="number" min={1} max={7} required value={expiresInDays} onChange={(e) => setExpiresInDays(Number(e.target.value))} /></label><label className="text-sm font-medium text-slate-700 dark:text-slate-300">Submission cap<input className={inputClasses} type="number" min={1} max={100} required value={submissionLimit} onChange={(e) => setSubmissionLimit(Number(e.target.value))} /></label></div>
+                <div className="grid grid-cols-2 gap-4"><label className="text-sm font-medium text-slate-700 dark:text-slate-300">Days<input className={inputClasses} type="number" min={1} max={policyCaps.max_expiry_days} required value={expiresInDays} onChange={(e) => setExpiresInDays(Number(e.target.value))} /></label><label className="text-sm font-medium text-slate-700 dark:text-slate-300">Submission cap<input className={inputClasses} type="number" min={1} max={policyCaps.max_submission_limit} required value={submissionLimit} onChange={(e) => setSubmissionLimit(Number(e.target.value))} /></label></div>
                 <button disabled={saving || !schoolId} className="w-full py-3.5 px-4 rounded-xl bg-primary-action hover:bg-teal-500 text-white font-semibold shadow-lg shadow-teal-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60">{saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <QrCode className="w-5 h-5" />} Generate QR</button>
             </form>
             <section className="xl:col-span-3 bg-white dark:bg-surface-card border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-xl">

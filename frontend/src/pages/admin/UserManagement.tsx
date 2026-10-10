@@ -44,6 +44,7 @@ interface UserFormData {
   email: string;
   contact_no: string;
   portal_role: CreatableAdminUserRole;
+  job_title: string;
   password: string;
 }
 
@@ -52,6 +53,7 @@ interface FormErrors {
   last_name?: string;
   email?: string;
   contact_no?: string;
+  job_title?: string;
   password?: string;
   general?: string;
 }
@@ -62,6 +64,7 @@ const initialFormData: UserFormData = {
   email: '',
   contact_no: '',
   portal_role: 'school_staff',
+  job_title: '',
   password: '',
 };
 
@@ -178,6 +181,7 @@ export const UserManagement: React.FC = () => {
       email: user.email,
       contact_no: user.contact_no || '',
       portal_role: editableRole,
+      job_title: user.job_title || '',
       password: '', // Blank unless admin enters replacement
     });
     setFormErrors({});
@@ -207,6 +211,12 @@ export const UserManagement: React.FC = () => {
       errors.email = 'Email address is required.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
       errors.email = 'Please provide a valid email address.';
+    }
+
+    if (!formData.job_title.trim()) {
+      errors.job_title = 'Job title is required.';
+    } else if (formData.job_title.trim().length > 100) {
+      errors.job_title = 'Job title must be 100 characters or fewer.';
     }
 
     if (!editingUser) {
@@ -243,6 +253,7 @@ export const UserManagement: React.FC = () => {
           last_name: formData.last_name.trim(),
           email: formData.email.trim().toLowerCase(),
           contact_no: formData.contact_no.trim() || null,
+          job_title: formData.job_title.trim(),
         };
 
         // If target user is not admin, role can be updated
@@ -265,6 +276,7 @@ export const UserManagement: React.FC = () => {
           email: formData.email.trim().toLowerCase(),
           contact_no: formData.contact_no.trim() || null,
           portal_role: formData.portal_role,
+          job_title: formData.job_title.trim(),
           password: formData.password,
         };
 
@@ -360,13 +372,19 @@ export const UserManagement: React.FC = () => {
               return (
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center space-x-1 bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
                   <UserCheck className="w-3 h-3 mr-1" aria-hidden="true" />
-                  Teacher
+                  School Staff
                 </span>
               );
             default:
               return null;
           }
         },
+      },
+      {
+        header: 'Job Title',
+        cell: (user) => (
+          <span className="text-xs text-slate-600 dark:text-slate-400">{user.job_title || '—'}</span>
+        ),
       },
       {
         header: 'Status',
@@ -668,6 +686,32 @@ export const UserManagement: React.FC = () => {
               Admin privileges cannot be provisioned through this portal.
             </p>
           </FormField>
+
+          <FormField label="Job Title" error={formErrors.job_title}>
+            <input
+              type="text"
+              value={formData.job_title}
+              onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+              maxLength={100}
+              required
+              list="job-title-examples"
+              placeholder="e.g. School Nurse"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-surface-input border border-slate-200 dark:border-teal-500/30 text-slate-900 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all"
+            />
+            <datalist id="job-title-examples">
+              <option value="Teacher" />
+              <option value="School Nurse" />
+              <option value="Coordinator" />
+              <option value="Doctor" />
+            </datalist>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Job title describes the person and does not grant access.</p>
+          </FormField>
+
+          {editingUser && editingUser.portal_role !== formData.portal_role && (
+            <p role="alert" className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+              Changing the portal role revokes this account’s school assignments and module permissions. Reassign access after saving.
+            </p>
+          )}
 
           {/* Password Field */}
           <FormField

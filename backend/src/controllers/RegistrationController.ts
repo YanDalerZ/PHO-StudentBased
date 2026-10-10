@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import pool from '../database/db.js';
-import { buildRegistrationUrl, readPublicRegistrationPolicy } from '../config/publicRegistration.js';
+import { buildRegistrationUrl, loadInvitationPolicy } from '../config/publicRegistration.js';
 import { AuditService } from '../services/AuditService.js';
 import {
     invitationCreateSchema,
@@ -203,9 +203,15 @@ export const generateInvitation = async (req: Request, res: Response): Promise<v
         return errorResponse(res, 403, 'FORBIDDEN', 'School is outside the active assignment scope');
     }
 
-    const policy = readPublicRegistrationPolicy();
+    let policy;
+    try { policy = await loadInvitationPolicy(); } catch { policy = null; }
     if (!policy) {
         return errorResponse(res, 503, 'PUBLIC_REGISTRATION_POLICY_UNAVAILABLE', 'Public registration is temporarily unavailable');
+    }
+    const expiryDays = parsed.data.expires_in_days ?? policy.maxExpiryDays;
+    const submissionLimit = parsed.data.submission_limit ?? policy.maxSubmissionLimit;
+    if (expiryDays > policy.maxExpiryDays || submissionLimit > policy.maxSubmissionLimit) {
+        return errorResponse(res, 400, 'INVITATION_POLICY_LIMIT', 'Invitation exceeds the current expiry or submission cap');
     }
 
     const client = await pool.connect();
@@ -239,7 +245,7 @@ export const generateInvitation = async (req: Request, res: Response): Promise<v
             VALUES ($1, $2, $3, NOW() + ($4 * INTERVAL '1 day'), $5)
             RETURNING id, school_id, created_by, expires_at, status,
                       submission_limit, submission_count, created_at
-        `, [tokenHash, parsed.data.school_id, req.user.id, parsed.data.expires_in_days, parsed.data.submission_limit]);
+        `, [tokenHash, parsed.data.school_id, req.user.id, expiryDays, submissionLimit]);
 
         await client.query('COMMIT');
         res.status(201).json({
@@ -267,11 +273,14 @@ export const getInvitations = async (req: Request, res: Response): Promise<void>
     const parsed = invitationListQuerySchema.safeParse(req.query);
     if (!parsed.success) return validationError(res, parsed.error);
     const assigned = req.effectiveAccess?.assignedSchoolIds ?? [];
+    let policy;
+    try { policy = await loadInvitationPolicy(); } catch { policy = null; }
+    if (!policy) return errorResponse(res, 503, 'PUBLIC_REGISTRATION_POLICY_UNAVAILABLE', 'Public registration is temporarily unavailable');
     if (parsed.data.school_id && !assigned.includes(parsed.data.school_id)) {
         return errorResponse(res, 403, 'FORBIDDEN', 'School is outside the active assignment scope');
     }
     if (assigned.length === 0) {
-        res.json({ data: [], meta: { page: parsed.data.page, pageSize: parsed.data.pageSize, total: 0, availableSchools: [] } });
+        res.json({ data: [], meta: { page: parsed.data.page, pageSize: parsed.data.pageSize, total: 0, availableSchools: [], policy: { max_expiry_days: policy.maxExpiryDays, max_submission_limit: policy.maxSubmissionLimit } } });
         return;
     }
 
@@ -319,6 +328,7 @@ export const getInvitations = async (req: Request, res: Response): Promise<void>
                 pageSize: parsed.data.pageSize,
                 total,
                 availableSchools: schools.rows,
+                policy: { max_expiry_days: policy.maxExpiryDays, max_submission_limit: policy.maxSubmissionLimit },
             },
         });
     } catch (error) {
@@ -334,30 +344,43 @@ export const revokeInvitation = async (req: Request, res: Response): Promise<voi
     if (!reasonResult.success) return validationError(res, reasonResult.error);
     if (!req.user) return errorResponse(res, 401, 'UNAUTHORIZED', 'Authentication required');
 
+    const client = await pool.connect();
     try {
-        const invitation = await pool.query<InvitationRow>(
-            'SELECT * FROM REGISTRATION_INVITATIONS WHERE id = $1',
-            [id],
+        await client.query('BEGIN');
+        const invitation = await client.query<InvitationRow>(
+            'SELECT id, school_id, status FROM REGISTRATION_INVITATIONS WHERE id = $1 FOR UPDATE', [id],
         );
         const row = invitation.rows[0];
-        if (!row) return errorResponse(res, 404, 'NOT_FOUND', 'Invitation not found');
+        if (!row) { await rollback(client); return errorResponse(res, 404, 'NOT_FOUND', 'Invitation not found'); }
         if (!hasSchoolAccess(req, row.school_id)) {
+            await rollback(client);
             return errorResponse(res, 403, 'FORBIDDEN', 'Invitation is outside the active assignment scope');
         }
         if (row.status !== 'active') {
+            await rollback(client);
             return errorResponse(res, 409, 'INVITATION_NOT_ACTIVE', 'Invitation is not active');
         }
-        const updated = await pool.query<InvitationRow>(`
+        const updated = await client.query<InvitationRow>(`
             UPDATE REGISTRATION_INVITATIONS
             SET status = 'revoked', revoked_at = NOW(), revoked_by = $1, revocation_reason = $2
             WHERE id = $3 AND status = 'active'
             RETURNING id, school_id, created_by, expires_at, status, submission_limit,
                       submission_count, revoked_at, revocation_reason, created_at
         `, [req.user.id, reasonResult.data.reason, id]);
+        await AuditService.logEvent({
+            actor_id: req.user.id, portal_role: req.user.portal_role,
+            action: 'REVOKE_REGISTRATION_INVITATION', entity_type: 'REGISTRATION_INVITATION',
+            entity_id: String(id), school_id: row.school_id, ip_address: req.ip,
+            details: { prior_status: row.status, status: 'revoked' },
+        }, client);
+        await client.query('COMMIT');
         res.json({ data: updated.rows[0] });
     } catch (error) {
-        console.error('Invitation revocation failed', error instanceof Error ? error.message : 'unknown error');
+        await rollback(client);
+        console.error('Invitation revocation failed', postgresError(error));
         errorResponse(res, 500, 'INTERNAL_ERROR', 'Unable to revoke invitation');
+    } finally {
+        client.release();
     }
 };
 
@@ -366,7 +389,8 @@ export const getInvitationDetails = async (req: Request, res: Response): Promise
     if (!token || !/^[a-f0-9]{32}$/i.test(token)) {
         return errorResponse(res, 404, 'INVITATION_UNAVAILABLE', 'Registration invitation is unavailable');
     }
-    const policy = readPublicRegistrationPolicy();
+    let policy;
+    try { policy = await loadInvitationPolicy(); } catch { policy = null; }
     if (!policy) {
         return errorResponse(res, 503, 'PUBLIC_REGISTRATION_POLICY_UNAVAILABLE', 'Public registration is temporarily unavailable');
     }

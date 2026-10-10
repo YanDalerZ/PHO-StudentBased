@@ -810,6 +810,7 @@ export interface CreateAdminUserPayload {
   email: string;
   password: string;
   portal_role: CreatableAdminUserRole;
+  job_title: string;
   first_name: string;
   last_name: string;
   contact_no?: string | null;
@@ -819,6 +820,7 @@ export interface UpdateAdminUserPayload {
   email?: string;
   password?: string;
   portal_role?: CreatableAdminUserRole;
+  job_title?: string;
   first_name?: string;
   last_name?: string;
   contact_no?: string | null;

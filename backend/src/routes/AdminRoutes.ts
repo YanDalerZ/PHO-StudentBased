@@ -3,6 +3,8 @@ import { authenticate } from '../middleware/auth.js';
 import { requirePortalRole } from '../middleware/rbac.js';
 import * as adminController from '../controllers/AdminController.js';
 import * as adminAccessController from '../controllers/AdminAccessController.js';
+import * as adminInvitationController from '../controllers/AdminInvitationController.js';
+import * as adminAuditController from '../controllers/AdminAuditController.js';
 
 const router = Router();
 
@@ -12,6 +14,7 @@ router.use(requirePortalRole('admin'));
 
 // System Dashboard
 router.get('/dashboard', adminController.getDashboard);
+router.get('/audit-logs', adminAuditController.getAuditLogs);
 
 // User Management
 router.get('/users', adminController.getUsers);
@@ -23,6 +26,12 @@ router.patch('/users/:id/status', adminController.updateUserStatus);
 router.get('/modules', adminController.getModules);
 router.post('/modules', adminController.createModule);
 router.put('/modules/:id', adminController.updateModule);
+
+// Invitation governance: token-free metadata and actor-owned revocation.
+router.get('/registration-invitation-policy', adminInvitationController.getAdminInvitationPolicy);
+router.put('/registration-invitation-policy', adminInvitationController.updateAdminInvitationPolicy);
+router.get('/registration-invitations', adminInvitationController.listAdminInvitations);
+router.post('/registration-invitations/:id/revoke', adminInvitationController.revokeAdminInvitation);
 
 // School Management
 router.get('/schools', adminController.getSchools);

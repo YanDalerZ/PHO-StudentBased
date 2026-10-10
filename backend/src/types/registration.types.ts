@@ -69,8 +69,8 @@ export const publicRegistrationPayloadSchema = z.strictObject({
 
 export const invitationCreateSchema = z.strictObject({
     school_id: positiveId,
-    expires_in_days: z.coerce.number().int().min(1).max(7).default(7),
-    submission_limit: z.coerce.number().int().min(1).max(100).default(100),
+    expires_in_days: z.coerce.number().int().min(1).max(7).optional(),
+    submission_limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 export const invitationListQuerySchema = z.strictObject({
