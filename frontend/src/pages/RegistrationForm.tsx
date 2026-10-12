@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
@@ -17,7 +17,7 @@ import {
 import {
     getMunicipalities,
     getBarangays,
-    getSchools,
+    getAllLookupSchools,
     createStudent,
     updateStudent,
 } from '../services/api';
@@ -154,6 +154,75 @@ const INITIAL_STATE: StudentFormData = {
     philhealth_category: ''
 };
 
+type FieldErrors = Partial<Record<keyof StudentFormData, string>>;
+
+const FIELD_LABELS: Partial<Record<keyof StudentFormData, string>> = {
+    student_lrn: 'Learner Reference Number (LRN)',
+    first_name: 'First Name',
+    middle_name: 'Middle Name',
+    last_name: 'Last Name',
+    date_of_birth: 'Date of Birth',
+    sex: 'Sex',
+    municipality: 'City/Municipality',
+    barangay: 'Barangay',
+    email: 'Email',
+    dswd_4ps: 'DSWD 4Ps member',
+    is_pwd: 'Person With Disability',
+    pwd_type: 'PWD Type',
+    philhealth_member: 'PhilHealth Member',
+    philhealth_id: 'PhilHealth Number',
+    philhealth_status_type: 'PhilHealth Status Type',
+    philhealth_category: 'PhilHealth Category',
+    school_id: 'School',
+    grade_level: 'Grade Level',
+};
+
+const SECTION_FIELD_ORDER: Record<number, (keyof StudentFormData)[]> = {
+    1: ['student_lrn', 'first_name', 'middle_name', 'last_name', 'date_of_birth', 'sex'],
+    2: ['municipality', 'barangay', 'email', 'dswd_4ps', 'is_pwd', 'pwd_type', 'philhealth_member', 'philhealth_id', 'philhealth_status_type', 'philhealth_category'],
+    3: ['school_id', 'grade_level'],
+};
+
+const orderedInvalidFields = (errors: FieldErrors, section: number) =>
+    (SECTION_FIELD_ORDER[section] ?? []).filter(field => Boolean(errors[field]));
+
+const validateSection = (data: StudentFormData, section: number): FieldErrors => {
+    const errors: FieldErrors = {};
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const required = (field: keyof StudentFormData) => {
+        if (!String(data[field] ?? '').trim() || data[field] === 0) {
+            errors[field] = `${FIELD_LABELS[field]} is required.`;
+        }
+    };
+
+    if (section === 1) {
+        (['student_lrn', 'first_name', 'middle_name', 'last_name', 'date_of_birth', 'sex'] as const).forEach(required);
+        if (data.student_lrn.trim() && !/^\d{12}$/.test(data.student_lrn.trim())) {
+            errors.student_lrn = 'LRN must be exactly 12 digits.';
+        }
+        if (data.date_of_birth && (!/^\d{4}-\d{2}-\d{2}$/.test(data.date_of_birth)
+            || Number.isNaN(Date.parse(data.date_of_birth))
+            || new Date(data.date_of_birth).toISOString().slice(0, 10) !== data.date_of_birth
+            || data.date_of_birth > today)) {
+            errors.date_of_birth = 'Enter a valid date of birth that is not in the future.';
+        }
+    } else if (section === 2) {
+        (['dswd_4ps', 'is_pwd', 'philhealth_member'] as const).forEach(required);
+        if (data.municipality) required('barangay');
+        if (data.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
+            errors.email = 'Enter a valid email address.';
+        }
+        if (data.is_pwd === 'Yes') required('pwd_type');
+        if (data.philhealth_member === 'Yes') {
+            (['philhealth_id', 'philhealth_status_type', 'philhealth_category'] as const).forEach(required);
+        }
+    } else if (section === 3) {
+        (['school_id', 'grade_level'] as const).forEach(required);
+    }
+    return errors;
+};
+
 const normalizeStudentData = (data?: Partial<Student> | null): StudentFormData => {
     if (!data) return INITIAL_STATE;
     return {
@@ -276,17 +345,23 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState<StudentFormData>(() => normalizeStudentData(initialData));
     const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+    const [attemptedSections, setAttemptedSections] = useState<Record<number, boolean>>({});
+    const formRef = useRef<HTMLFormElement>(null);
     const [loading, setLoading] = useState(false);
 
-    // Cascading Dropdown States
+    // Residential address lookups and the independently scoped school list.
     const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
     const [barangays, setBarangays] = useState<Barangay[]>([]);
     const [schools, setSchools] = useState<School[]>([]);
+    const [schoolsLoading, setSchoolsLoading] = useState(true);
+    const [schoolsError, setSchoolsError] = useState(false);
 
     const [prevInitialData, setPrevInitialData] = useState(initialData);
     if (initialData !== prevInitialData) {
         setPrevInitialData(initialData);
         setFormData(normalizeStudentData(initialData));
+        setTouchedFields({});
+        setAttemptedSections({});
     }
 
     useEffect(() => {
@@ -312,13 +387,21 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
 
     useEffect(() => {
         let isCurrent = true;
-        if (formData.barangay) {
-            getSchools(formData.barangay).then(data => {
-                if (isCurrent) setSchools(data);
+        getAllLookupSchools()
+            .then(data => {
+                if (isCurrent) {
+                    setSchools(data.filter(school => school.is_active !== false));
+                    setSchoolsError(false);
+                }
+            })
+            .catch(() => {
+                if (isCurrent) setSchoolsError(true);
+            })
+            .finally(() => {
+                if (isCurrent) setSchoolsLoading(false);
             });
-        }
         return () => { isCurrent = false; };
-    }, [formData.barangay]);
+    }, []);
 
 
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -375,10 +458,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
         const { name, value } = e.target;
         setFormData(prev => {
             if (name === 'municipality') {
-                return { ...prev, municipality: value, barangay: '', school_id: 0 };
+                return { ...prev, municipality: value, barangay: '' };
             }
             if (name === 'barangay') {
-                return { ...prev, barangay: value, school_id: 0 };
+                return { ...prev, barangay: value };
             }
             return {
                 ...prev,
@@ -386,7 +469,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
             };
         });
         if (name === 'municipality') {
-            setSchools([]);
+            setBarangays([]);
         }
     }, []);
 
@@ -395,105 +478,45 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
         setTouchedFields(prev => ({ ...prev, [name]: true }));
     }, []);
 
-    const isFieldInvalid = useCallback((name: keyof StudentFormData, isRequired = true): boolean => {
-        if (!isRequired) return false;
-        if (!touchedFields[name]) return false;
+    const sectionErrors = useMemo(() => validateSection(formData, step), [formData, step]);
+    const fieldError = useCallback((name: keyof StudentFormData): string | undefined =>
+        (attemptedSections[step] || touchedFields[name]) ? sectionErrors[name] : undefined,
+    [attemptedSections, touchedFields, sectionErrors, step]);
+    const isFieldInvalid = useCallback((name: keyof StudentFormData): boolean =>
+        Boolean(fieldError(name)), [fieldError]);
 
-        const value = formData[name];
-        if (typeof value === 'number') return value === 0;
-        return !value || String(value).trim() === '';
-    }, [formData, touchedFields]);
+    const fieldMessage = (name: keyof StudentFormData) => {
+        const message = fieldError(name);
+        return message ? <p id={`${name}-error`} className="mt-1.5 text-xs text-red-700" role="alert">{message}</p> : null;
+    };
 
-    const getInputClasses = useCallback((fieldName: keyof StudentFormData, isRequired = true) => cn(
+    const getInputClasses = useCallback((fieldName: keyof StudentFormData) => cn(
         "w-full px-3.5 py-2.5 rounded-lg bg-white border text-black placeholder-slate-400 focus:outline-none focus:ring-2 transition-colors text-sm",
-        isFieldInvalid(fieldName, isRequired)
+        isFieldInvalid(fieldName)
             ? "border-red-500 bg-red-50/20 text-red-900 focus:ring-red-500 focus:border-red-500"
             : "border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
     ), [isFieldInvalid]);
 
-    const getSelectClasses = useCallback((fieldName: keyof StudentFormData, isRequired = true) => cn(
-        getInputClasses(fieldName, isRequired),
+    const getSelectClasses = useCallback((fieldName: keyof StudentFormData) => cn(
+        getInputClasses(fieldName),
         "appearance-none bg-no-repeat pr-10"
     ), [getInputClasses]);
 
 
-    const markStepFieldsTouched = useCallback((currentStep: number) => {
-        const fieldsToTouch: Record<string, boolean> = {};
-        if (currentStep === 1) {
-            fieldsToTouch.student_lrn = true;
-            fieldsToTouch.first_name = true;
-            fieldsToTouch.middle_name = true;
-            fieldsToTouch.last_name = true;
-            fieldsToTouch.date_of_birth = true;
-        } else if (currentStep === 2) {
-            fieldsToTouch.municipality = true;
-            fieldsToTouch.barangay = true;
-        } else if (currentStep === 3) {
-            fieldsToTouch.school_id = true;
-            fieldsToTouch.grade_level = true;
-        }
-        setTouchedFields(prev => ({ ...prev, ...fieldsToTouch }));
-    }, []);
-
     const validateStep = useCallback((currentStep: number): boolean => {
-        markStepFieldsTouched(currentStep);
-
-        if (currentStep === 1) {
-            if (!formData.student_lrn.trim()) {
-                toast.error('Please enter the Learner Reference Number (LRN).');
-                return false;
-            }
-            if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.middle_name.trim()) {
-                toast.error('First Name, Middle Name, and Last Name are required.');
-                return false;
-            }
-            if (!formData.date_of_birth) {
-                toast.error('Please enter the Date of Birth.');
-                return false;
-            }
-        } else if (currentStep === 2) {
-            if (!formData.municipality) {
-                toast.error('Please select a Municipality.');
-                return false;
-            }
-            if (!formData.barangay) {
-                toast.error('Please select a Barangay.');
-                return false;
-            }
-            if (!formData.dswd_4ps) {
-                toast.error('Please specify if the student is a DSWD 4Ps member.');
-                return false;
-            }
-            if (!formData.is_pwd) {
-                toast.error('Please specify if the student is a Person With Disability.');
-                return false;
-            }
-            if (formData.is_pwd === 'Yes' && !formData.pwd_type) {
-                toast.error('Please select a PWD Type.');
-                return false;
-            }
-            if (!formData.philhealth_member) {
-                toast.error('Please specify Philhealth membership.');
-                return false;
-            }
-            if (formData.philhealth_member === 'Yes') {
-                if (!formData.philhealth_id || !formData.philhealth_status_type || !formData.philhealth_category) {
-                    toast.error('Please complete all Philhealth details.');
-                    return false;
-                }
-            }
-        } else if (currentStep === 3) {
-            if (!formData.school_id) {
-                toast.error('Please select a School.');
-                return false;
-            }
-            if (!formData.grade_level) {
-                toast.error('Please select a Grade Level.');
-                return false;
-            }
+        const errors = validateSection(formData, currentStep);
+        setAttemptedSections(prev => ({ ...prev, [currentStep]: true }));
+        const firstInvalid = orderedInvalidFields(errors, currentStep)[0];
+        if (firstInvalid) {
+            requestAnimationFrame(() => {
+                const control = Array.from(formRef.current?.elements ?? []).find(
+                    element => element instanceof HTMLElement && element.getAttribute('name') === firstInvalid
+                );
+                if (control instanceof HTMLElement) control.focus();
+            });
         }
-        return true;
-    }, [formData, markStepFieldsTouched]);
+        return !firstInvalid;
+    }, [formData]);
 
     const handleNext = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
@@ -526,8 +549,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
         setLoading(true);
         try {
             const targetId = studentId || formData.id || initialData?.id;
+            // The optional UI choice must be omitted when blank; the API accepts only Yes/No.
+            const payload = { ...formData, indigenous: formData.indigenous || undefined };
             if (mode === 'edit' && targetId) {
-                const res = await updateStudent(targetId, formData);
+                const res = await updateStudent(targetId, payload);
                 toast.success('Student updated successfully!', {
                     style: {
                         background: '#f0fdf4',
@@ -543,7 +568,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     onClose();
                 }
             } else {
-                const res = await createStudent(formData);
+                const res = await createStudent(payload);
                 toast.success('Registration successful! Redirecting...', {
                     style: {
                         background: '#f0fdf4',
@@ -621,7 +646,17 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                             You can view this record, but your current access does not allow this change.
                         </div>
                     )}
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form ref={formRef} noValidate onSubmit={handleSubmit} className="space-y-6">
+                        {attemptedSections[step] && Object.keys(sectionErrors).length > 0 && (
+                            <div role="alert" aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                                <p className="font-semibold">Please review these fields before {step === 3 ? 'saving' : 'continuing'}:</p>
+                                <ul className="mt-2 list-disc pl-5">
+                                    {orderedInvalidFields(sectionErrors, step).map(name => (
+                                        <li key={name}>{FIELD_LABELS[name]}: {sectionErrors[name]}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                         {/* STEP 1: Personal Information */}
                         {step === 1 && (
                             <div className="space-y-5">
@@ -649,7 +684,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                                 onBlur={handleBlur}
                                                 className={getInputClasses('student_lrn')}
                                                 placeholder="12-digit LRN"
+                                                aria-invalid={isFieldInvalid('student_lrn')}
+                                                aria-describedby={fieldError('student_lrn') ? 'student_lrn-error' : undefined}
                                             />
+                                            {fieldMessage('student_lrn')}
                                         </div>
                                         <div>
                                             <label className={labelClasses}>
@@ -667,7 +705,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                                 onChange={handleChange}
                                                 onBlur={handleBlur}
                                                 className={getInputClasses('first_name')}
+                                                aria-invalid={isFieldInvalid('first_name')}
+                                                aria-describedby={fieldError('first_name') ? 'first_name-error' : undefined}
                                             />
+                                            {fieldMessage('first_name')}
                                         </div>
                                     </div>
                                     <div className="sm:col-span-1 flex flex-col">
@@ -753,7 +794,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getInputClasses('middle_name')}
+                                            aria-invalid={isFieldInvalid('middle_name')}
+                                            aria-describedby={fieldError('middle_name') ? 'middle_name-error' : undefined}
                                         />
+                                        {fieldMessage('middle_name')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>
@@ -771,7 +815,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getInputClasses('last_name')}
+                                            aria-invalid={isFieldInvalid('last_name')}
+                                            aria-describedby={fieldError('last_name') ? 'last_name-error' : undefined}
                                         />
+                                        {fieldMessage('last_name')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>Suffix (e.g., Jr., III)</label>
@@ -780,7 +827,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.suffix}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('suffix', false)}
+                                            className={getSelectClasses('suffix')}
                                         >
                                             <option value="">Select Suffix</option>
                                             {SUFFIX_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -803,7 +850,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getInputClasses('date_of_birth')}
+                                            aria-invalid={isFieldInvalid('date_of_birth')}
+                                            aria-describedby={fieldError('date_of_birth') ? 'date_of_birth-error' : undefined}
                                         />
+                                        {fieldMessage('date_of_birth')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>Sex *</label>
@@ -814,10 +864,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getSelectClasses('sex')}
+                                            aria-invalid={isFieldInvalid('sex')}
+                                            aria-describedby={fieldError('sex') ? 'sex-error' : undefined}
                                         >
                                             <option value="Male">Male</option>
                                             <option value="Female">Female</option>
                                         </select>
+                                        {fieldMessage('sex')}
                                     </div>
                                     <div className="sm:col-span-2 pt-3">
                                         <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-1 mb-4">Other Personal Information</h3>
@@ -829,7 +882,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.birth_place}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('birth_place', false)}
+                                            className={getInputClasses('birth_place')}
                                         />
                                     </div>
                                     <div>
@@ -839,7 +892,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.civil_status}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('civil_status', false)}
+                                            className={getSelectClasses('civil_status')}
                                         >
                                             <option value="">Select Civil Status</option>
                                             {CIVIL_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -852,7 +905,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.educational_attainment}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('educational_attainment', false)}
+                                            className={getSelectClasses('educational_attainment')}
                                         >
                                             <option value="">Select Attainment</option>
                                             {EDUCATIONAL_ATTAINMENT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -865,7 +918,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.employment_status}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('employment_status', false)}
+                                            className={getSelectClasses('employment_status')}
                                         >
                                             <option value="">Select Employment</option>
                                             {EMPLOYMENT_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -878,7 +931,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.tin_no}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('tin_no', false)}
+                                            className={getInputClasses('tin_no')}
                                         />
                                     </div>
                                     <div>
@@ -888,7 +941,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.religion}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('religion', false)}
+                                            className={getSelectClasses('religion')}
                                         >
                                             <option value="">Select Religion</option>
                                             {RELIGION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -901,7 +954,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.indigenous || ''}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('indigenous', false)}
+                                            className={getSelectClasses('indigenous')}
                                         >
                                             <option value="">Select Yes/No</option>
                                             <option value="Yes">Yes</option>
@@ -916,7 +969,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                                 value={formData.indigenous_group || ''}
                                                 onChange={handleChange}
                                                 onBlur={handleBlur}
-                                                className={getSelectClasses('indigenous_group', false)}
+                                                className={getSelectClasses('indigenous_group')}
                                             >
                                                 <option value="">Select Ethnic Group</option>
                                                 {INDIGENOUS_GROUP_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -930,7 +983,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.blood_type}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('blood_type', false)}
+                                            className={getSelectClasses('blood_type')}
                                         >
                                             <option value="">Select Blood Type</option>
                                             {BLOOD_TYPE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -946,7 +999,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.mother_first_name}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('mother_first_name', false)}
+                                            className={getInputClasses('mother_first_name')}
                                         />
                                     </div>
                                     <div>
@@ -956,7 +1009,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.mother_middle_name}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('mother_middle_name', false)}
+                                            className={getInputClasses('mother_middle_name')}
                                         />
                                     </div>
                                     <div>
@@ -966,7 +1019,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.mother_last_name}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('mother_last_name', false)}
+                                            className={getInputClasses('mother_last_name')}
                                         />
                                     </div>
                                     <div>
@@ -977,7 +1030,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.mother_birthdate}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('mother_birthdate', false)}
+                                            className={getInputClasses('mother_birthdate')}
                                         />
                                     </div>
                                 </div>
@@ -1022,7 +1075,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                     </div>
                                     <div>
                                         <label className={labelClasses}>
-                                            <span>City/Municipality *</span>
+                                            <span>City/Municipality</span>
                                             {isFieldInvalid('municipality') && (
                                                 <span className="text-red-600 text-xs flex items-center font-normal lowercase">
                                                     <AlertCircle className="w-3 h-3 mr-1" /> required
@@ -1030,22 +1083,24 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             )}
                                         </label>
                                         <select
-                                            required
                                             name="municipality"
                                             value={formData.municipality}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getSelectClasses('municipality')}
+                                            aria-invalid={isFieldInvalid('municipality')}
+                                            aria-describedby={fieldError('municipality') ? 'municipality-error' : undefined}
                                         >
                                             <option value="">Select Municipality</option>
                                             {municipalities.map(m => (
                                                 <option key={m.id} value={m.id}>{m.name}</option>
                                             ))}
                                         </select>
+                                        {fieldMessage('municipality')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>
-                                            <span>Barangay *</span>
+                                            <span>Barangay {formData.municipality && '*'}</span>
                                             {isFieldInvalid('barangay') && (
                                                 <span className="text-red-600 text-xs flex items-center font-normal lowercase">
                                                     <AlertCircle className="w-3 h-3 mr-1" /> required
@@ -1053,7 +1108,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             )}
                                         </label>
                                         <select
-                                            required
+                                            required={Boolean(formData.municipality)}
                                             name="barangay"
                                             value={formData.barangay}
                                             onChange={handleChange}
@@ -1063,12 +1118,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                                 getSelectClasses('barangay'),
                                                 "disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed"
                                             )}
+                                            aria-invalid={isFieldInvalid('barangay')}
+                                            aria-describedby={fieldError('barangay') ? 'barangay-error' : undefined}
                                         >
                                             <option value="">Select Barangay</option>
                                             {barangays.map(b => (
                                                 <option key={b.id} value={b.id}>{b.name}</option>
                                             ))}
                                         </select>
+                                        {fieldMessage('barangay')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>Number/Street Name/Purok</label>
@@ -1077,7 +1135,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.address}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('address', false)}
+                                            className={getInputClasses('address')}
                                             placeholder="House No., Street Name"
                                         />
                                     </div>
@@ -1088,7 +1146,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.zip_code}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('zip_code', false)}
+                                            className={getInputClasses('zip_code')}
                                         />
                                     </div>
                                     <div>
@@ -1099,8 +1157,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.email}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('email', false)}
+                                            className={getInputClasses('email')}
+                                            aria-invalid={isFieldInvalid('email')}
+                                            aria-describedby={fieldError('email') ? 'email-error' : undefined}
                                         />
+                                        {fieldMessage('email')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>Mobile</label>
@@ -1109,7 +1170,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.contact_no}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('contact_no', false)}
+                                            className={getInputClasses('contact_no')}
                                         />
                                     </div>
                                     <div>
@@ -1119,7 +1180,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.landline}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('landline', false)}
+                                            className={getInputClasses('landline')}
                                         />
                                     </div>
 
@@ -1133,7 +1194,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.parent_guardian_name}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('parent_guardian_name', false)}
+                                            className={getInputClasses('parent_guardian_name')}
                                         />
                                     </div>
                                     <div>
@@ -1143,7 +1204,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.parent_guardian_contact}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('parent_guardian_contact', false)}
+                                            className={getInputClasses('parent_guardian_contact')}
                                             placeholder="09..."
                                         />
                                     </div>
@@ -1167,11 +1228,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getSelectClasses('dswd_4ps')}
+                                            aria-invalid={isFieldInvalid('dswd_4ps')}
+                                            aria-describedby={fieldError('dswd_4ps') ? 'dswd_4ps-error' : undefined}
                                         >
                                             <option value="">Select Yes/No</option>
                                             <option value="Yes">Yes</option>
                                             <option value="No">No</option>
                                         </select>
+                                        {fieldMessage('dswd_4ps')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>4Ps Household Number</label>
@@ -1180,7 +1244,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.dswd_4ps_no}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('dswd_4ps_no', false)}
+                                            className={getInputClasses('dswd_4ps_no')}
                                         />
                                     </div>
                                     <div>
@@ -1199,11 +1263,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getSelectClasses('is_pwd')}
+                                            aria-invalid={isFieldInvalid('is_pwd')}
+                                            aria-describedby={fieldError('is_pwd') ? 'is_pwd-error' : undefined}
                                         >
                                             <option value="">Select Yes/No</option>
                                             <option value="Yes">Yes</option>
                                             <option value="No">No</option>
                                         </select>
+                                        {fieldMessage('is_pwd')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>PWD TYPE {formData.is_pwd === 'Yes' && '*'}</label>
@@ -1212,11 +1279,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.pwd_type}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('pwd_type', formData.is_pwd === 'Yes' && !formData.pwd_type)}
+                                            className={getSelectClasses('pwd_type')}
+                                            aria-invalid={isFieldInvalid('pwd_type')}
+                                            aria-describedby={fieldError('pwd_type') ? 'pwd_type-error' : undefined}
                                         >
                                             <option value="">Select PWD Type</option>
                                             {PWD_TYPE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                         </select>
+                                        {fieldMessage('pwd_type')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>PWD ID</label>
@@ -1225,7 +1295,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.pwd_id_no}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('pwd_id_no', false)}
+                                            className={getInputClasses('pwd_id_no')}
                                         />
                                     </div>
                                     <div>
@@ -1235,7 +1305,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.psa_national_id}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('psa_national_id', false)}
+                                            className={getInputClasses('psa_national_id')}
                                         />
                                     </div>
 
@@ -1258,11 +1328,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getSelectClasses('philhealth_member')}
+                                            aria-invalid={isFieldInvalid('philhealth_member')}
+                                            aria-describedby={fieldError('philhealth_member') ? 'philhealth_member-error' : undefined}
                                         >
                                             <option value="">Select Yes/No</option>
                                             <option value="Yes">Yes</option>
                                             <option value="No">No</option>
                                         </select>
+                                        {fieldMessage('philhealth_member')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>Philhealth Number {formData.philhealth_member === 'Yes' && '*'}</label>
@@ -1271,8 +1344,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.philhealth_id}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getInputClasses('philhealth_id', formData.philhealth_member === 'Yes' && !formData.philhealth_id)}
+                                            className={getInputClasses('philhealth_id')}
+                                            aria-invalid={isFieldInvalid('philhealth_id')}
+                                            aria-describedby={fieldError('philhealth_id') ? 'philhealth_id-error' : undefined}
                                         />
+                                        {fieldMessage('philhealth_id')}
                                     </div>
                                     <div>
                                         <label className={labelClasses}>Philhealth Status Type {formData.philhealth_member === 'Yes' && '*'}</label>
@@ -1281,11 +1357,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.philhealth_status_type}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('philhealth_status_type', formData.philhealth_member === 'Yes' && !formData.philhealth_status_type)}
+                                            className={getSelectClasses('philhealth_status_type')}
+                                            aria-invalid={isFieldInvalid('philhealth_status_type')}
+                                            aria-describedby={fieldError('philhealth_status_type') ? 'philhealth_status_type-error' : undefined}
                                         >
                                             <option value="">Select Status</option>
                                             {PHILHEALTH_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                         </select>
+                                        {fieldMessage('philhealth_status_type')}
                                     </div>
                                     <div className="sm:col-span-2">
                                         <label className={labelClasses}>Philhealth Category {formData.philhealth_member === 'Yes' && '*'}</label>
@@ -1294,11 +1373,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.philhealth_category}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            className={getSelectClasses('philhealth_category', formData.philhealth_member === 'Yes' && !formData.philhealth_category)}
+                                            className={getSelectClasses('philhealth_category')}
+                                            aria-invalid={isFieldInvalid('philhealth_category')}
+                                            aria-describedby={fieldError('philhealth_category') ? 'philhealth_category-error' : undefined}
                                         >
                                             <option value="">Select Category</option>
                                             {PHILHEALTH_CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                         </select>
+                                        {fieldMessage('philhealth_category')}
                                     </div>
                                 </div>
                             </div>
@@ -1328,19 +1410,18 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                             value={formData.school_id}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            disabled={!formData.barangay}
-                                            className={cn(
-                                                getSelectClasses('school_id'),
-                                                "disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed"
-                                            )}
+                                            className={getSelectClasses('school_id')}
+                                            aria-invalid={isFieldInvalid('school_id')}
+                                            aria-describedby={fieldError('school_id') ? 'school_id-error' : undefined}
                                         >
-                                            <option value={0}>Select School</option>
+                                            <option value={0}>{schoolsLoading ? 'Loading schools...' : 'Select School'}</option>
                                             {schools.map(s => (
                                                 <option key={s.id} value={s.id}>{s.name}</option>
                                             ))}
                                         </select>
-                                        {!formData.barangay && (
-                                            <p className="text-xs text-emerald-800 font-medium mt-1.5">Note: Select a Municipality and Barangay first to populate local schools.</p>
+                                        {fieldMessage('school_id')}
+                                        {schoolsError && (
+                                            <p className="text-xs text-red-700 mt-1.5" role="alert">Schools could not be loaded. Please reopen the form and try again.</p>
                                         )}
                                     </div>
 
@@ -1361,6 +1442,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                                 onChange={handleChange}
                                                 onBlur={handleBlur}
                                                 className={getSelectClasses('grade_level')}
+                                                aria-invalid={isFieldInvalid('grade_level')}
+                                                aria-describedby={fieldError('grade_level') ? 'grade_level-error' : undefined}
                                             >
                                                 <option value="">Select Grade</option>
                                                 <option value="Kindergarten">Kindergarten</option>
@@ -1377,6 +1460,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                                 <option value="Grade 11">Grade 11</option>
                                                 <option value="Grade 12">Grade 12</option>
                                             </select>
+                                            {fieldMessage('grade_level')}
                                         </div>
                                         <div>
                                             <label className={labelClasses}>Section</label>
@@ -1385,7 +1469,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                                 value={formData.section}
                                                 onChange={handleChange}
                                                 onBlur={handleBlur}
-                                                className={getInputClasses('section', false)}
+                                                className={getInputClasses('section')}
                                                 placeholder="e.g., Section A"
                                             />
                                         </div>
