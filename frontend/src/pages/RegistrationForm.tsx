@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
+import { isAxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
@@ -163,6 +164,7 @@ const FIELD_LABELS: Partial<Record<keyof StudentFormData, string>> = {
     last_name: 'Last Name',
     date_of_birth: 'Date of Birth',
     sex: 'Sex',
+    indigenous: 'Indigenous People?',
     municipality: 'City/Municipality',
     barangay: 'Barangay',
     email: 'Email',
@@ -178,7 +180,7 @@ const FIELD_LABELS: Partial<Record<keyof StudentFormData, string>> = {
 };
 
 const SECTION_FIELD_ORDER: Record<number, (keyof StudentFormData)[]> = {
-    1: ['student_lrn', 'first_name', 'middle_name', 'last_name', 'date_of_birth', 'sex'],
+    1: ['student_lrn', 'first_name', 'middle_name', 'last_name', 'date_of_birth', 'sex', 'indigenous'],
     2: ['municipality', 'barangay', 'email', 'dswd_4ps', 'is_pwd', 'pwd_type', 'philhealth_member', 'philhealth_id', 'philhealth_status_type', 'philhealth_category'],
     3: ['school_id', 'grade_level'],
 };
@@ -197,7 +199,10 @@ const validateSection = (data: StudentFormData, section: number): FieldErrors =>
     };
 
     if (section === 1) {
-        (['student_lrn', 'first_name', 'middle_name', 'last_name', 'date_of_birth', 'sex'] as const).forEach(required);
+        (['student_lrn', 'first_name', 'middle_name', 'last_name', 'date_of_birth', 'sex', 'indigenous'] as const).forEach(required);
+        if (data.indigenous && data.indigenous !== 'Yes' && data.indigenous !== 'No') {
+            errors.indigenous = 'Select Yes or No.';
+        }
         if (data.student_lrn.trim() && !/^\d{12}$/.test(data.student_lrn.trim())) {
             errors.student_lrn = 'LRN must be exactly 12 digits.';
         }
@@ -549,8 +554,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
         setLoading(true);
         try {
             const targetId = studentId || formData.id || initialData?.id;
-            // The optional UI choice must be omitted when blank; the API accepts only Yes/No.
-            const payload = { ...formData, indigenous: formData.indigenous || undefined };
+            const payload = {
+                ...formData,
+                indigenous: formData.indigenous,
+                is_indigenous: formData.indigenous === 'Yes',
+                indigenous_group: formData.indigenous === 'Yes' ? formData.indigenous_group || null : null,
+            };
             if (mode === 'edit' && targetId) {
                 const res = await updateStudent(targetId, payload);
                 toast.success('Student updated successfully!', {
@@ -578,7 +587,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     iconTheme: { primary: '#16a34a', secondary: '#fff' }
                 });
                 if (onSuccess) {
-                    onSuccess({ ...formData, id: res.id } as Student);
+                    onSuccess({ ...payload, id: res.id } as Student);
                 }
                 setTimeout(() => {
                     if (onClose) {
@@ -589,7 +598,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                 }, 1000);
             }
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to save student';
+            const response = isAxiosError<{
+                message?: string;
+                errors?: Array<{ path: Array<string | number>; message: string }>;
+            }>(err) ? err.response?.data : undefined;
+            const validationDetails = response?.errors
+                ?.map(issue => `${issue.path.join('.')}: ${issue.message}`)
+                .join('; ');
+            const message = validationDetails || response?.message
+                || (err instanceof Error ? err.message : 'Failed to save student');
             toast.error(message);
         } finally {
             setLoading(false);
@@ -948,18 +965,29 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                                         </select>
                                     </div>
                                     <div>
-                                        <label className={labelClasses}>Indigenous People?</label>
+                                        <label className={labelClasses}>
+                                            <span>Indigenous People? *</span>
+                                            {isFieldInvalid('indigenous') && (
+                                                <span className="text-red-600 text-xs flex items-center font-normal lowercase">
+                                                    <AlertCircle className="w-3 h-3 mr-1" /> required
+                                                </span>
+                                            )}
+                                        </label>
                                         <select
+                                            required
                                             name="indigenous"
                                             value={formData.indigenous || ''}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
                                             className={getSelectClasses('indigenous')}
+                                            aria-invalid={isFieldInvalid('indigenous')}
+                                            aria-describedby={fieldError('indigenous') ? 'indigenous-error' : undefined}
                                         >
                                             <option value="">Select Yes/No</option>
                                             <option value="Yes">Yes</option>
                                             <option value="No">No</option>
                                         </select>
+                                        {fieldMessage('indigenous')}
                                     </div>
                                     {formData.indigenous === 'Yes' && (
                                         <div className="col-span-1 sm:col-span-2">
