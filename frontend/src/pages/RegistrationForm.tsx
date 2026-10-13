@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import {
     User, MapPin, GraduationCap, ChevronRight, ChevronLeft,
     CheckCircle2, Loader2, Save, Building2, X, AlertCircle, Camera,
-    Trash2, RefreshCw
+    Trash2, RefreshCw, Printer
 } from 'lucide-react';
 import { uploadStudentPhoto, validatePhotoFile } from '../services/cloudinary';
 import {
@@ -27,6 +27,7 @@ import { cn } from '../lib/utils';
 import { hasModulePermission } from '../lib/access';
 import { useAuth } from '../contexts/AuthContext';
 import logo from '../assets/images/logo.jpg';
+import RegistrationPaperPacket, { type PaperSection } from './RegistrationPaperPacket';
 
 export interface RegistrationFormProps {
     onClose?: () => void;
@@ -346,6 +347,32 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
         'patient-info',
         mode === 'edit' ? 'can_edit' : 'can_create',
     );
+    const canPrint = mode === 'create' && hasModulePermission(effectiveAccess, 'patient-info', 'can_create');
+    const [printRequest, setPrintRequest] = useState<{ id: string; section: PaperSection } | null>(null);
+    const printStartedId = useRef<string | null>(null);
+
+    const printPaper = useCallback((section: PaperSection) => {
+        if (!canPrint) return;
+        const bytes = new Uint8Array(6);
+        crypto.getRandomValues(bytes);
+        const code = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+        setPrintRequest({ id: `PF-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${code}`, section });
+    }, [canPrint]);
+
+    useEffect(() => {
+        if (!printRequest) return;
+        const finishPrint = () => setPrintRequest(null);
+        window.addEventListener('afterprint', finishPrint);
+        const frame = requestAnimationFrame(() => {
+            if (printStartedId.current === printRequest.id) return;
+            printStartedId.current = printRequest.id;
+            window.print();
+        });
+        return () => {
+            cancelAnimationFrame(frame);
+            window.removeEventListener('afterprint', finishPrint);
+        };
+    }, [printRequest]);
 
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState<StudentFormData>(() => normalizeStudentData(initialData));
@@ -651,6 +678,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                             ? 'Update the student information and credentials below.'
                             : 'Please complete the required details below to register a student profile.'}
                     </p>
+                    {canPrint && (
+                        <button type="button" onClick={() => printPaper('all')} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer">
+                            <Printer className="h-4 w-4" /> Print all sections
+                        </button>
+                    )}
                 </div>
 
                 {/* Main Form Container */}
@@ -664,6 +696,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         </div>
                     )}
                     <form ref={formRef} noValidate onSubmit={handleSubmit} className="space-y-6">
+                        {canPrint && (
+                            <div className="flex justify-end">
+                                <button type="button" onClick={() => printPaper(step as 1 | 2 | 3)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">
+                                    <Printer className="h-4 w-4" /> Print this section
+                                </button>
+                            </div>
+                        )}
                         {attemptedSections[step] && Object.keys(sectionErrors).length > 0 && (
                             <div role="alert" aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
                                 <p className="font-semibold">Please review these fields before {step === 3 ? 'saving' : 'continuing'}:</p>
@@ -1547,6 +1586,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     </form>
                 </div>
             </div>
+            {printRequest && canPrint && <RegistrationPaperPacket id={printRequest.id} section={printRequest.section} />}
         </div>
     );
 };
