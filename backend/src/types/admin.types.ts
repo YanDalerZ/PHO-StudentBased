@@ -89,6 +89,7 @@ export interface AdminModulePermission {
   can_approve_registration: boolean;
   can_report: boolean;
   can_export: boolean;
+  can_manage_targets?: boolean;
 }
 
 export interface ModulePermissionReplacement {
@@ -99,6 +100,7 @@ export interface ModulePermissionReplacement {
   can_approve_registration: boolean;
   can_report: boolean;
   can_export: boolean;
+  can_manage_targets?: boolean;
 }
 
 export interface AdminSchoolAssignment {

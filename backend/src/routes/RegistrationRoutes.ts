@@ -36,9 +36,9 @@ router.get(
 router.post(
     '/public/registration-invitations/:token/submissions',
     publicRegistrationHeaders,
-    validatePublicRegistrationInput,
     requirePublicRegistrationPolicy,
     protectPublicRegistrationSubmission,
+    validatePublicRegistrationInput,
     submitRegistration,
 );
 

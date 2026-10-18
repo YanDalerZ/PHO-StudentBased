@@ -31,6 +31,7 @@ const actions: Array<{ key: keyof ModulePermissions; label: string }> = [
   { key: 'can_approve_registration', label: 'Approve' },
   { key: 'can_report', label: 'Report' },
   { key: 'can_export', label: 'Export' },
+  { key: 'can_manage_targets', label: 'Targets' },
 ];
 
 export const EffectiveAccessPreview = ({ user, access, isDraft }: EffectiveAccessPreviewProps) => {

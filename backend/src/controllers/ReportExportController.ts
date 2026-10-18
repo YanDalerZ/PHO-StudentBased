@@ -16,6 +16,7 @@ import type { ModuleSlug, PortalRole } from '../types/auth.types.js';
 
 const exportRequestSchema = z.object({
     format: z.enum(['csv', 'xlsx']),
+    view: z.enum(['municipality', 'masterlist']).default('municipality'),
     filters: z.record(z.string(), z.unknown()).default({}),
 }).strict();
 
@@ -96,6 +97,7 @@ export async function requestReportExport(req: Request, res: Response): Promise<
             ...auditContext,
             details: {
                 filters,
+                view: parsed.data.view,
                 scope_mode: scope.mode,
             },
             action: 'REPORT_EXPORT_REQUESTED',
@@ -103,6 +105,7 @@ export async function requestReportExport(req: Request, res: Response): Promise<
 
         const file = await generateDirectReportExport({
             moduleSlug: slug,
+            view: parsed.data.view,
             format: parsed.data.format,
             filters,
             scope,

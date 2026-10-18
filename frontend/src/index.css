@@ -1,13 +1,38 @@
 @import 'tailwindcss';
 
 @media print {
-  @page { margin: 12mm; size: A4 landscape; }
+  @page {
+    margin: 14mm 10mm 17mm;
+    size: A3 landscape;
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt Arial, sans-serif; }
+  }
+  @page reportMasterlist {
+    margin: 14mm 10mm 17mm;
+    size: A3 landscape;
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt Arial, sans-serif; }
+  }
+  @page reportImmunization {
+    margin: 14mm 10mm 17mm;
+    size: A2 landscape;
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt Arial, sans-serif; }
+  }
   body { background: white !important; }
   body * { visibility: hidden; }
+  .dashboard-layout, .dashboard-content, .dashboard-main {
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .dashboard-layout aside, .dashboard-content > header { display: none !important; }
+  .report-page { width: auto !important; max-width: none !important; margin: 0 !important; }
   .report-sheet, .report-sheet * { visibility: visible; }
   .report-sheet {
-    position: absolute;
-    inset: 0;
+    position: static;
     width: 100%;
     border: 0 !important;
     box-shadow: none !important;
@@ -15,6 +40,30 @@
     color: #0f172a !important;
   }
   .report-sheet * { color: #0f172a !important; }
+  .report-masterlist { page: reportMasterlist; }
+  .report-immunization { page: reportImmunization; }
+  .report-sheet .overflow-x-auto { overflow: visible !important; }
   .report-controls { display: none !important; }
   .break-inside-avoid { break-inside: avoid; }
+  .report-sheet { padding: 0 !important; }
+  .report-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 7pt !important; }
+  .report-table th, .report-table td { overflow-wrap: anywhere; }
+  .report-table th, .report-table td { padding: 2pt 3pt !important; }
+  .report-table thead { display: table-header-group; }
+  .report-table tr { break-inside: avoid; }
+  .report-group { break-after: avoid; }
+  .report-signatures {
+    break-inside: avoid;
+    margin-top: 8pt !important;
+    gap: 10pt !important;
+    font-size: 7pt !important;
+  }
+  .report-signatures > div > div { padding-top: 10pt !important; }
+  .report-signature-context {
+    display: block !important;
+    grid-column: 1 / -1;
+    font-size: 7pt !important;
+    font-weight: 700;
+  }
+  .report-title { display: none; }
 }

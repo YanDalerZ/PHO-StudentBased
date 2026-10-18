@@ -11,6 +11,7 @@ import DashboardRoutes from './DashboardRoutes.js';
 import AdminRoutes from './AdminRoutes.js';
 import RegistrationRoutes from './RegistrationRoutes.js';
 import ReportRoutes from './ReportRoutes.js';
+import ReportTargetRoutes from './ReportTargetRoutes.js';
 
 export default {
     UserRoutes,
@@ -26,6 +27,7 @@ export default {
     AdminRoutes,
     RegistrationRoutes,
     ReportRoutes,
+    ReportTargetRoutes,
 };
 
 

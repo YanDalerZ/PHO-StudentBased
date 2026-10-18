@@ -45,6 +45,7 @@ const actions: Array<{ key: PermissionAction; label: string; description: string
   { key: 'can_approve_registration', label: 'Approve', description: 'Review QR submissions' },
   { key: 'can_report', label: 'Report', description: 'Open consolidated reports' },
   { key: 'can_export', label: 'Export', description: 'Download report files' },
+  { key: 'can_manage_targets', label: 'Targets', description: 'Enter and revise school-period targets' },
 ];
 
 const getErrorMessage = (error: unknown, fallback: string): string => {

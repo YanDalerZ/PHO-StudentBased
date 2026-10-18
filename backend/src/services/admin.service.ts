@@ -721,7 +721,8 @@ export async function getModulePermissions(userId: number): Promise<AdminModuleP
       ump.can_edit,
       ump.can_approve_registration,
       ump.can_report,
-      ump.can_export
+      ump.can_export,
+      ump.can_manage_targets
     FROM USER_MODULE_PERMISSIONS ump
     JOIN MODULES m ON ump.module_id = m.id
     WHERE ump.user_id = $1 AND ump.revoked_at IS NULL
@@ -738,6 +739,7 @@ export async function getModulePermissions(userId: number): Promise<AdminModuleP
     can_approve_registration: row.can_approve_registration,
     can_report: row.can_report,
     can_export: row.can_export,
+    can_manage_targets: row.can_manage_targets,
   }));
 }
 
@@ -758,6 +760,7 @@ const permissionActions = [
   'can_approve_registration',
   'can_report',
   'can_export',
+  'can_manage_targets',
 ] as const;
 
 function assertUniquePositiveIds(ids: number[], label: string): void {
@@ -830,6 +833,9 @@ export async function updateModulePermissions(
           `Module ${module.slug} requires can_report or can_view when can_export is granted.`,
         );
       }
+      if (permission.can_manage_targets && !permission.can_report) {
+        throw new AdminServiceError(400, `Module ${module.slug} requires can_report when target management is granted.`);
+      }
       if (permission.can_approve_registration
         && (target.portal_role !== 'school_staff' || module.slug !== 'patient-info')) {
         throw new AdminServiceError(
@@ -848,12 +854,12 @@ export async function updateModulePermissions(
       if (!perm.module_id) continue;
       await client.query(`
         INSERT INTO USER_MODULE_PERMISSIONS 
-        (user_id, module_id, can_view, can_create, can_edit, can_approve_registration, can_report, can_export, granted_by)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (user_id, module_id, can_view, can_create, can_edit, can_approve_registration, can_report, can_export, can_manage_targets, granted_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `, [
         userId, perm.module_id, 
         perm.can_view, perm.can_create, perm.can_edit,
-        perm.can_approve_registration, perm.can_report, perm.can_export,
+        perm.can_approve_registration, perm.can_report, perm.can_export, perm.can_manage_targets ?? false,
         grantedBy
       ]);
     }
@@ -955,11 +961,11 @@ export async function getEffectiveAccess(userId: number): Promise<EffectiveAcces
   const effectiveAccess: EffectiveAccess = {
     assignedSchoolIds: schools.map(s => s.school_id),
     modulePermissions: {
-        'patient-info': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
-        'oral-health': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
-        'deworming': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
-        'immunization': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
-        'vital-signs': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false },
+        'patient-info': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false, can_manage_targets: false },
+        'oral-health': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false, can_manage_targets: false },
+        'deworming': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false, can_manage_targets: false },
+        'immunization': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false, can_manage_targets: false },
+        'vital-signs': { can_view: false, can_create: false, can_edit: false, can_approve_registration: false, can_report: false, can_export: false, can_manage_targets: false },
     }
   };
 
@@ -971,6 +977,7 @@ export async function getEffectiveAccess(userId: number): Promise<EffectiveAcces
       can_approve_registration: perm.can_approve_registration,
       can_report: perm.can_report,
       can_export: perm.can_export,
+      can_manage_targets: perm.can_manage_targets ?? false,
     };
   }
 

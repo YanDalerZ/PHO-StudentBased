@@ -66,6 +66,9 @@ const EDUCATIONAL_LEVELS = [
     'Grade 12',
 ];
 
+type VaccineLotKey = 'td1' | 'mr1' | 'hpv1' | 'hpv2' | 'td2' | 'mr2';
+const emptyVaccineLots = (): Record<VaccineLotKey, string> => ({ td1: '', mr1: '', hpv1: '', hpv2: '', td2: '', mr2: '' });
+
 const ImmunizationForm: React.FC = () => {
     const { effectiveAccess } = useAuth();
     const { id } = useParams<{ id: string }>();
@@ -101,9 +104,10 @@ const ImmunizationForm: React.FC = () => {
     const [isFromOtherFacility, setIsFromOtherFacility] = useState<boolean>(false);
     const [otherFacilityName, setOtherFacilityName] = useState<string>('');
     const [lotBatchNo, setLotBatchNo] = useState<string>('');
+    const [vaccineLots, setVaccineLots] = useState<Record<VaccineLotKey, string>>(emptyVaccineLots);
 
     // Pre-screening & Consent
-    const [consentGiven, setConsentGiven] = useState<boolean>(true);
+    const [consentGiven, setConsentGiven] = useState<boolean | null>(null);
     const [isSickToday, setIsSickToday] = useState<boolean>(false);
     const [historyOfAllergies, setHistoryOfAllergies] = useState<string>('');
 
@@ -155,8 +159,13 @@ const ImmunizationForm: React.FC = () => {
                     setIsFromOtherFacility(Boolean(currentRecord.is_from_other_facility));
                     setOtherFacilityName(currentRecord.other_facility_name || '');
                     setLotBatchNo(currentRecord.lot_batch_no || '');
+                    setVaccineLots({
+                        td1: currentRecord.lot_batch_td1 || '', mr1: currentRecord.lot_batch_mr1 || '',
+                        hpv1: currentRecord.lot_batch_hpv1 || '', hpv2: currentRecord.lot_batch_hpv2 || '',
+                        td2: currentRecord.lot_batch_td2 || '', mr2: currentRecord.lot_batch_mr2 || '',
+                    });
 
-                    setConsentGiven(currentRecord.consent_given ?? true);
+                    setConsentGiven(currentRecord.consent_given ?? null);
                     setIsSickToday(Boolean(currentRecord.is_sick_today));
                     setHistoryOfAllergies(currentRecord.history_of_allergies || '');
 
@@ -263,6 +272,12 @@ const ImmunizationForm: React.FC = () => {
                 is_from_other_facility: isFromOtherFacility,
                 other_facility_name: isFromOtherFacility ? otherFacilityName.trim() : null,
                 lot_batch_no: lotBatchNo.trim() || null,
+                lot_batch_td1: vaccineTd1 ? vaccineLots.td1.trim() || null : null,
+                lot_batch_mr1: vaccineMr1 ? vaccineLots.mr1.trim() || null : null,
+                lot_batch_hpv1: vaccineHpv1 ? vaccineLots.hpv1.trim() || null : null,
+                lot_batch_hpv2: vaccineHpv2 ? vaccineLots.hpv2.trim() || null : null,
+                lot_batch_td2: vaccineTd2 ? vaccineLots.td2.trim() || null : null,
+                lot_batch_mr2: vaccineMr2 ? vaccineLots.mr2.trim() || null : null,
                 consent_given: consentGiven,
                 is_sick_today: isSickToday,
                 history_of_allergies: historyOfAllergies.trim() || null,
@@ -605,18 +620,20 @@ const ImmunizationForm: React.FC = () => {
                         Administration & Facility Details
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <div>
-                            <label className={labelClasses}>Lot / Batch Number</label>
-                            <input
-                                type="text"
-                                value={lotBatchNo}
-                                onChange={(e) => setLotBatchNo(e.target.value)}
-                                className={inputClasses}
-                                placeholder="e.g. AB12345C"
-                                maxLength={100}
-                            />
-                            <span className="text-xs text-slate-400 mt-1 block">Vaccine vial lot or batch identifier</span>
-                        </div>
+                        {([
+                            { key: 'td1', label: 'Td1', selected: vaccineTd1 },
+                            { key: 'mr1', label: 'MR1', selected: vaccineMr1 },
+                            { key: 'hpv1', label: 'HPV1', selected: vaccineHpv1 },
+                            { key: 'hpv2', label: 'HPV2', selected: vaccineHpv2 },
+                            { key: 'td2', label: 'Td2', selected: vaccineTd2 },
+                            { key: 'mr2', label: 'MR2', selected: vaccineMr2 },
+                        ] as const).filter(item => item.selected).map(item => (
+                            <div key={item.key}>
+                                <label className={labelClasses} htmlFor={`lot-${item.key}`}>{item.label} lot / batch number</label>
+                                <input id={`lot-${item.key}`} type="text" value={vaccineLots[item.key]} onChange={event => setVaccineLots(current => ({ ...current, [item.key]: event.target.value }))} className={inputClasses} maxLength={100} />
+                            </div>
+                        ))}
+                        {lotBatchNo && <p className="sm:col-span-2 lg:col-span-3 text-xs text-slate-500">Historical shared lot/batch: {lotBatchNo}. This value is not assigned to any specific vaccine.</p>}
 
                         <div>
                             <label className={labelClasses}>Vaccinator Name</label>
@@ -687,17 +704,13 @@ const ImmunizationForm: React.FC = () => {
                         Pre-Screening & Consent
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <label className="flex items-start space-x-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={consentGiven}
-                                onChange={(e) => setConsentGiven(e.target.checked)}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-semibold text-slate-800">Consent Given by Parent/Guardian</span>
-                                <p className="text-xs text-slate-500">Signed parent or guardian consent form on file</p>
-                            </div>
+                        <label className="space-y-1.5 text-sm font-semibold text-slate-800" htmlFor="immunization-consent">
+                            <span>Parent/guardian consent on file</span>
+                            <select id="immunization-consent" value={consentGiven === null ? '' : String(consentGiven)} onChange={(e) => setConsentGiven(e.target.value === '' ? null : e.target.value === 'true')} className={inputClasses}>
+                                <option value="">Not recorded</option>
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                            </select>
                         </label>
 
                         <label className="flex items-start space-x-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-colors">

@@ -44,3 +44,32 @@ export interface ConsolidatedReportPreview {
   empty_message: string | null;
   privacy: Record<string, unknown>;
 }
+
+export interface ReportTargetRevision {
+  id: number;
+  school_id: number;
+  school_name: string;
+  municipality_name: string;
+  indicator: string;
+  date_from: string;
+  date_to: string;
+  period_label: string | null;
+  target_count: number;
+  source_note: string;
+  changed_by: number;
+  changed_at: string;
+}
+
+export type ReportView = 'municipality' | 'masterlist';
+export interface ReportDocument {
+  module: ModuleSlug;
+  view: ReportView;
+  title: string;
+  filters: ConsolidatedReportPreview['filters'];
+  scope: { mode: 'province' | 'restricted'; school_ids: number[] | null };
+  columns: Array<{ key: string; label: string }>;
+  rows: Array<Record<string, string | number | boolean | null>>;
+  total_students: number | null;
+  empty: boolean;
+  note: string | null;
+}

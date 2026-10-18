@@ -17,6 +17,7 @@ export const emptyModulePermissions = (): ModulePermissions => ({
   can_approve_registration: false,
   can_report: false,
   can_export: false,
+  can_manage_targets: false,
 });
 
 export const buildPermissionDraft = (
@@ -33,6 +34,7 @@ export const buildPermissionDraft = (
       can_approve_registration: grant.can_approve_registration,
       can_report: grant.can_report,
       can_export: grant.can_export,
+      can_manage_targets: grant.can_manage_targets ?? false,
     } : emptyModulePermissions()];
   }));
 };
@@ -50,6 +52,7 @@ export const applyPermissionToggle = (
   if (action === 'can_export' && checked && !next.can_view && !next.can_report) {
     next.can_view = true;
   }
+  if (action === 'can_manage_targets' && checked) next.can_report = true;
   if (action === 'can_view' && !checked) {
     next.can_create = false;
     next.can_edit = false;
@@ -58,6 +61,7 @@ export const applyPermissionToggle = (
   if (action === 'can_report' && !checked && !next.can_view) {
     next.can_export = false;
   }
+  if (action === 'can_report' && !checked) next.can_manage_targets = false;
 
   return next;
 };
@@ -79,6 +83,9 @@ export const validateModulePermission = (
   }
   if (permission.can_export && !permission.can_view && !permission.can_report) {
     messages.push('Export access requires view or report access.');
+  }
+  if (permission.can_manage_targets && !permission.can_report) {
+    messages.push('Target management requires report access.');
   }
   if (permission.can_approve_registration
     && (portalRole !== 'school_staff' || moduleSlug !== 'patient-info')) {
