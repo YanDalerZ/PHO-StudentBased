@@ -71,7 +71,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
           ['vital-signs', 'Vital Signs Report'],
         ];
         reportModules.forEach(([module, name]) => {
-          if (hasModulePermission(effectiveAccess, module, 'can_report')) {
+          if (hasModulePermission(effectiveAccess, module, 'can_report') || hasModulePermission(effectiveAccess, module, 'can_export')) {
             staffLinks.push({ name, path: `/teacher/reports/${module}`, icon: BarChart3 });
           }
         });
@@ -98,7 +98,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
           ['vital-signs', 'Vital Signs Report'],
         ];
         reportModules.forEach(([module, name]) => {
-          if (hasModulePermission(effectiveAccess, module, 'can_report')) {
+          if (hasModulePermission(effectiveAccess, module, 'can_report') || hasModulePermission(effectiveAccess, module, 'can_export')) {
             superLinks.push({ name, path: `/superuser/reports/${module}`, icon: BarChart3 });
           }
         });
@@ -112,6 +112,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
           { name: 'Schools', path: '/admin/schools', icon: School },
           { name: 'QR invitations', path: '/admin/invitations', icon: QrCode },
           { name: 'Audit log', path: '/admin/audit-logs', icon: ClipboardCheck },
+          { name: 'Report targets', path: '/admin/report-targets', icon: ClipboardCheck },
           { name: 'Settings', path: '/admin/settings', icon: Building2 },
         ];
       default:

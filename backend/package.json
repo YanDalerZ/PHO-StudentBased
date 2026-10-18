@@ -51,6 +51,7 @@
     "migrate:phase4b:audit-browser": "npm run build && node dist/scripts/run_phase4b_audit_browser_migration.js",
     "test:phase4b:audit-browser": "npm run build && node dist/scripts/test_phase4b_audit_browser.js",
     "migrate:phase3:reporting-foundation": "npm run build && node dist/scripts/run_phase3_reporting_migration.js",
+    "migrate:local:reporting-redesign": "npm run build && node dist/scripts/run_reporting_redesign_migrations.js",
     "verify:phase3:reporting-schema": "npm run build && node dist/scripts/verify_phase3_reporting_schema.js",
     "preflight:production:phase3": "npm run build && node dist/scripts/preflight_phase3_production.js",
     "migrate:production:phase3": "npm run build && node dist/scripts/migrate_phase3_production.js",

@@ -77,6 +77,7 @@ app.get('/healthz', async (_req, res) => {
 const apiRouter = express.Router();
 apiRouter.use('/', AllRoutes.RegistrationRoutes);
 apiRouter.use('/', AllRoutes.ReportRoutes);
+apiRouter.use('/', AllRoutes.ReportTargetRoutes);
 apiRouter.use('/students', AllRoutes.StudentRoutes);
 apiRouter.use('/auth', AllRoutes.AuthRoutes);
 apiRouter.use('/lookup', AllRoutes.LookupRoutes);

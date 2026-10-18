@@ -16,6 +16,7 @@ export interface ModulePermissions {
   can_approve_registration: boolean;
   can_report: boolean;
   can_export: boolean;
+  can_manage_targets?: boolean;
 }
 
 export type ModuleSlug =
@@ -358,7 +359,7 @@ export interface Deworming {
   date_dewormed: string;
   age_group: string;
   medication_given: string;
-  is_dewormed: boolean;
+  is_dewormed: boolean | null;
   school_type?: 'public' | 'private';
   in_school: boolean;
   school_id?: number;
@@ -403,6 +404,12 @@ export interface Immunization {
   is_from_other_facility: boolean;
   other_facility_name?: string;
   lot_batch_no?: string;
+  lot_batch_td1?: string;
+  lot_batch_mr1?: string;
+  lot_batch_hpv1?: string;
+  lot_batch_hpv2?: string;
+  lot_batch_td2?: string;
+  lot_batch_mr2?: string;
   consent_given?: boolean;
   is_sick_today: boolean;
   history_of_allergies?: string;
@@ -435,6 +442,12 @@ export interface CreateImmunizationPayload {
   is_from_other_facility?: boolean;
   other_facility_name?: string | null;
   lot_batch_no?: string | null;
+  lot_batch_td1?: string | null;
+  lot_batch_mr1?: string | null;
+  lot_batch_hpv1?: string | null;
+  lot_batch_hpv2?: string | null;
+  lot_batch_td2?: string | null;
+  lot_batch_mr2?: string | null;
   consent_given?: boolean | null;
   is_sick_today?: boolean;
   history_of_allergies?: string | null;
@@ -640,28 +653,6 @@ export interface DewormingDashboardResponse {
   municipality_summary: DewormingMunicipalitySummary[];
   province_total: {
     target: number;
-    total_accomplished: number;
-    accomplishment_rate: number;
-  };
-}
-
-export interface DewormingReportMunicipalityRow {
-  municipality_id: number;
-  municipality_name: string;
-  target: number;
-  male_accomplished: number;
-  female_accomplished: number;
-  total_accomplished: number;
-  accomplishment_rate: number;
-}
-
-export interface DewormingReportResponse {
-  period: string;
-  municipalities: DewormingReportMunicipalityRow[];
-  province_totals: {
-    target: number;
-    male_accomplished: number;
-    female_accomplished: number;
     total_accomplished: number;
     accomplishment_rate: number;
   };

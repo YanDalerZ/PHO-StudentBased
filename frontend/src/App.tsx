@@ -17,7 +17,8 @@ import DewormingForm from './components/forms/DewormingForm';
 import ImmunizationForm from './components/forms/ImmunizationForm';
 import VitalSignsForm from './components/forms/VitalSignsForm';
 
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { hasModulePermission } from './lib/access';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Sidebar } from './components/common/Sidebar';
 
@@ -40,21 +41,30 @@ import PublicRegistration from './pages/public/PublicRegistration';
 import InvitationManagement from './pages/teacher/InvitationManagement';
 import RegistrationReviewQueue from './pages/teacher/RegistrationReviewQueue';
 import ConsolidatedReportPage from './pages/reports/ConsolidatedReportPage';
+import ReportTargetPage from './pages/reports/ReportTargetPage';
 import type { ModuleSlug } from './types';
 
 const REPORT_MODULES = new Set<ModuleSlug>(['patient-info', 'oral-health', 'deworming', 'immunization', 'vital-signs']);
 
 const ModuleReportRoute = () => {
   const { moduleSlug } = useParams();
+  const { effectiveAccess } = useAuth();
   if (!moduleSlug || !REPORT_MODULES.has(moduleSlug as ModuleSlug)) {
     return <Navigate to="/forbidden" replace />;
   }
   const typedModule = moduleSlug as ModuleSlug;
+  const canReport = hasModulePermission(effectiveAccess, typedModule, 'can_report');
   return (
-    <ProtectedRoute requiredModule={typedModule} requiredAction="can_report">
-      <ConsolidatedReportPage moduleSlug={typedModule} />
+    <ProtectedRoute requiredModule={typedModule} requiredAction={canReport ? 'can_report' : 'can_export'}>
+      <ConsolidatedReportPage key={typedModule} moduleSlug={typedModule} />
     </ProtectedRoute>
   );
+};
+
+const ModuleTargetRoute = () => {
+  const { moduleSlug } = useParams();
+  if (!moduleSlug || !REPORT_MODULES.has(moduleSlug as ModuleSlug)) return <Navigate to="/forbidden" replace />;
+  return <ProtectedRoute requiredModule={moduleSlug as ModuleSlug} requiredAction="can_manage_targets"><ReportTargetPage /></ProtectedRoute>;
 };
 
 // Dashboard Layout Wrapper to manage Sidebar and Page Content
@@ -62,10 +72,10 @@ const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
+    <div className="dashboard-layout flex h-screen w-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="dashboard-content flex-1 flex flex-col overflow-hidden relative">
         {/* Mobile Header with Hamburger Menu */}
         <header className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
           <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
@@ -80,7 +90,7 @@ const DashboardLayout = () => {
         </header>
 
         {/* Main Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 dark:bg-surface-dark">
+        <main className="dashboard-main flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 dark:bg-surface-dark">
           <Outlet />
         </main>
       </div>
@@ -174,6 +184,7 @@ const App: React.FC = () => {
                 </ProtectedRoute>
               } />
               <Route path="reports/:moduleSlug" element={<ModuleReportRoute />} />
+              <Route path="report-targets/:moduleSlug" element={<ModuleTargetRoute />} />
             </Route>
 
             {/* Super User Portal Routes */}
@@ -253,6 +264,7 @@ const App: React.FC = () => {
                 </ProtectedRoute>
               } />
               <Route path="reports/:moduleSlug" element={<ModuleReportRoute />} />
+              <Route path="report-targets/:moduleSlug" element={<ModuleTargetRoute />} />
             </Route>
 
             {/* Admin Portal Routes */}
@@ -271,6 +283,7 @@ const App: React.FC = () => {
               <Route path="schools" element={<SchoolManagement />} />
               <Route path="invitations" element={<InvitationGovernance />} />
               <Route path="audit-logs" element={<AuditLogBrowser />} />
+              <Route path="report-targets" element={<ReportTargetPage />} />
               <Route path="settings" element={<SystemSettings />} />
             </Route>
 

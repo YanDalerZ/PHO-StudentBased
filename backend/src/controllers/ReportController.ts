@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import pool from '../database/db.js';
 import { AuditService } from '../services/AuditService.js';
-import { getReportPreview } from '../services/report-preview.service.js';
+import { getReportDocument, type ReportView } from '../services/report-document.service.js';
 import {
     normalizeReportFilters,
     ReportContractError,
@@ -18,7 +18,7 @@ function isModuleSlug(value: string): value is ModuleSlug {
     return moduleSlugs.has(value as ModuleSlug);
 }
 
-export async function getConsolidatedReportPreview(req: Request, res: Response): Promise<void> {
+async function getDocumentPreview(req: Request, res: Response, view: ReportView): Promise<void> {
     try {
         const user = req.user;
         const effectiveAccess = req.effectiveAccess;
@@ -41,7 +41,7 @@ export async function getConsolidatedReportPreview(req: Request, res: Response):
             filters.school_id,
         );
         await validateReportGeography(pool, filters);
-        const preview = await getReportPreview(pool, moduleSlug, filters, scope);
+        const preview = await getReportDocument(pool, moduleSlug, view, filters, scope);
 
         await AuditService.logEvent({
             actor_id: user.id,
@@ -52,6 +52,7 @@ export async function getConsolidatedReportPreview(req: Request, res: Response):
             school_id: filters.school_id ?? null,
             details: {
                 module_slug: moduleSlug,
+                view,
                 filters,
                 scope_mode: scope.mode,
                 empty: preview.empty,
@@ -79,6 +80,19 @@ export async function getConsolidatedReportPreview(req: Request, res: Response):
     }
 }
 
+export async function getConsolidatedReportPreview(req: Request, res: Response): Promise<void> {
+    return getDocumentPreview(req, res, 'municipality');
+}
+
+export async function getMasterlistReportPreview(req: Request, res: Response): Promise<void> {
+    return getDocumentPreview(req, res, 'masterlist');
+}
+
+export async function recordMasterlistReportPrint(req: Request, res: Response): Promise<void> {
+    req.body = { ...req.body, view: 'masterlist' };
+    return recordConsolidatedReportPrint(req, res);
+}
+
 export async function recordConsolidatedReportPrint(req: Request, res: Response): Promise<void> {
     try {
         const user = req.user;
@@ -97,7 +111,17 @@ export async function recordConsolidatedReportPrint(req: Request, res: Response)
 
         // The request body is deliberately limited to the same strict, non-clinical
         // filter contract used by report previews. Actor and scope are server-owned.
-        const filters = normalizeReportFilters(req.body, { purpose: 'preview' });
+        const { view: rawView, ...filterInput } = req.body ?? {};
+        const view: ReportView = rawView === 'masterlist' ? 'masterlist' : 'municipality';
+        if (rawView !== undefined && rawView !== 'municipality' && rawView !== 'masterlist') {
+            res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid report view.' } });
+            return;
+        }
+        if (view === 'masterlist' && !effectiveAccess.modulePermissions[moduleSlug].can_export) {
+            res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Masterlist print requires export permission.' } });
+            return;
+        }
+        const filters = normalizeReportFilters(filterInput, { purpose: 'preview' });
         const scope = resolveReportSchoolScope(
             user.portal_role,
             effectiveAccess.assignedSchoolIds,
@@ -118,6 +142,7 @@ export async function recordConsolidatedReportPrint(req: Request, res: Response)
                 school_id: filters.school_id ?? null,
                 details: {
                     module_slug: moduleSlug,
+                    view,
                     filters,
                     scope_mode: scope.mode,
                     status: 'initiated',

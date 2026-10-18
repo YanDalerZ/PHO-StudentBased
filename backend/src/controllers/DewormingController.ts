@@ -6,7 +6,6 @@ import {
     dashboardFiltersSchema,
     validateGeographyHierarchy,
     getDewormingDashboard as fetchDewormingDashboard,
-    getDewormingReport as fetchDewormingReport,
 } from '../services/dashboard.service.js';
 
 // Strict typing for Deworming DB row
@@ -33,7 +32,7 @@ export interface DewormingResponse {
     date_dewormed: string;
     age_group: string;
     medication_given: string;
-    is_dewormed: boolean;
+    is_dewormed: boolean | null;
     school_type?: 'public' | 'private' | undefined;
     in_school: boolean;
     school_id?: number | undefined;
@@ -50,7 +49,6 @@ const formatDate = (val: string | Date | null | undefined): string => {
     if (s.includes('T')) return s.split('T')[0] ?? s;
     return s;
 };
-
 const mapDewormingRow = (row: DewormingDbRow): DewormingResponse => {
     const response: DewormingResponse = {
         id: row.id,
@@ -58,7 +56,7 @@ const mapDewormingRow = (row: DewormingDbRow): DewormingResponse => {
         date_dewormed: formatDate(row.date_dewormed),
         age_group: row.age_group ?? '',
         medication_given: row.medication_given ?? '',
-        is_dewormed: row.is_dewormed ?? true,
+        is_dewormed: row.is_dewormed,
         in_school: row.in_school ?? true,
         recorded_by: row.recorded_by,
         created_at: formatDate(row.created_at),
@@ -96,7 +94,7 @@ const dewormingSchema = z.object({
     date_dewormed: z.string().min(1, 'Date dewormed is required'),
     age_group: z.string().max(10).optional().nullable(),
     medication_given: z.string().max(100).optional().nullable(),
-    is_dewormed: z.boolean().optional().default(true),
+    is_dewormed: z.boolean().optional(),
     school_type: z.enum(['public', 'private']).optional().nullable(),
     in_school: z.boolean().optional().default(true),
     school_id: z.number().int().positive().optional().nullable(),
@@ -105,6 +103,11 @@ const dewormingSchema = z.object({
 
 const createDewormingSchema = dewormingSchema.extend({
     student_id: z.number().int().positive('Valid student ID is required'),
+    is_dewormed: z.boolean(),
+}).superRefine((value, context) => {
+    if (!value.is_dewormed && value.medication_given?.trim()) {
+        context.addIssue({ code: 'custom', path: ['medication_given'], message: 'Medication Given must be blank when treatment was not administered.' });
+    }
 });
 
 const updateDewormingSchema = dewormingSchema.partial();
@@ -201,7 +204,7 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
                 dateDewormedStr,
                 ageGroup || null,
                 validated.medication_given ?? null,
-                validated.is_dewormed ?? true,
+                validated.is_dewormed,
                 validated.school_type ?? null,
                 validated.in_school ?? true,
                 schoolId,
@@ -394,6 +397,10 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
 
         const medicationGiven = validated.medication_given !== undefined ? validated.medication_given : existingRecord.medication_given;
         const isDewormed = validated.is_dewormed !== undefined ? validated.is_dewormed : existingRecord.is_dewormed;
+        if (isDewormed === false && medicationGiven?.trim()) {
+            res.status(400).json({ message: 'Medication Given must be blank when treatment was not administered.' });
+            return;
+        }
         const schoolType = validated.school_type !== undefined ? validated.school_type : existingRecord.school_type;
         const inSchool = validated.in_school !== undefined ? validated.in_school : existingRecord.in_school;
         const remarks = validated.remarks !== undefined ? validated.remarks : existingRecord.remarks;
@@ -508,38 +515,5 @@ export const getDewormingDashboard = async (req: Request, res: Response): Promis
     } catch (error) {
         console.error('Deworming dashboard error:', error);
         res.status(500).json({ message: 'Internal server error while generating dashboard data' });
-    }
-};
-
-const dewormingReportSchema = z.object({
-    period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be in YYYY-MM format'),
-});
-
-/**
- * GET /api/modules/deworming/report
- * Deworming municipality consolidation report.
- * Access: superuser, admin
- */
-export const getDewormingReport = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const parseResult = dewormingReportSchema.safeParse(req.query);
-        if (!parseResult.success) {
-            res.status(400).json({
-                message: 'Invalid query parameters: period (YYYY-MM) is required',
-                errors: parseResult.error.flatten(),
-            });
-            return;
-        }
-
-        const { period } = parseResult.data;
-        const reportData = await fetchDewormingReport(period);
-
-        res.status(200).json({
-            message: 'Deworming consolidation report fetched successfully',
-            data: reportData,
-        });
-    } catch (error) {
-        console.error('Deworming report error:', error);
-        res.status(500).json({ message: 'Internal server error while generating consolidation report' });
     }
 };

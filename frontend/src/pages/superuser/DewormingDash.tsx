@@ -12,8 +12,6 @@ import {
     RefreshCw,
     Loader2,
     FileText,
-    Printer,
-    X,
 } from 'lucide-react';
 import { FilterBar } from '../../components/common/FilterBar';
 import { DataTable } from '../../components/common/DataTable';
@@ -21,7 +19,7 @@ import { BarChart } from '../../components/charts/BarChart';
 import { DonutChart } from '../../components/charts/DonutChart';
 import { LineChart } from '../../components/charts/LineChart';
 import { ProgressRing } from '../../components/charts/ProgressRing';
-import { getDewormingDashboard, getDewormingReport, getStudents } from '../../services/api';
+import { getDewormingDashboard, getStudents } from '../../services/api';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasModulePermission } from '../../lib/access';
@@ -29,19 +27,10 @@ import type {
     Student,
     DashboardFilters,
     DewormingDashboardResponse,
-    DewormingReportResponse,
     DewormingMunicipalitySummary,
 } from '../../types';
 
 const PAGE_SIZE = 5;
-
-// Helper to format default current period as YYYY-MM
-const getCurrentPeriod = (): string => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
-};
 
 export const DewormingDash: React.FC = () => {
     const navigate = useNavigate();
@@ -62,13 +51,6 @@ export const DewormingDash: React.FC = () => {
 
     // Municipality search filter
     const [munSearch, setMunSearch] = useState('');
-
-    // Consolidation Report Modal State
-    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-    const [reportPeriod, setReportPeriod] = useState(getCurrentPeriod);
-    const [reportData, setReportData] = useState<DewormingReportResponse | null>(null);
-    const [reportLoading, setReportLoading] = useState(false);
-    const [reportError, setReportError] = useState<string | null>(null);
 
     // Fetch dashboard data
     const fetchDashboard = useCallback(async (currentFilters: DashboardFilters) => {
@@ -151,34 +133,6 @@ export const DewormingDash: React.FC = () => {
     const handleRetry = () => {
         void fetchDashboard(filters);
         void fetchStudentsList(filters);
-    };
-
-    // Load consolidation report
-    const fetchReport = useCallback(async (period: string) => {
-        setReportLoading(true);
-        setReportError(null);
-        try {
-            const data = await getDewormingReport(period);
-            setReportData(data);
-        } catch (err) {
-            console.error('Failed to load deworming consolidation report:', err);
-            setReportError('Failed to load consolidation report for selected period.');
-        } finally {
-            setReportLoading(false);
-        }
-    }, []);
-
-    const openReportModal = () => {
-        setIsReportModalOpen(true);
-        void fetchReport(reportPeriod);
-    };
-
-    const handlePeriodChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newPeriod = e.target.value;
-        setReportPeriod(newPeriod);
-        if (/^\d{4}-\d{2}$/.test(newPeriod)) {
-            void fetchReport(newPeriod);
-        }
     };
 
     const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -331,7 +285,7 @@ export const DewormingDash: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2.5">
                     <button
                         type="button"
-                        onClick={openReportModal}
+                        onClick={() => navigate('/superuser/reports/deworming')}
                         className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs sm:text-sm font-semibold rounded-xl transition-colors cursor-pointer"
                     >
                         <FileText className="w-4 h-4" />
@@ -668,186 +622,6 @@ export const DewormingDash: React.FC = () => {
                 </>
             )}
 
-            {/* Consolidation Report Modal */}
-            {isReportModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto">
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-
-                        {/* Modal Header Toolbar */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 shrink-0">
-                            <div className="flex items-center gap-2.5">
-                                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
-                                    <FileText className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                                        Deworming Municipality Consolidation Report
-                                    </h2>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Official PHO provincial consolidation across all 17 municipalities
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Controls: Month picker, Print, Close */}
-                            <div className="flex items-center gap-2 self-end sm:self-auto">
-                                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 rounded-lg text-xs">
-                                    <span className="text-slate-400 font-medium">Period:</span>
-                                    <input
-                                        type="month"
-                                        value={reportPeriod}
-                                        onChange={handlePeriodChange}
-                                        className="bg-transparent text-slate-800 dark:text-slate-100 font-semibold focus:outline-none cursor-pointer text-xs"
-                                    />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => window.print()}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                                >
-                                    <Printer className="w-3.5 h-3.5 text-slate-500" />
-                                    <span>Print</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsReportModalOpen(false)}
-                                    className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Modal Body / Report Printable Container */}
-                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 print:p-0">
-                            {reportLoading && (
-                                <div className="flex flex-col items-center justify-center p-12">
-                                    <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                        Generating consolidation report for period {reportPeriod}...
-                                    </p>
-                                </div>
-                            )}
-
-                            {reportError && !reportLoading && (
-                                <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between text-xs text-red-700 dark:text-red-300">
-                                    <span>{reportError}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => void fetchReport(reportPeriod)}
-                                        className="font-semibold underline cursor-pointer"
-                                    >
-                                        Try again
-                                    </button>
-                                </div>
-                            )}
-
-                            {!reportLoading && !reportError && reportData && (
-                                <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-6 bg-white dark:bg-slate-900 shadow-sm print:border-none print:shadow-none">
-                                    {/* Formal PHO Header */}
-                                    <div className="text-center pb-4 mb-4 border-b border-slate-200 dark:border-slate-800 space-y-0.5">
-                                        <p className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400 font-semibold">
-                                            Republic of the Philippines • Province of Aklan
-                                        </p>
-                                        <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white uppercase tracking-tight">
-                                            PROVINCIAL HEALTH OFFICE (PHO) — AKLAN
-                                        </h3>
-                                        <p className="text-xs sm:text-sm font-bold text-teal-700 dark:text-teal-400">
-                                            DEWORMING MUNICIPALITY CONSOLIDATION REPORT
-                                        </p>
-                                        <p className="text-xs text-slate-500 font-medium">
-                                            Reporting Period: <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{reportData.period}</span>
-                                        </p>
-                                    </div>
-
-                                    {/* Consolidated Municipalities Table */}
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-xs text-left">
-                                            <thead className="text-[11px] uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                                                <tr>
-                                                    <th className="py-2.5 px-3 font-bold w-12 text-center">#</th>
-                                                    <th className="py-2.5 px-3 font-bold">Municipality</th>
-                                                    <th className="py-2.5 px-3 font-bold text-right">Target Pop</th>
-                                                    <th className="py-2.5 px-3 font-bold text-right">Male</th>
-                                                    <th className="py-2.5 px-3 font-bold text-right">Female</th>
-                                                    <th className="py-2.5 px-3 font-bold text-right">Total Accomplished</th>
-                                                    <th className="py-2.5 px-3 font-bold text-right">Accomplishment %</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                                {reportData.municipalities.map((row, idx) => (
-                                                    <tr key={row.municipality_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                                                        <td className="py-2 px-3 text-center text-slate-400 font-mono">
-                                                            {idx + 1}
-                                                        </td>
-                                                        <td className="py-2 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                                            {row.municipality_name}
-                                                        </td>
-                                                        <td className="py-2 px-3 text-right font-mono text-slate-600 dark:text-slate-400">
-                                                            {row.target.toLocaleString()}
-                                                        </td>
-                                                        <td className="py-2 px-3 text-right font-mono text-slate-600 dark:text-slate-400">
-                                                            {row.male_accomplished.toLocaleString()}
-                                                        </td>
-                                                        <td className="py-2 px-3 text-right font-mono text-slate-600 dark:text-slate-400">
-                                                            {row.female_accomplished.toLocaleString()}
-                                                        </td>
-                                                        <td className="py-2 px-3 text-right font-mono font-bold text-teal-700 dark:text-teal-400">
-                                                            {row.total_accomplished.toLocaleString()}
-                                                        </td>
-                                                        <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
-                                                            {row.accomplishment_rate}%
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot className="bg-slate-100 dark:bg-slate-800 font-bold border-t-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white">
-                                                <tr>
-                                                    <td colSpan={2} className="py-3 px-3 uppercase tracking-wider text-xs">
-                                                        PROVINCE TOTALS
-                                                    </td>
-                                                    <td className="py-3 px-3 text-right font-mono">
-                                                        {reportData.province_totals.target.toLocaleString()}
-                                                    </td>
-                                                    <td className="py-3 px-3 text-right font-mono">
-                                                        {reportData.province_totals.male_accomplished.toLocaleString()}
-                                                    </td>
-                                                    <td className="py-3 px-3 text-right font-mono">
-                                                        {reportData.province_totals.female_accomplished.toLocaleString()}
-                                                    </td>
-                                                    <td className="py-3 px-3 text-right font-mono text-teal-700 dark:text-teal-400">
-                                                        {reportData.province_totals.total_accomplished.toLocaleString()}
-                                                    </td>
-                                                    <td className="py-3 px-3 text-right font-mono text-emerald-600 dark:text-emerald-400 text-sm">
-                                                        {reportData.province_totals.accomplishment_rate}%
-                                                    </td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
-
-                                    {/* Sign-off certification block */}
-                                    <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 grid grid-cols-2 gap-8 text-xs text-slate-500 dark:text-slate-400">
-                                        <div>
-                                            <p className="font-semibold text-slate-700 dark:text-slate-300 mb-6">Prepared by:</p>
-                                            <div className="border-b border-slate-300 dark:border-slate-600 w-48 mb-1" />
-                                            <p className="font-bold text-slate-800 dark:text-slate-200">PHO Deworming Program Coordinator</p>
-                                            <p className="text-[10px]">Provincial Health Office - Aklan</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-semibold text-slate-700 dark:text-slate-300 mb-6">Approved by:</p>
-                                            <div className="border-b border-slate-300 dark:border-slate-600 w-48 mb-1 ml-auto" />
-                                            <p className="font-bold text-slate-800 dark:text-slate-200">Provincial Health Officer II</p>
-                                            <p className="text-[10px]">Provincial Health Office - Aklan</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                    </div>
-                </div>
-            )}
 
         </div>
     );

@@ -69,8 +69,8 @@ const DewormingForm: React.FC = () => {
     // Form states
     const [dateDewormed, setDateDewormed] = useState<string>(new Date().toISOString().split('T')[0] ?? '');
     const [ageGroupOverride, setAgeGroupOverride] = useState<string>('');
-    const [medicationGiven, setMedicationGiven] = useState<string>('Albendazole 400mg');
-    const [isDewormed, setIsDewormed] = useState<boolean>(true);
+    const [medicationGiven, setMedicationGiven] = useState<string>('');
+    const [isDewormed, setIsDewormed] = useState<boolean | null>(null);
     const [schoolType, setSchoolType] = useState<'public' | 'private'>('public');
     const [inSchool, setInSchool] = useState<boolean>(true);
     const [remarks, setRemarks] = useState<string>('');
@@ -99,7 +99,7 @@ const DewormingForm: React.FC = () => {
                     setDateDewormed(currentRecord.date_dewormed || '');
                     setAgeGroupOverride(currentRecord.age_group || '');
                     setMedicationGiven(currentRecord.medication_given || '');
-                    setIsDewormed(currentRecord.is_dewormed ?? true);
+                    setIsDewormed(currentRecord.is_dewormed ?? null);
                     setSchoolType(currentRecord.school_type || 'public');
                     setInSchool(currentRecord.in_school ?? true);
                     setRemarks(currentRecord.remarks || '');
@@ -149,13 +149,21 @@ const DewormingForm: React.FC = () => {
             toast.error('Your current access allows viewing this record, but not saving this change.');
             return;
         }
+        if (isDewormed === null) {
+            toast.error('Select whether deworming was administered.');
+            return;
+        }
+        if (!isDewormed && medicationGiven.trim()) {
+            toast.error('Clear Medication Given when treatment was not administered.');
+            return;
+        }
 
         // Validate date vs DOB
         if (student.date_of_birth && dateDewormed) {
             const birth = new Date(student.date_of_birth);
             const deworm = new Date(dateDewormed);
             if (deworm < birth) {
-                toast.error('Date dewormed cannot be earlier than student date of birth');
+                toast.error('Record date cannot be earlier than student date of birth');
                 return;
             }
         }
@@ -325,7 +333,7 @@ const DewormingForm: React.FC = () => {
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div>
-                            <label className={labelClasses}>Date Dewormed *</label>
+                            <label className={labelClasses}>Record Date *</label>
                             <input
                                 type="date"
                                 value={dateDewormed}
@@ -333,7 +341,7 @@ const DewormingForm: React.FC = () => {
                                 className={inputClasses}
                                 required
                             />
-                            <span className="text-xs text-slate-400 mt-1 block">Date treatment was administered</span>
+                            <span className="text-xs text-slate-400 mt-1 block">Date of treatment or recorded non-administration</span>
                         </div>
 
                         <div>
@@ -377,18 +385,12 @@ const DewormingForm: React.FC = () => {
                         </div>
 
                         <div className="sm:col-span-2 lg:col-span-3">
-                            <label className="flex items-center space-x-3 p-3.5 bg-teal-50/50 border border-teal-100 rounded-xl cursor-pointer hover:bg-teal-50 transition-colors">
-                                <input
-                                    type="checkbox"
-                                    checked={isDewormed}
-                                    onChange={(e) => setIsDewormed(e.target.checked)}
-                                    className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
-                                />
-                                <div>
-                                    <span className="text-sm font-semibold text-slate-800">Successfully Dewormed</span>
-                                    <p className="text-xs text-slate-500">Student received and swallowed the required dosage without adverse refusal</p>
-                                </div>
-                            </label>
+                            <label className={labelClasses} htmlFor="deworming-administered">Was deworming administered? *</label>
+                            <select id="deworming-administered" value={isDewormed === null ? '' : String(isDewormed)} onChange={(e) => setIsDewormed(e.target.value === '' ? null : e.target.value === 'true')} className={inputClasses} required>
+                                <option value="">Select recorded outcome</option>
+                                <option value="true">Yes — treatment administered</option>
+                                <option value="false">No — treatment not administered</option>
+                            </select>
                         </div>
                     </div>
                 </div>

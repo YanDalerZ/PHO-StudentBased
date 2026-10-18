@@ -673,28 +673,6 @@ export interface DewormingDashboardData {
   };
 }
 
-export interface DewormingReportMunicipalityRow {
-  municipality_id: number;
-  municipality_name: string;
-  target: number;
-  male_accomplished: number;
-  female_accomplished: number;
-  total_accomplished: number;
-  accomplishment_rate: number;
-}
-
-export interface DewormingReportData {
-  period: string;
-  municipalities: DewormingReportMunicipalityRow[];
-  province_totals: {
-    target: number;
-    male_accomplished: number;
-    female_accomplished: number;
-    total_accomplished: number;
-    accomplishment_rate: number;
-  };
-}
-
 export async function getDewormingDashboard(
   filters: DashboardFilters
 ): Promise<DewormingDashboardData> {
@@ -883,104 +861,6 @@ export async function getDewormingDashboard(
   };
 }
 
-export async function getDewormingReport(
-  period: string
-): Promise<DewormingReportData> {
-  const result = await pool.query<{
-    municipality_id: number;
-    municipality_name: string;
-    target: number;
-    male_accomplished: number;
-    female_accomplished: number;
-    total_accomplished: number;
-  }>(
-    `
-    WITH targets AS (
-      SELECT
-        m.id AS municipality_id,
-        COUNT(DISTINCT s.id)::int AS target
-      FROM "municipalities" m
-      LEFT JOIN "barangays" b ON b.municipality_id = m.id
-      LEFT JOIN "schools" sc ON sc.barangay_id = b.id
-      LEFT JOIN "students" s ON s.school_id = sc.id
-      GROUP BY m.id
-    ),
-    accomplished AS (
-      SELECT
-        m.id AS municipality_id,
-        COUNT(DISTINCT CASE WHEN s.sex = 'Male' THEN d.student_id END)::int AS male_accomplished,
-        COUNT(DISTINCT CASE WHEN s.sex = 'Female' THEN d.student_id END)::int AS female_accomplished,
-        COUNT(DISTINCT d.student_id)::int AS total_accomplished
-      FROM "deworming" d
-      JOIN "students" s ON d.student_id = s.id
-      JOIN "schools" sc ON s.school_id = sc.id
-      JOIN "barangays" b ON sc.barangay_id = b.id
-      JOIN "municipalities" m ON b.municipality_id = m.id
-      WHERE d.is_dewormed = TRUE AND TO_CHAR(d.date_dewormed, 'YYYY-MM') = $1
-      GROUP BY m.id
-    )
-    SELECT
-      m.id AS municipality_id,
-      m.name AS municipality_name,
-      COALESCE(t.target, 0) AS target,
-      COALESCE(a.male_accomplished, 0) AS male_accomplished,
-      COALESCE(a.female_accomplished, 0) AS female_accomplished,
-      COALESCE(a.total_accomplished, 0) AS total_accomplished
-    FROM "municipalities" m
-    LEFT JOIN targets t ON t.municipality_id = m.id
-    LEFT JOIN accomplished a ON a.municipality_id = m.id
-    ORDER BY m.name ASC
-    `,
-    [period]
-  );
-
-  let totalTarget = 0;
-  let totalMale = 0;
-  let totalFemale = 0;
-  let totalAccomplished = 0;
-
-  const municipalities: DewormingReportMunicipalityRow[] = result.rows.map(
-    (r) => {
-      const target = Number(r.target);
-      const male = Number(r.male_accomplished);
-      const female = Number(r.female_accomplished);
-      const total = Number(r.total_accomplished);
-      const rate = target > 0 ? Math.round((total / target) * 1000) / 10 : 0;
-
-      totalTarget += target;
-      totalMale += male;
-      totalFemale += female;
-      totalAccomplished += total;
-
-      return {
-        municipality_id: Number(r.municipality_id),
-        municipality_name: r.municipality_name,
-        target,
-        male_accomplished: male,
-        female_accomplished: female,
-        total_accomplished: total,
-        accomplishment_rate: rate,
-      };
-    }
-  );
-
-  const provinceRate =
-    totalTarget > 0
-      ? Math.round((totalAccomplished / totalTarget) * 1000) / 10
-      : 0;
-
-  return {
-    period,
-    municipalities,
-    province_totals: {
-      target: totalTarget,
-      male_accomplished: totalMale,
-      female_accomplished: totalFemale,
-      total_accomplished: totalAccomplished,
-      accomplishment_rate: provinceRate,
-    },
-  };
-}
 
 // ─── Vital Signs Dashboard Aggregations (with Clinical-Threshold Safeguard) ──────
 

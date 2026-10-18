@@ -27,6 +27,7 @@ const modulePermissionSchema = z.object({
   can_approve_registration: z.boolean().optional(),
   can_report: z.boolean().optional(),
   can_export: z.boolean().optional(),
+  can_manage_targets: z.boolean().optional(),
 }).strict().transform((permission) => ({
   module_id: permission.module_id,
   can_view: permission.can_view ?? false,
@@ -35,6 +36,7 @@ const modulePermissionSchema = z.object({
   can_approve_registration: permission.can_approve_registration ?? false,
   can_report: permission.can_report ?? false,
   can_export: permission.can_export ?? false,
+  can_manage_targets: permission.can_manage_targets ?? false,
 }));
 
 const updateModulePermissionsSchema = z.array(modulePermissionSchema).max(5).superRefine((permissions, context) => {

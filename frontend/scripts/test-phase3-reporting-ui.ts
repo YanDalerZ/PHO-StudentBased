@@ -13,20 +13,22 @@ const [app, sidebar, reportPage, api, styles] = await Promise.all([
 
 assert.match(app, /path="reports\/:moduleSlug"/,
   'Teacher and superuser layouts must expose the module report route.');
-assert.match(app, /requiredAction="can_report"/,
-  'The report route must require the can_report grant.');
-assert.match(sidebar, /hasModulePermission\(effectiveAccess, module, 'can_report'\)/,
-  'Report navigation must be derived from effective can_report access.');
+assert.match(app, /canReport \? 'can_report' : 'can_export'/,
+  'The shared report route must admit report users and export-only masterlist users.');
+assert.match(sidebar, /hasModulePermission\(effectiveAccess, module, 'can_report'\) \|\| hasModulePermission\(effectiveAccess, module, 'can_export'\)/,
+  'Report navigation must be derived from report or export access.');
 assert.match(reportPage, /hasModulePermission\(effectiveAccess, moduleSlug, 'can_export'\)/,
   'Export controls must be derived from the separate can_export grant.');
+assert.match(reportPage, /canReport \? 'municipality' : 'masterlist'/,
+  'Export-only users must default to the masterlist view.');
 assert.match(reportPage, /await recordReportPrint[\s\S]*window\.print\(\)/,
   'Printing must be audited successfully before opening the print dialog.');
-assert.match(reportPage, /await downloadReportExport\(moduleSlug, format, appliedFilters \?\? filters\)/,
+assert.match(reportPage, /await downloadReportExport\(moduleSlug, format, appliedFilters, document\.view\)/,
   'The UI must download the generated export directly from the canonical endpoint.');
 assert.doesNotMatch(reportPage, /getReportExport|setTimeout|job\.status/,
   'The UI must not poll an asynchronous export job.');
-assert.match(api, /`\/reports\/\$\{moduleSlug\}`/,
-  'The UI must call the canonical report preview endpoint.');
+assert.match(api, /`\/reports\/\$\{moduleSlug\}\$\{view === 'masterlist' \? '\/masterlist' : ''\}`/,
+  'The UI must call the canonical municipality or masterlist preview endpoint.');
 assert.match(api, /`\/reports\/\$\{moduleSlug\}\/exports`/,
   'The UI must call the canonical report export endpoint.');
 assert.match(styles, /@media print/,

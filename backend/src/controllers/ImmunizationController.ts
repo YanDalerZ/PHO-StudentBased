@@ -25,6 +25,12 @@ export interface ImmunizationDbRow {
     is_from_other_facility: boolean | null;
     other_facility_name: string | null;
     lot_batch_no: string | null;
+    lot_batch_td1: string | null;
+    lot_batch_mr1: string | null;
+    lot_batch_hpv1: string | null;
+    lot_batch_hpv2: string | null;
+    lot_batch_td2: string | null;
+    lot_batch_mr2: string | null;
     consent_given: boolean | null;
     is_sick_today: boolean | null;
     history_of_allergies: string | null;
@@ -59,6 +65,12 @@ export interface ImmunizationResponse {
     is_from_other_facility: boolean;
     other_facility_name?: string | undefined;
     lot_batch_no?: string | undefined;
+    lot_batch_td1?: string | undefined;
+    lot_batch_mr1?: string | undefined;
+    lot_batch_hpv1?: string | undefined;
+    lot_batch_hpv2?: string | undefined;
+    lot_batch_td2?: string | undefined;
+    lot_batch_mr2?: string | undefined;
     consent_given?: boolean | undefined;
     is_sick_today: boolean;
     history_of_allergies?: string | undefined;
@@ -110,6 +122,12 @@ const mapImmunizationRow = (row: ImmunizationDbRow): ImmunizationResponse => {
     if (row.educational_level) res.educational_level = row.educational_level;
     if (row.other_facility_name) res.other_facility_name = row.other_facility_name;
     if (row.lot_batch_no) res.lot_batch_no = row.lot_batch_no;
+    if (row.lot_batch_td1) res.lot_batch_td1 = row.lot_batch_td1;
+    if (row.lot_batch_mr1) res.lot_batch_mr1 = row.lot_batch_mr1;
+    if (row.lot_batch_hpv1) res.lot_batch_hpv1 = row.lot_batch_hpv1;
+    if (row.lot_batch_hpv2) res.lot_batch_hpv2 = row.lot_batch_hpv2;
+    if (row.lot_batch_td2) res.lot_batch_td2 = row.lot_batch_td2;
+    if (row.lot_batch_mr2) res.lot_batch_mr2 = row.lot_batch_mr2;
     if (row.consent_given !== null && row.consent_given !== undefined) res.consent_given = row.consent_given;
     if (row.history_of_allergies) res.history_of_allergies = row.history_of_allergies;
     if (row.refusal_reason_code) res.refusal_reason_code = row.refusal_reason_code;
@@ -137,6 +155,12 @@ const immunizationBaseSchema = z.object({
     is_from_other_facility: z.boolean().optional(),
     other_facility_name: z.string().max(200).optional().nullable(),
     lot_batch_no: z.string().max(100).optional().nullable(),
+    lot_batch_td1: z.string().max(100).optional().nullable(),
+    lot_batch_mr1: z.string().max(100).optional().nullable(),
+    lot_batch_hpv1: z.string().max(100).optional().nullable(),
+    lot_batch_hpv2: z.string().max(100).optional().nullable(),
+    lot_batch_td2: z.string().max(100).optional().nullable(),
+    lot_batch_mr2: z.string().max(100).optional().nullable(),
     consent_given: z.boolean().optional().nullable(),
     is_sick_today: z.boolean().optional(),
     history_of_allergies: z.string().max(500).optional().nullable(),
@@ -174,6 +198,12 @@ const validateImmunizationLogic = (data: {
     vaccine_hpv2?: boolean | undefined;
     vaccine_td2?: boolean | undefined;
     vaccine_mr2?: boolean | undefined;
+    lot_batch_td1?: string | null | undefined;
+    lot_batch_mr1?: string | null | undefined;
+    lot_batch_hpv1?: string | null | undefined;
+    lot_batch_hpv2?: string | null | undefined;
+    lot_batch_td2?: string | null | undefined;
+    lot_batch_mr2?: string | null | undefined;
 }): { isValid: boolean; message?: string } => {
     const isRefused = Boolean(data.is_refused);
     const isDeferred = Boolean(data.is_deferred);
@@ -225,6 +255,20 @@ const validateImmunizationLogic = (data: {
             isValid: false,
             message: 'Validation failed: A refused or deferred vaccination cannot be marked as fully immunized',
         };
+    }
+
+    const vaccineLots: Array<[boolean | undefined, string | null | undefined, string]> = [
+        [data.vaccine_td1, data.lot_batch_td1, 'Td1'],
+        [data.vaccine_mr1, data.lot_batch_mr1, 'MR1'],
+        [data.vaccine_hpv1, data.lot_batch_hpv1, 'HPV1'],
+        [data.vaccine_hpv2, data.lot_batch_hpv2, 'HPV2'],
+        [data.vaccine_td2, data.lot_batch_td2, 'Td2'],
+        [data.vaccine_mr2, data.lot_batch_mr2, 'MR2'],
+    ];
+    for (const [administered, lot, vaccine] of vaccineLots) {
+        if (!administered && lot?.trim()) {
+            return { isValid: false, message: `${vaccine} lot/batch requires that vaccine to be marked administered.` };
+        }
     }
 
     return { isValid: true };
@@ -324,11 +368,14 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
                 supervisor_name,
                 remarks,
                 school_id,
-                recorded_by
+                recorded_by,
+                lot_batch_td1, lot_batch_mr1, lot_batch_hpv1,
+                lot_batch_hpv2, lot_batch_td2, lot_batch_mr2
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                $21, $22, $23, $24, $25, $26, $27
+                $21, $22, $23, $24, $25, $26, $27,
+                $28, $29, $30, $31, $32, $33
             ) RETURNING *
         `;
 
@@ -363,6 +410,12 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
             validated.remarks ?? null,
             schoolId,
             req.user.id,
+            validated.lot_batch_td1?.trim() || null,
+            validated.lot_batch_mr1?.trim() || null,
+            validated.lot_batch_hpv1?.trim() || null,
+            validated.lot_batch_hpv2?.trim() || null,
+            validated.lot_batch_td2?.trim() || null,
+            validated.lot_batch_mr2?.trim() || null,
             ]);
 
             const createdRow = insertResult.rows[0];
@@ -520,6 +573,12 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
             vaccine_hpv2: validated.vaccine_hpv2 !== undefined ? validated.vaccine_hpv2 : existingRecord.vaccine_hpv2,
             vaccine_td2: validated.vaccine_td2 !== undefined ? validated.vaccine_td2 : existingRecord.vaccine_td2,
             vaccine_mr2: validated.vaccine_mr2 !== undefined ? validated.vaccine_mr2 : existingRecord.vaccine_mr2,
+            lot_batch_td1: validated.lot_batch_td1 !== undefined ? validated.lot_batch_td1 : existingRecord.lot_batch_td1,
+            lot_batch_mr1: validated.lot_batch_mr1 !== undefined ? validated.lot_batch_mr1 : existingRecord.lot_batch_mr1,
+            lot_batch_hpv1: validated.lot_batch_hpv1 !== undefined ? validated.lot_batch_hpv1 : existingRecord.lot_batch_hpv1,
+            lot_batch_hpv2: validated.lot_batch_hpv2 !== undefined ? validated.lot_batch_hpv2 : existingRecord.lot_batch_hpv2,
+            lot_batch_td2: validated.lot_batch_td2 !== undefined ? validated.lot_batch_td2 : existingRecord.lot_batch_td2,
+            lot_batch_mr2: validated.lot_batch_mr2 !== undefined ? validated.lot_batch_mr2 : existingRecord.lot_batch_mr2,
         };
 
         const logicCheck = validateImmunizationLogic(merged);
@@ -587,6 +646,12 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
                 supervisor_name = $23,
                 remarks = $24,
                 school_id = $25,
+                lot_batch_td1 = $27,
+                lot_batch_mr1 = $28,
+                lot_batch_hpv1 = $29,
+                lot_batch_hpv2 = $30,
+                lot_batch_td2 = $31,
+                lot_batch_mr2 = $32,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $26
             RETURNING *
@@ -622,6 +687,12 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
             remarks,
             schoolId,
             id,
+            validated.lot_batch_td1 !== undefined ? validated.lot_batch_td1?.trim() || null : existingRecord.lot_batch_td1,
+            validated.lot_batch_mr1 !== undefined ? validated.lot_batch_mr1?.trim() || null : existingRecord.lot_batch_mr1,
+            validated.lot_batch_hpv1 !== undefined ? validated.lot_batch_hpv1?.trim() || null : existingRecord.lot_batch_hpv1,
+            validated.lot_batch_hpv2 !== undefined ? validated.lot_batch_hpv2?.trim() || null : existingRecord.lot_batch_hpv2,
+            validated.lot_batch_td2 !== undefined ? validated.lot_batch_td2?.trim() || null : existingRecord.lot_batch_td2,
+            validated.lot_batch_mr2 !== undefined ? validated.lot_batch_mr2?.trim() || null : existingRecord.lot_batch_mr2,
             ]);
 
             const updatedRow = updateResult.rows[0];

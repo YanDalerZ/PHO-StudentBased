@@ -2,7 +2,8 @@ import axios from 'axios';
 import type { StudentModuleContext } from '../types/moduleContext';
 import type { ModuleSlug } from '../types';
 import type {
-    ConsolidatedReportPreview,
+    ReportDocument,
+    ReportView,
     ReportRequestFilters,
 } from '../types/reports';
 
@@ -47,7 +48,6 @@ import type {
     PatientInfoDashboardResponse,
     OralHealthDashboardResponse,
     DewormingDashboardResponse,
-    DewormingReportResponse,
     VitalSignsDashboardResponse,
     ImmunizationDashboardResponse,
     AdminDashboardStats,
@@ -153,29 +153,50 @@ export const getLookupModules = async (): Promise<AdminModule[]> => {
 export const getConsolidatedReport = async (
     moduleSlug: ModuleSlug,
     filters: ReportRequestFilters,
-): Promise<ConsolidatedReportPreview> => {
-    const response = await api.get<{ data: ConsolidatedReportPreview }>(
-        `/reports/${moduleSlug}`,
+    view: ReportView = 'municipality',
+): Promise<ReportDocument> => {
+    const response = await api.get<{ data: ReportDocument }>(
+        `/reports/${moduleSlug}${view === 'masterlist' ? '/masterlist' : ''}`,
         { params: filters },
     );
     return response.data.data;
 };
 
+export const getReportTargetRevisions = async (
+    moduleSlug: ModuleSlug,
+    period: { period: string } | { date_from: string; date_to: string },
+): Promise<import('../types/reports').ReportTargetRevision[]> => {
+    const response = await api.get<{ data: import('../types/reports').ReportTargetRevision[] }>(
+        `/report-targets/${moduleSlug}`, { params: period },
+    );
+    return response.data.data;
+};
+
+export const saveReportTarget = async (
+    moduleSlug: ModuleSlug,
+    payload: ({ period: string } | { date_from: string; date_to: string }) &
+        { school_id: number; indicator: string; target_count: number; source_note: string },
+): Promise<void> => {
+    await api.post(`/report-targets/${moduleSlug}`, payload);
+};
+
 export const recordReportPrint = async (
     moduleSlug: ModuleSlug,
     filters: ReportRequestFilters,
+    view: ReportView = 'municipality',
 ): Promise<void> => {
-    await api.post(`/reports/${moduleSlug}/print-events`, filters);
+    await api.post(`/reports/${moduleSlug}${view === 'masterlist' ? '/masterlist' : ''}/print-events`, { ...filters, view });
 };
 
 export const requestReportExport = async (
     moduleSlug: ModuleSlug,
     format: 'csv' | 'xlsx',
     filters: ReportRequestFilters,
+    view: ReportView = 'municipality',
 ): Promise<{ data: Blob; contentDisposition: string | undefined }> => {
     const response = await api.post<Blob>(
         `/reports/${moduleSlug}/exports`,
-        { format, filters },
+        { format, filters, view },
         { responseType: 'blob' },
     );
     const header = response.headers['content-disposition'];
@@ -189,8 +210,9 @@ export const downloadReportExport = async (
     moduleSlug: ModuleSlug,
     format: 'csv' | 'xlsx',
     filters: ReportRequestFilters,
+    view: ReportView = 'municipality',
 ): Promise<void> => {
-    const response = await requestReportExport(moduleSlug, format, filters);
+    const response = await requestReportExport(moduleSlug, format, filters, view);
     const filenameMatch = /filename="?([^";]+)"?/i.exec(response.contentDisposition ?? '');
     const filename = filenameMatch?.[1] ?? `${moduleSlug}-report.${format}`;
     const url = URL.createObjectURL(response.data);
@@ -390,16 +412,6 @@ export const getDewormingDashboard = async (
     const response = await api.get<{ data: DewormingDashboardResponse }>(
         '/modules/deworming/dashboard',
         { params }
-    );
-    return response.data.data;
-};
-
-export const getDewormingReport = async (
-    period: string
-): Promise<DewormingReportResponse> => {
-    const response = await api.get<{ data: DewormingReportResponse }>(
-        '/modules/deworming/report',
-        { params: { period } }
     );
     return response.data.data;
 };

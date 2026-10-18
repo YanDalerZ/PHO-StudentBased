@@ -13,7 +13,8 @@ export type ActionGrant =
     | 'can_edit'
     | 'can_approve_registration'
     | 'can_report'
-    | 'can_export';
+    | 'can_export'
+    | 'can_manage_targets';
 
 export interface ModulePermissions {
     can_view: boolean;
@@ -22,6 +23,7 @@ export interface ModulePermissions {
     can_approve_registration: boolean;
     can_report: boolean;
     can_export: boolean;
+    can_manage_targets?: boolean;
 }
 
 export interface EffectiveAccess {
