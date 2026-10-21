@@ -56,7 +56,7 @@ export const uploadStudentPhoto = async (
 
     if (!cloudName || !uploadPreset) {
         throw new Error(
-            'Cloudinary configuration missing. Please set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in frontend/.env.'
+            'Photo upload is unavailable. Please contact your administrator.'
         );
     }
 

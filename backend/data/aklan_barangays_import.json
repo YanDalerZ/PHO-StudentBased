@@ -1,0 +1,1250 @@
+{
+  "source_filename": "Barangay-in-each-Municipality.xlsx",
+  "source_sha256": "545208e537c2eae4868e940f0c1084dcfb94a23c16fc8efc50fb4c24a186fe88",
+  "rows": [
+    {
+      "municipality": "Altavas",
+      "barangay": "Cabangila"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Cabugao"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Catmon"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Dalipdip"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Ginictan"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Linayasan"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Lumaynay"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Lupo"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Man-up"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Odiong"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Quinasay-an"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Talon"
+    },
+    {
+      "municipality": "Altavas",
+      "barangay": "Tibiao"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Aranas"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Arcangel"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Calizo"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Cortes"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Feliciano"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Fulgencio"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Guanko"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Morales"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Oquendo"
+    },
+    {
+      "municipality": "Balete",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Agbanawan"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Bacan"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Badiangan"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Cerrudo"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Cupang"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Daguitan"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Daja Norte"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Daja Sur"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Dingle"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Jumarap"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Lapnag"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Libas"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Linabuan Sur"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Mambog"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Mangan"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Muguing"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Pagsanghan"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Palale"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Polo"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Polocate"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "San Isidro"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Sibalew"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Sigcay"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Taba-ao"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Tabayon"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Tinapuay"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Torralba"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Ugsod"
+    },
+    {
+      "municipality": "Banga",
+      "barangay": "Venturanza"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Ambolong"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Angas"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Bay-ang"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Caiyang"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Cabugao"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Camaligan"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Camanci"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Ipil"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Lalab"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Lupit"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Magpag-ong"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Magubahay"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Mambuquiao"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Man-up"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Mandong"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Napti"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Palay"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Songcolan"
+    },
+    {
+      "municipality": "Batan",
+      "barangay": "Tabon"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Alegria"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Bagongbayan"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Balusbos"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Bel-is"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Cabugan"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "El Progreso"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Habana"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Katipunan"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Mayapay"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Nazareth"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Panilongan"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Santander"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Tag-osip"
+    },
+    {
+      "municipality": "Buruanga",
+      "barangay": "Tigum"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Agbago"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Agdugayan"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Antipolo"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Aparicio"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Aquino"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Aslum"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Bagacay"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Batuan"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Buenavista"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Bugtongbato"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Cabugao"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Capilijan"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Colongcolong"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Laguinbanwa"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Mabusao"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Malindog"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Maloco"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Mina-a"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Monlaque"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Naile"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Naisud"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Naligusan"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Ondoy"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Polo"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Regador"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Rivera"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Rizal"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "San Isidro"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "San Jose"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Sta. Cruz"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Tagbaya"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Tul-ang"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Unat"
+    },
+    {
+      "municipality": "Ibajay",
+      "barangay": "Yawan"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Agcawilan"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Bagto"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Bugasongan"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Carugdog"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Cogon"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Ibao"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Mina"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Sta. Cruz"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Sta. Cruz Biga-a"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Silakat Nonok"
+    },
+    {
+      "municipality": "Lezo",
+      "barangay": "Tayhawan"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Agmailig"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Alfonso XII"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Batobato"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Bonza"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Calacabian"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Calamcan"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Can-Awan"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Casit-an"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Dalagsaan"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Guadalupe"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Janlud"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Julita"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Luctoga"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Magugba"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Manika"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Ogsip"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Ortega"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Oyang"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Pampango"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Pinonoy"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Rivera"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Rosal"
+    },
+    {
+      "municipality": "Libacao",
+      "barangay": "Sibalew"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Alaminos"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Alas-as"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Bacyang"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Balactasan"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Cabangahan"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Cabilawan"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Catabana"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Dit-Ana"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Galicia"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Guinatu-an"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Logohon"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Mamba"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Maria Cristina"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Medina"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Mercedes"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Napnot"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Pang-Itan"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Paningayan"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Panipiason"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "San Jose"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Singay"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Talangban"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Talimagao"
+    },
+    {
+      "municipality": "Madalag",
+      "barangay": "Tigbawan"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Agbalogo"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Aglucay"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Alibagon"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Bagong Barrio"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Baybay"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Cabatanga"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Cajilo"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Calangcang"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Calimbajan"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Castillo"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Cayangwan"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Dumga"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Libang"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Mantiguib"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Tibiawan"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Tina"
+    },
+    {
+      "municipality": "Makato",
+      "barangay": "Tugas"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Argao"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Balabag"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Balusbus"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Cabulihan"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Caticlan"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Cogon"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Cubay Norte"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Cubay Sur"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Dumlog"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Manoc-Manoc"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Naasug"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Nabaoy"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Napaan"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "San Viray"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Yapak"
+    },
+    {
+      "municipality": "Malay",
+      "barangay": "Motag"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Banaybanay"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Biga-a"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Bulabud"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Cabayugan"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Capataga"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Cogon"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Dangcalan"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Kinalangay Nuevo"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Kinalangay Viejo"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Lilo-an"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Malandayon"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Manhanip"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Navitas"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Osman"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Rosario"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "San Dimas"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "San Ramon"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "San Roque"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Sipac"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Sugnod"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Tambuan"
+    },
+    {
+      "municipality": "Malinao",
+      "barangay": "Tigpalas"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Alimbo Baybay"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Buenasuerte"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Buenafortuna"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Buenavista"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Gibon"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Habana"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Laserna"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Libertad"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Magallanes"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Matabana"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Nagustan"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Pawa"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Pinatuad"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Rizal"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Solido"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Tagororoc"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Toledo"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Unidos"
+    },
+    {
+      "municipality": "Nabas",
+      "barangay": "Union"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Candelaria"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Cawayan"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Dumaguit"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Fatima"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Guinbaliwan"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Jalas"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Jugas"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Lawa-an"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Mabilo"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Mataphao"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Ochando"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Pinamuk-an"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Polo"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Puis"
+    },
+    {
+      "municipality": "New Washington",
+      "barangay": "Tambak"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Albasan"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Aliputos"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Badio"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Bubog"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Bulwang"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Camanci Norte"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Camanci Sur"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Dongon East"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Dongon West"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Joyao-joyao"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Laguinbanua East"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Laguinbanua West"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Marianos"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Navitas"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Pusiw"
+    },
+    {
+      "municipality": "Numancia",
+      "barangay": "Tabangka"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Afga"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Baybay"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Dapdap"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Dumatad"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Jawili"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Lanipga"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Napatag"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Panayakan"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Poblacion"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Pudiot"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Tagas"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Tamalagon"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Tamokoe"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Tondog"
+    },
+    {
+      "municipality": "Tangalan",
+      "barangay": "Vivo"
+    }
+  ]
+}

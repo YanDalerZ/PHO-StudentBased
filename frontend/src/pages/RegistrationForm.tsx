@@ -455,7 +455,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
         const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
         if (!cloudName || !uploadPreset) {
-            toast.error('Cloudinary configuration missing. Please verify VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in frontend/.env.');
+            toast.error('Photo upload is unavailable. Please contact your administrator.');
             inputElem.value = '';
             return;
         }
