@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { endPortalSession, reasonFromCode } from '../lib/portalSession';
 import type { StudentModuleContext } from '../types/moduleContext';
 import type { ModuleSlug } from '../types';
 import type {
@@ -100,7 +101,7 @@ export const publicApi = axios.create({ baseURL: getApiBaseUrl() });
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
-        if (token && config.headers) {
+        if (token && config.headers && !/^\/?auth\/login(?:\?|$)/.test(config.url ?? '')) {
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
@@ -114,9 +115,12 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/Login';
+            // A failed login has no portal token to invalidate.
+            const current = localStorage.getItem('token');
+            const attempted = error.config?.headers?.Authorization;
+            if (current && attempted === `Bearer ${current}`) {
+                endPortalSession(reasonFromCode(error.response?.data?.code));
+            }
         }
         return Promise.reject(error);
     }

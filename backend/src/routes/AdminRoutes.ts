@@ -5,6 +5,7 @@ import * as adminController from '../controllers/AdminController.js';
 import * as adminAccessController from '../controllers/AdminAccessController.js';
 import * as adminInvitationController from '../controllers/AdminInvitationController.js';
 import * as adminAuditController from '../controllers/AdminAuditController.js';
+import * as adminSessionController from '../controllers/AdminSessionController.js';
 
 const router = Router();
 
@@ -15,6 +16,8 @@ router.use(requirePortalRole('admin'));
 // System Dashboard
 router.get('/dashboard', adminController.getDashboard);
 router.get('/audit-logs', adminAuditController.getAuditLogs);
+router.get('/session-timeout', adminSessionController.getSessionPolicy);
+router.put('/session-timeout', adminSessionController.updateSessionPolicy);
 
 // User Management
 router.get('/users', adminController.getUsers);

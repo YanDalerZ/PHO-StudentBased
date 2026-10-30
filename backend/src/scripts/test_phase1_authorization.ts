@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 import pool from '../database/db.js';
 import { app } from '../index.js';
 import { AuditService } from '../services/AuditService.js';
@@ -22,8 +23,10 @@ let patientModuleWasActive = true;
 const secret = process.env.JWT_SECRET;
 if (!secret) throw new Error('JWT_SECRET is required.');
 
-function authToken(id: number, email: string, role: Role): string {
-    return jwt.sign({ id, email, portal_role: role }, secret!, { expiresIn: '10m' });
+async function authToken(id: number, email: string, role: Role): Promise<string> {
+    const sid = randomUUID();
+    await pool.query('INSERT INTO PORTAL_SESSIONS (id, user_id) VALUES ($1, $2)', [sid, id]);
+    return jwt.sign({ id, sid, email, portal_role: role }, secret!, { expiresIn: '10m' });
 }
 
 async function addUser(role: Role, label: string): Promise<FixtureUser> {
@@ -37,7 +40,7 @@ async function addUser(role: Role, label: string): Promise<FixtureUser> {
     const id = result.rows[0]?.id;
     assert.ok(id);
     userIds.push(id);
-    return { id, email, role, token: authToken(id, email, role) };
+    return { id, email, role, token: await authToken(id, email, role) };
 }
 
 async function grant(userId: number, moduleIds: number[], actorId: number, actions = true): Promise<void> {
@@ -173,7 +176,12 @@ try {
     const createBodies: Record<string, Json> = {
         'patient-info': { student_id: studentB },
         'oral-health': { student_id: studentB, date_examined: '2026-01-10' },
-        deworming: { student_id: studentB, date_dewormed: '2026-01-10' },
+        deworming: {
+            student_id: studentB,
+            date_dewormed: '2026-01-10',
+            is_dewormed: true,
+            medication_given: 'Albendazole 400mg',
+        },
         immunization: { student_id: studentB, immunization_date: '2026-01-10', vaccine_td1: true },
         'vital-signs': { student_id: studentB, date_checked: '2026-01-10' },
     };
@@ -205,7 +213,7 @@ try {
     const successBodies: Record<string, Json> = {
         'patient-info': { student_id: studentA },
         'oral-health': { student_id: studentA, date_examined: '2026-01-10' },
-        deworming: { student_id: studentA, date_dewormed: '2026-01-10' },
+        deworming: { student_id: studentA, date_dewormed: '2026-01-10', is_dewormed: true, medication_given: 'Albendazole 400mg' },
         immunization: { student_id: studentA, immunization_date: '2026-01-10', vaccine_td1: true },
         'vital-signs': { student_id: studentA, date_checked: '2026-01-10' },
     };
@@ -340,6 +348,7 @@ try {
         await pool.query('DELETE FROM USER_MODULE_PERMISSIONS WHERE user_id = ANY($1::int[])', [userIds]);
         await pool.query('DELETE FROM USER_SCHOOL_ASSIGNMENTS WHERE user_id = ANY($1::int[])', [userIds]);
         await pool.query('DELETE FROM AUDIT_EVENTS WHERE actor_id = ANY($1::int[])', [userIds]);
+        await pool.query('DELETE FROM PORTAL_SESSIONS WHERE user_id = ANY($1::int[])', [userIds]);
         await pool.query('DELETE FROM USERS WHERE id = ANY($1::int[])', [userIds]);
     }
     if (schoolIds.length) await pool.query('DELETE FROM SCHOOLS WHERE id = ANY($1::int[])', [schoolIds]);

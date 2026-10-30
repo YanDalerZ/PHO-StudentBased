@@ -78,7 +78,9 @@ const detailDefinitions: Record<ModuleSlug, { alias: string; date: string; colum
             { key: 'school_type', label: 'School type' }, { key: 'in_school', label: 'In school' },
         ],
         select: `TO_CHAR(d.date_dewormed, 'YYYY-MM-DD') AS event_date,
-            d.age_group, d.medication_given AS medication, d.is_dewormed AS accomplished,
+            CASE WHEN d.age_group IN ('<1', '1-4', '5-9', '10-14')
+                THEN d.age_group || ' (historical)' ELSE d.age_group END AS age_group,
+            d.medication_given AS medication, d.is_dewormed AS accomplished,
             d.school_type::text AS school_type, d.in_school`,
     },
     immunization: {
@@ -144,10 +146,11 @@ const summaryDefinitions: Record<ModuleSlug, { accomplishedWhen: string; extras:
     deworming: {
         accomplishedWhen: 'd.is_dewormed = TRUE',
         extras: [
-            { key: 'age_1_4', label: 'Age 1–4', sql: "COUNT(DISTINCT d.student_id) FILTER (WHERE d.is_dewormed = TRUE AND d.age_group = '1-4')" },
-            { key: 'age_5_9', label: 'Age 5–9', sql: "COUNT(DISTINCT d.student_id) FILTER (WHERE d.is_dewormed = TRUE AND d.age_group = '5-9')" },
-            { key: 'age_10_14', label: 'Age 10–14', sql: "COUNT(DISTINCT d.student_id) FILTER (WHERE d.is_dewormed = TRUE AND d.age_group = '10-14')" },
+            { key: 'age_5_14', label: 'Age 5–14', sql: "COUNT(DISTINCT d.student_id) FILTER (WHERE d.is_dewormed = TRUE AND d.age_group IN ('5-14', '5-9', '10-14'))" },
             { key: 'age_15_19', label: 'Age 15–19', sql: "COUNT(DISTINCT d.student_id) FILTER (WHERE d.is_dewormed = TRUE AND d.age_group = '15-19')" },
+            { key: 'age_20_plus', label: 'Age 20+', sql: "COUNT(DISTINCT d.student_id) FILTER (WHERE d.is_dewormed = TRUE AND d.age_group = '20+')" },
+            { key: 'historical_under_5', label: 'Historical under 5', sql: "COUNT(DISTINCT d.student_id) FILTER (WHERE d.is_dewormed = TRUE AND d.age_group IN ('<1', '1-4'))" },
+            { key: 'historical_unknown', label: 'Historical/Unknown age group', sql: "COUNT(DISTINCT d.student_id) FILTER (WHERE d.is_dewormed = TRUE AND (d.age_group IS NULL OR d.age_group NOT IN ('5-14', '5-9', '10-14', '15-19', '20+', '<1', '1-4')))" },
         ],
     },
     immunization: {

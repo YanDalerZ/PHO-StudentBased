@@ -33,6 +33,7 @@ export interface EffectiveAccess {
 
 export interface AuthUser {
     id: number;
+    sid?: string;
     email: string;
     portal_role: PortalRole;
     job_title: string;
@@ -46,6 +47,7 @@ declare global {
         interface Request {
             user?: AuthUser;
             effectiveAccess?: EffectiveAccess;
+            portalSessionId?: string;
         }
     }
 }

@@ -1,892 +1,303 @@
 import StudentContextPanel from '../common/StudentContextPanel';
 import type { StudentModuleContext } from '../../types/moduleContext';
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
-import {
-    ArrowLeft,
-    Save,
-    CheckCircle2,
-    Clock,
-    ShieldAlert,
-    Loader2,
-    Syringe,
-    Building2,
-    Calendar,
-    User,
-    FileText,
-    AlertCircle,
-} from 'lucide-react';
-import {
-    getStudentModuleContext,
-    getImmunizationByStudent,
-    createImmunization,
-    updateImmunization,
-} from '../../services/api';
+import { getStudentModuleContext, getImmunizationByStudent, createImmunization, updateImmunization } from '../../services/api';
 import type { Immunization, CreateImmunizationPayload } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { canWriteModuleRecord } from '../../lib/access';
 import { cn } from '../../lib/utils';
 
 const REFUSAL_REASONS = [
-    { code: '1', label: '1 - Parent absent/away from home' },
-    { code: '2', label: '2 - Fear of vaccine side effect' },
-    { code: '3', label: '3 - Vaccine safety issues (past adverse experience)' },
-    { code: '4', label: '4 - Child already has complete routine vaccination' },
-    { code: '5', label: '5 - Fear of COVID transmission' },
-    { code: '6', label: '6 - Vaccine perceived ineffective/low-quality/near-expiry' },
-    { code: '7', label: '7 - Client is a newborn and parents believed too young' },
-    { code: '8', label: '8 - Already vaccinated by private MD' },
-    { code: '9', label: '9 - Peculiar personal beliefs/misconceptions' },
-    { code: '10', label: '10 - Lack of trust in the vaccinator' },
-    { code: '11', label: '11 - Child just recovered from illness/discharged from hospital' },
-    { code: '12', label: '12 - Unaware of the campaign' },
-    { code: '13', label: '13 - Vaccine team did not visit' },
-    { code: '14', label: '14 - Child from a different area' },
-    { code: '15', label: '15 - Child was acutely sick or not feeling well' },
-    { code: '16', label: '16 - Do not know/declined to respond' },
-    { code: '17', label: '17 - Outright refusal' },
-    { code: '18', label: '18 - Other (specify)' },
+    'Parent absent/away from home', 'Fear of vaccine side effect', 'Vaccine safety issues (past adverse experience)',
+    'Child already has complete routine vaccination', 'Fear of COVID transmission',
+    'Vaccine perceived ineffective/low-quality/near-expiry', 'Client is a newborn and parents believed too young',
+    'Already vaccinated by private MD', 'Peculiar personal beliefs/misconceptions', 'Lack of trust in the vaccinator',
+    'Child just recovered from illness/discharged from hospital', 'Unaware of the campaign', 'Vaccine team did not visit',
+    'Child from a different area', 'Child was acutely sick or not feeling well', 'Do not know/declined to respond',
+    'Outright refusal', 'Other (specify)',
 ];
+const EDUCATIONAL_LEVELS = ['Kindergarten', ...Array.from({ length: 12 }, (_, i) => 'Grade ' + (i + 1))];
+const DOSES = ['mr1', 'mr2', 'td1', 'td2', 'hpv1', 'hpv2'] as const;
+type Dose = typeof DOSES[number];
+type Disposition = 'neither' | 'deferred' | 'refused' | 'conflict';
+const emptyLots = (): Record<Dose, string> => ({ mr1: '', mr2: '', td1: '', td2: '', hpv1: '', hpv2: '' });
+const emptyDoses = (): Record<Dose, boolean> => ({ mr1: false, mr2: false, td1: false, td2: false, hpv1: false, hpv2: false });
+const doseLabel = (key: Dose) => (key.startsWith('mr') ? 'MR' : key.startsWith('td') ? 'Td' : 'HPV') + ' Dose ' + key.slice(-1);
+const localToday = () => {
+    const date = new Date();
+    return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+};
+const inputClass = 'w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-800 focus:ring-2 focus:ring-rose-500/30';
+const buttonClass = 'rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-rose-500';
+const sectionClass = 'space-y-4 border-t border-slate-100 pt-6';
+const titleClass = 'text-base font-bold text-slate-900';
 
-const EDUCATIONAL_LEVELS = [
-    'Kindergarten',
-    'Grade 1',
-    'Grade 2',
-    'Grade 3',
-    'Grade 4',
-    'Grade 5',
-    'Grade 6',
-    'Grade 7',
-    'Grade 8',
-    'Grade 9',
-    'Grade 10',
-    'Grade 11',
-    'Grade 12',
-];
-
-type VaccineLotKey = 'td1' | 'mr1' | 'hpv1' | 'hpv2' | 'td2' | 'mr2';
-const emptyVaccineLots = (): Record<VaccineLotKey, string> => ({ td1: '', mr1: '', hpv1: '', hpv2: '', td2: '', mr2: '' });
-
-const ImmunizationForm: React.FC = () => {
-    const { effectiveAccess } = useAuth();
+export default function ImmunizationForm() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const location = useLocation();
-
-    const isSuperUser = location.pathname.startsWith('/superuser');
-    const basePath = isSuperUser ? '/superuser' : '/teacher';
-
-    const [loading, setLoading] = useState<boolean>(true);
-    const [isSaving, setIsSaving] = useState<boolean>(false);
-    const [errorStatus, setErrorStatus] = useState<number | null>(null);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
+    const { pathname } = useLocation();
+    const basePath = pathname.startsWith('/superuser') ? '/superuser' : '/teacher';
+    const { effectiveAccess } = useAuth();
     const [student, setStudent] = useState<StudentModuleContext | null>(null);
-    const [existingRecord, setExistingRecord] = useState<Immunization | null>(null);
+    const [record, setRecord] = useState<Immunization | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [step, setStep] = useState<1 | 2>(1);
+    const [error, setError] = useState('');
+    const [sick, setSick] = useState<boolean | null>(null);
+    const [consent, setConsent] = useState<boolean | null>(null);
+    const [allergies, setAllergies] = useState('');
+    const [date, setDate] = useState(localToday);
+    const [program, setProgram] = useState('School-Based Immunization');
+    const [programEdited, setProgramEdited] = useState(false);
+    const [education, setEducation] = useState('Grade 1');
+    const [doses, setDoses] = useState(emptyDoses);
+    const [lots, setLots] = useState(emptyLots);
+    const [disposition, setDisposition] = useState<Disposition>('neither');
+    const [deferredReason, setDeferredReason] = useState('');
+    const [refusalCode, setRefusalCode] = useState('');
+    const [fullyImmunized, setFullyImmunized] = useState(false);
+    const [vaccinator, setVaccinator] = useState('');
+    const [supervisor, setSupervisor] = useState('');
+    const [reviewedCorrections, setReviewedCorrections] = useState(false);
 
-    // Form states
-    const [immunizationDate, setImmunizationDate] = useState<string>(new Date().toISOString().split('T')[0] ?? '');
-    const [immunizationType, setImmunizationType] = useState<string>('SCHOOL & COMMUNITY BASED IMMUNIZATION');
-    const [isSchoolBased, setIsSchoolBased] = useState<boolean>(true);
-    const [educationalLevel, setEducationalLevel] = useState<string>('Grade 1');
-
-    // Vaccines
-    const [vaccineTd1, setVaccineTd1] = useState<boolean>(false);
-    const [vaccineMr1, setVaccineMr1] = useState<boolean>(false);
-    const [vaccineHpv1, setVaccineHpv1] = useState<boolean>(false);
-    const [vaccineHpv2, setVaccineHpv2] = useState<boolean>(false);
-    const [vaccineTd2, setVaccineTd2] = useState<boolean>(false);
-    const [vaccineMr2, setVaccineMr2] = useState<boolean>(false);
-
-    // Facility & Lot
-    const [isFromOtherFacility, setIsFromOtherFacility] = useState<boolean>(false);
-    const [otherFacilityName, setOtherFacilityName] = useState<string>('');
-    const [lotBatchNo, setLotBatchNo] = useState<string>('');
-    const [vaccineLots, setVaccineLots] = useState<Record<VaccineLotKey, string>>(emptyVaccineLots);
-
-    // Pre-screening & Consent
-    const [consentGiven, setConsentGiven] = useState<boolean | null>(null);
-    const [isSickToday, setIsSickToday] = useState<boolean>(false);
-    const [historyOfAllergies, setHistoryOfAllergies] = useState<string>('');
-
-    // Deferral & Refusal
-    const [isDeferred, setIsDeferred] = useState<boolean>(false);
-    const [isRefused, setIsRefused] = useState<boolean>(false);
-    const [refusalReasonCode, setRefusalReasonCode] = useState<string>('');
-    const [refusalReasonText, setRefusalReasonText] = useState<string>('');
-
-    // Status & Personnel
-    const [isFullyImmunized, setIsFullyImmunized] = useState<boolean>(false);
-    const [vaccinatorName, setVaccinatorName] = useState<string>('');
-    const [supervisorName, setSupervisorName] = useState<string>('');
-    const [remarks, setRemarks] = useState<string>('');
-
-    // Load data
     useEffect(() => {
-        let isMounted = true;
+        let active = true;
         if (!id) return;
-
         Promise.all([
             getStudentModuleContext(id, 'immunization'),
             getImmunizationByStudent(id).catch((err: unknown) => {
-                if (axios.isAxiosError(err) && err.response?.status === 404) {
-                    return { data: { immunization: null, records: [] } };
-                }
+                if (axios.isAxiosError(err) && err.response?.status === 404) return { data: { immunization: null, records: [] } };
                 throw err;
             }),
-        ])
-            .then(([studentRes, immuRes]) => {
-                if (!isMounted) return;
-                setStudent(studentRes.data);
-
-                const currentRecord = immuRes.data.immunization;
-                if (currentRecord) {
-                    setExistingRecord(currentRecord);
-                    setImmunizationDate(currentRecord.immunization_date || '');
-                    setImmunizationType(currentRecord.immunization_type || 'SCHOOL & COMMUNITY BASED IMMUNIZATION');
-                    setIsSchoolBased(currentRecord.is_school_based ?? true);
-                    setEducationalLevel(currentRecord.educational_level || 'Grade 1');
-
-                    setVaccineTd1(Boolean(currentRecord.vaccine_td1));
-                    setVaccineMr1(Boolean(currentRecord.vaccine_mr1));
-                    setVaccineHpv1(Boolean(currentRecord.vaccine_hpv1));
-                    setVaccineHpv2(Boolean(currentRecord.vaccine_hpv2));
-                    setVaccineTd2(Boolean(currentRecord.vaccine_td2));
-                    setVaccineMr2(Boolean(currentRecord.vaccine_mr2));
-
-                    setIsFromOtherFacility(Boolean(currentRecord.is_from_other_facility));
-                    setOtherFacilityName(currentRecord.other_facility_name || '');
-                    setLotBatchNo(currentRecord.lot_batch_no || '');
-                    setVaccineLots({
-                        td1: currentRecord.lot_batch_td1 || '', mr1: currentRecord.lot_batch_mr1 || '',
-                        hpv1: currentRecord.lot_batch_hpv1 || '', hpv2: currentRecord.lot_batch_hpv2 || '',
-                        td2: currentRecord.lot_batch_td2 || '', mr2: currentRecord.lot_batch_mr2 || '',
-                    });
-
-                    setConsentGiven(currentRecord.consent_given ?? null);
-                    setIsSickToday(Boolean(currentRecord.is_sick_today));
-                    setHistoryOfAllergies(currentRecord.history_of_allergies || '');
-
-                    setIsDeferred(Boolean(currentRecord.is_deferred));
-                    setIsRefused(Boolean(currentRecord.is_refused));
-                    setRefusalReasonCode(currentRecord.refusal_reason_code || '');
-                    setRefusalReasonText(currentRecord.refusal_reason_text || '');
-
-                    setIsFullyImmunized(Boolean(currentRecord.is_fully_immunized));
-                    setVaccinatorName(currentRecord.vaccinator_name || '');
-                    setSupervisorName(currentRecord.supervisor_name || '');
-                    setRemarks(currentRecord.remarks || '');
-                } else {
-                    setExistingRecord(null);
-                    if (studentRes.data.grade_level) {
-                        setEducationalLevel(studentRes.data.grade_level);
-                    }
-                }
-                setErrorStatus(null);
-                setErrorMessage(null);
-                setLoading(false);
-            })
-            .catch((err: unknown) => {
-                if (!isMounted) return;
-                let status = 500;
-                let message = 'Failed to load immunization record. Please try again.';
-
-                if (axios.isAxiosError(err) && err.response) {
-                    status = err.response.status;
-                    if (status === 403) {
-                        message = 'You do not have permission to view or manage records for this student.';
-                    } else if (status === 404) {
-                        message = 'Student record not found in the registry.';
-                    } else if (err.response.data?.message) {
-                        message = err.response.data.message;
-                    }
-                }
-
-                setErrorStatus(status);
-                setErrorMessage(message);
-                setLoading(false);
-            });
-
-        return () => {
-            isMounted = false;
-        };
+        ]).then(([context, response]) => {
+            if (!active) return;
+            setStudent(context.data);
+            const existing = response.data.immunization;
+            setRecord(existing);
+            setEducation(existing?.educational_level ?? context.data.grade_level ?? 'Grade 1');
+            if (existing) {
+                setDate(existing.immunization_date);
+                setProgram(existing.immunization_type ?? '');
+                setSick(existing.is_sick_today ?? null);
+                setConsent(existing.consent_given ?? null);
+                setAllergies(existing.history_of_allergies ?? '');
+                setDoses(Object.fromEntries(DOSES.map(key => [key, Boolean(existing[('vaccine_' + key) as keyof Immunization])])) as Record<Dose, boolean>);
+                setLots(Object.fromEntries(DOSES.map(key => [key, existing[('lot_batch_' + key) as keyof Immunization] ?? ''])) as Record<Dose, string>);
+                setDisposition(existing.is_deferred && existing.is_refused ? 'conflict' : existing.is_deferred ? 'deferred' : existing.is_refused ? 'refused' : 'neither');
+                setDeferredReason(existing.deferred_reason_text ?? '');
+                setRefusalCode(existing.refusal_reason_code ?? '');
+                setFullyImmunized(existing.is_fully_immunized);
+                setVaccinator(existing.vaccinator_name ?? '');
+                setSupervisor(existing.supervisor_name ?? '');
+            }
+            setLoading(false);
+        }).catch((err: unknown) => {
+            if (!active) return;
+            setLoadError(axios.isAxiosError(err) && err.response?.status === 403 ? 'Access restricted: you do not have permission to view this immunization record.' : 'Unable to load this student’s immunization record. Return to the registry and try again.');
+            setLoading(false);
+        });
+        return () => { active = false; };
     }, [id]);
 
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!student || !id) return;
-        if (!canWriteModuleRecord(effectiveAccess, 'immunization', Boolean(existingRecord))) {
-            toast.error('Your current access allows viewing this record, but not saving this change.');
-            return;
+    const deferred = disposition === 'deferred';
+    const refused = disposition === 'refused';
+    const male = student?.sex === 'Male';
+    const invalidLots = DOSES.filter(key => doses[key] && !/^[0-9]*$/.test(lots[key]));
+    // Hidden fields are omitted from updates, so the controller retains their exact saved values.
+    const removingHistoricalValues = Boolean(record && (
+        DOSES.some(key => (record[('vaccine_' + key) as keyof Immunization] && !doses[key]) ||
+            (record[('lot_batch_' + key) as keyof Immunization] && (!doses[key] || lots[key] !== record[('lot_batch_' + key) as keyof Immunization]))) ||
+        ((record.refusal_reason_code || record.refusal_reason_text) && !refused) ||
+        (record.deferred_reason_text && (!deferred || deferredReason.trim() !== record.deferred_reason_text))
+    ));
+    const canSave = canWriteModuleRecord(effectiveAccess, 'immunization', Boolean(record));
+    const advance = () => {
+        if (sick === null) { setError('Choose Yes or No before continuing.'); return; }
+        if (sick) { setError('The vaccination event cannot continue through this form when the child is sick today. No event has been saved or automatically marked deferred.'); return; }
+        setError('');
+        setStep(2);
+    };
+    const save = async (event: React.FormEvent) => {
+        event.preventDefault();
+        setError('');
+        if (step === 1) { advance(); return; }
+        if (!student || !id || !canSave || saving) return;
+        let message = '';
+        if (sick !== false) message = 'Complete screening with No before continuing.';
+        else if (disposition === 'conflict') message = 'Choose one status to resolve this historical Deferred/Refused conflict.';
+        else if (deferred && (!deferredReason.trim() || deferredReason.trim().length > 2000)) message = 'Enter a deferred reason of 1-2000 characters.';
+        else if (male && (doses.hpv1 || doses.hpv2)) message = 'HPV is unavailable for Male students under this school-based program eligibility rule.';
+        else if (invalidLots.length) message = 'Enter digits only in each selected dose’s lot/batch number, or leave it empty.';
+        else if (removingHistoricalValues && !reviewedCorrections) message = 'Review and confirm the historical corrections before saving.';
+        else if (date < student.date_of_birth) message = 'Immunization date cannot be earlier than the student’s date of birth.';
+        else if (!refused && !deferred && !DOSES.some(key => doses[key])) message = 'Select at least one administered dose, or select Refused.';
+        else if (refused && !refusalCode) message = 'Select a refusal reason code.';
+        if (message) { setError(message); return; }
+        const payload: CreateImmunizationPayload = {
+            student_id: Number(id), immunization_date: date,
+            // Preserve legacy type and school-program flag unless the visible type is edited.
+            ...(!record || programEdited ? { immunization_type: program } : {}),
+            ...(!record ? { is_school_based: true, is_from_other_facility: false } : {}),
+            educational_level: education || null,
+            consent_given: consent, is_sick_today: false, history_of_allergies: allergies.trim() || null,
+            is_deferred: deferred, is_refused: refused,
+            deferred_reason_text: deferred ? deferredReason.trim() : null,
+            refusal_reason_code: refused ? refusalCode : null,
+            // Keep historical text when still Refused; explicitly clear it when moving away.
+            ...(!refused ? { refusal_reason_text: null } : {}),
+            is_fully_immunized: (refused || deferred) ? false : fullyImmunized,
+            vaccinator_name: vaccinator.trim() || null, supervisor_name: supervisor.trim() || null,
+            school_id: student.school_id,
+        };
+        for (const key of DOSES) {
+            payload[('vaccine_' + key) as `vaccine_${Dose}`] = doses[key];
+            payload[('lot_batch_' + key) as `lot_batch_${Dose}`] = doses[key] ? lots[key] || null : null;
         }
-
-        // Date vs DOB check
-        if (student.date_of_birth && immunizationDate) {
-            const birth = new Date(student.date_of_birth);
-            const immu = new Date(immunizationDate);
-            if (immu < birth) {
-                toast.error('Immunization date cannot be earlier than student date of birth');
-                return;
-            }
-        }
-
-        // Logical rule: at least one vaccine if not refused and not deferred
-        if (!isRefused && !isDeferred) {
-            const hasVaccine = vaccineTd1 || vaccineMr1 || vaccineHpv1 || vaccineHpv2 || vaccineTd2 || vaccineMr2;
-            if (!hasVaccine) {
-                toast.error('Please select at least one vaccine administered');
-                return;
-            }
-        }
-
-        // Logical rule: refusal reason when refused
-        if (isRefused) {
-            if (!refusalReasonCode && !refusalReasonText.trim()) {
-                toast.error('Please select a refusal reason code or provide an explanation');
-                return;
-            }
-        }
-
-        // Logical rule: other facility name
-        if (isFromOtherFacility && !otherFacilityName.trim()) {
-            toast.error('Please specify the other facility name');
-            return;
-        }
-
-        setIsSaving(true);
+        setSaving(true);
         try {
-            const payload: CreateImmunizationPayload = {
-                student_id: Number(id),
-                immunization_date: immunizationDate,
-                immunization_type: immunizationType,
-                vaccine_td1: vaccineTd1,
-                vaccine_mr1: vaccineMr1,
-                vaccine_hpv1: vaccineHpv1,
-                vaccine_hpv2: vaccineHpv2,
-                vaccine_td2: vaccineTd2,
-                vaccine_mr2: vaccineMr2,
-                is_school_based: isSchoolBased,
-                educational_level: educationalLevel || null,
-                is_from_other_facility: isFromOtherFacility,
-                other_facility_name: isFromOtherFacility ? otherFacilityName.trim() : null,
-                lot_batch_no: lotBatchNo.trim() || null,
-                lot_batch_td1: vaccineTd1 ? vaccineLots.td1.trim() || null : null,
-                lot_batch_mr1: vaccineMr1 ? vaccineLots.mr1.trim() || null : null,
-                lot_batch_hpv1: vaccineHpv1 ? vaccineLots.hpv1.trim() || null : null,
-                lot_batch_hpv2: vaccineHpv2 ? vaccineLots.hpv2.trim() || null : null,
-                lot_batch_td2: vaccineTd2 ? vaccineLots.td2.trim() || null : null,
-                lot_batch_mr2: vaccineMr2 ? vaccineLots.mr2.trim() || null : null,
-                consent_given: consentGiven,
-                is_sick_today: isSickToday,
-                history_of_allergies: historyOfAllergies.trim() || null,
-                is_deferred: isDeferred,
-                is_refused: isRefused,
-                refusal_reason_code: isRefused ? (refusalReasonCode || null) : null,
-                refusal_reason_text: isRefused ? (refusalReasonText.trim() || null) : null,
-                is_fully_immunized: (isRefused || isDeferred) ? false : isFullyImmunized,
-                vaccinator_name: vaccinatorName.trim() || null,
-                supervisor_name: supervisorName.trim() || null,
-                remarks: remarks.trim() || null,
-                school_id: student.school_id || null,
-            };
-
-            if (existingRecord?.id) {
-                await updateImmunization(existingRecord.id, payload);
-                toast.success('Immunization record updated successfully');
-            } else {
-                await createImmunization(payload);
-                toast.success('Immunization record created successfully');
-            }
-
-            navigate(`${basePath}/students/${id}`);
+            if (record) await updateImmunization(record.id, payload);
+            else await createImmunization(payload);
+            toast.success(record ? 'Immunization record updated successfully' : 'Immunization record created successfully');
+            navigate(basePath + '/students/' + id);
         } catch (err: unknown) {
-            let message = 'Failed to save immunization record';
-            if (axios.isAxiosError(err) && err.response?.data?.message) {
-                message = err.response.data.message;
-            }
-            toast.error(message);
-        } finally {
-            setIsSaving(false);
-        }
+            setError(axios.isAxiosError(err) ? err.response?.data?.message || 'Unable to save this record.' : 'Unable to save this record.');
+        } finally { setSaving(false); }
     };
 
-    if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3">
-                <Loader2 className="w-8 h-8 animate-spin text-rose-600" />
-                <p className="text-sm font-medium text-slate-500">Loading immunization record...</p>
-            </div>
-        );
-    }
-
-    if (errorStatus === 403) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
-                <div className="p-4 bg-amber-50 text-amber-600 rounded-full mb-4 border border-amber-200">
-                    <ShieldAlert className="w-12 h-12" />
-                </div>
-                <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
-                <p className="text-sm text-slate-600 max-w-md mt-2">
-                    {errorMessage || 'You do not have permission to access records for this student.'}
-                </p>
-                <Link
-                    to={`${basePath}/students`}
-                    className="mt-6 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold transition-colors flex items-center shadow-xs"
-                >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Registry
-                </Link>
-            </div>
-        );
-    }
-
-    if (!student || errorStatus === 404) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
-                <h2 className="text-xl font-bold text-slate-800">Student Not Found</h2>
-                <p className="text-sm text-slate-500 max-w-md mt-2">
-                    {errorMessage || 'The requested student record could not be found.'}
-                </p>
-                <Link
-                    to={`${basePath}/students`}
-                    className="mt-6 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold transition-colors flex items-center"
-                >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Registry
-                </Link>
-            </div>
-        );
-    }
-
-    const isCompleted = existingRecord !== null;
-    const canSave = canWriteModuleRecord(effectiveAccess, 'immunization', isCompleted);
-    const inputClasses = "w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-600 transition-all outline-hidden";
-    const labelClasses = "block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5";
-    const sectionClasses = "pt-6 border-t border-slate-100";
-    const sectionTitleClasses = "text-base font-bold text-slate-900 mb-4 flex items-center";
-
-    return (
-        <div className="space-y-6 pb-12 max-w-5xl mx-auto">
-            {/* Header Navigation */}
-            <div className="flex items-center justify-between">
-                <Link
-                    to={`${basePath}/students/${id}`}
-                    className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-rose-600 transition-colors"
-                >
-                    <ArrowLeft className="w-4 h-4 mr-1.5" />
-                    Back to Student Profile
-                </Link>
-
-                <div className="flex items-center space-x-2">
-                    {isCompleted ? (
-                        <span className="flex items-center space-x-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            <span>Record on File (Completed)</span>
-                        </span>
-                    ) : (
-                        <span className="flex items-center space-x-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
-                            <Clock className="w-4 h-4 text-amber-600" />
-                            <span>Pending Entry</span>
-                        </span>
-                    )}
-                </div>
-            </div>
-
-            {/* Student Overview Header Card */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-lg shrink-0">
-                        {student.first_name[0]}{student.last_name[0]}
-                    </div>
-                    <div>
-                        <div className="flex items-center space-x-2">
-                            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                                {student.first_name} {student.middle_name ? `${student.middle_name[0]}. ` : ''}{student.last_name} {student.suffix && student.suffix !== 'NOT APPLICABLE' ? student.suffix : ''}
-                            </h1>
-                            <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                                LRN: {student.student_lrn}
-                            </span>
+    if (loading) return <p role="status" className="p-8 text-center">Loading immunization record…</p>;
+    if (!student || loadError) return <div className="space-y-4 p-8"><p role="alert">{loadError || 'Student not found.'}</p><Link to={basePath + '/students'}>Back to registry</Link></div>;
+    return <div className="mx-auto max-w-5xl space-y-6 pb-12">
+        <Link to={basePath + '/students/' + id} className="text-sm text-slate-600">Back to Student Profile</Link>
+        <header className="rounded-2xl border border-slate-200 bg-white p-6">
+            <h1 className="text-xl font-bold text-slate-900">{[student.first_name, student.middle_name, student.last_name, student.suffix === 'NOT APPLICABLE' ? null : student.suffix].filter(Boolean).join(' ')} — Immunization</h1>
+            <p className="mt-2 text-sm text-slate-600">LRN: {student.student_lrn} · {student.sex} · {student.school_name}</p>
+            {record && <p className="mt-2 text-xs text-slate-500">Editing the saved record. Screening answers and historical selections are loaded for review.</p>}
+        </header>
+        <StudentContextPanel student={student} />
+        <form onSubmit={save} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+            <p aria-live="polite" className="font-semibold text-slate-600">Step {step} of 2 — {step === 1 ? 'Pre-Screening & Consent' : 'Vaccination Event'}</p>
+            {error && <p role="alert" className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
+            {step === 1 ? <>
+                <section className="space-y-5" aria-labelledby="screening-title">
+                    <h2 id="screening-title" className={titleClass}>Pre-Screening &amp; Consent</h2>
+                    <fieldset className="space-y-3">
+                        <legend className="mb-2 text-sm font-semibold">Is the child sick today? *</legend>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[true, false].map(answer => <label key={String(answer)} className={cn('flex cursor-pointer items-center gap-3 rounded-xl border p-4', sick === answer ? 'border-rose-500 bg-rose-50' : 'border-slate-300')}>
+                                <input type="radio" name="sick-today" checked={sick === answer} onChange={() => { setSick(answer); setError(''); }} />
+                                <span className="font-semibold">{answer ? 'Yes' : 'No'}</span>
+                            </label>)}
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-slate-500">
-                            <span className="flex items-center">
-                                <User className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                                {student.sex}
-                            </span>
-                            <span className="flex items-center">
-                                <Calendar className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                                Born: {student.date_of_birth}
-                            </span>
-                            <span className="flex items-center">
-                                <Building2 className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                                {student.school_name || `School #${student.school_id}`}
-                            </span>
-                        </div>
-                    </div>
+                        {sick === true && <p role="alert" className="text-sm text-rose-800">The vaccination event cannot continue through this form when the child is sick today. No event has been saved or automatically marked deferred.</p>}
+                    </fieldset>
+                    <label className="block space-y-2 text-sm font-semibold">Parent/guardian consent on file
+                        <select value={consent === null ? '' : String(consent)} onChange={e => setConsent(e.target.value === '' ? null : e.target.value === 'true')} className={inputClass}>
+                            <option value="">Not recorded</option><option value="true">Yes</option><option value="false">No</option>
+                        </select>
+                    </label>
+                    <label className="block space-y-2 text-sm font-semibold">History of Allergies
+                        <textarea rows={2} value={allergies} onChange={e => setAllergies(e.target.value)} maxLength={500} className={inputClass} />
+                    </label>
+                </section>
+                <div className="flex flex-wrap justify-between gap-3">
+                    <Link to={basePath + '/students/' + id} className={buttonClass}>Cancel</Link>
+                    <button type="button" onClick={advance} className={buttonClass + ' bg-rose-600 text-white'}>Continue to vaccination details</button>
                 </div>
-
-                <div className="text-right sm:border-l sm:border-slate-100 sm:pl-6">
-                    <span className="text-xs font-medium text-slate-400 block">Module</span>
-                    <span className="text-sm font-bold text-slate-800">Immunization Record</span>
-                </div>
-            </div>
-
-            {/* Main Form */}
-            <StudentContextPanel student={student} />
-            <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-8">
-                {/* General Information */}
-                <div>
-                    <h2 className={sectionTitleClasses}>
-                        <Calendar className="w-5 h-5 mr-2 text-rose-600" />
-                        Vaccination Event Details
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <div>
-                            <label className={labelClasses}>Immunization Date *</label>
-                            <input
-                                type="date"
-                                value={immunizationDate}
-                                onChange={(e) => setImmunizationDate(e.target.value)}
-                                className={inputClasses}
-                                required
-                            />
-                            <span className="text-xs text-slate-400 mt-1 block">Date of vaccination or screening</span>
-                        </div>
-
-                        <div>
-                            <label className={labelClasses}>Immunization Type</label>
-                            <input
-                                type="text"
-                                value={immunizationType}
-                                onChange={(e) => setImmunizationType(e.target.value)}
-                                className={inputClasses}
-                                placeholder="SCHOOL & COMMUNITY BASED IMMUNIZATION"
-                                maxLength={100}
-                            />
-                            <span className="text-xs text-slate-400 mt-1 block">Program or campaign description</span>
-                        </div>
-
-                        <div>
-                            <label className={labelClasses}>Educational Level</label>
-                            <select
-                                value={educationalLevel}
-                                onChange={(e) => setEducationalLevel(e.target.value)}
-                                className={inputClasses}
-                            >
-                                {EDUCATIONAL_LEVELS.map((lvl) => (
-                                    <option key={lvl} value={lvl}>{lvl}</option>
-                                ))}
+            </> : <>
+                <section className={sectionClass}>
+                    <h2 className={titleClass}>Vaccination Event Details</h2>
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                        <label className="space-y-2 text-sm font-semibold">Immunization Date *
+                            <input type="date" value={date} onChange={e => setDate(e.target.value)} required className={inputClass} />
+                        </label>
+                        <label className="space-y-2 text-sm font-semibold">Immunization Type
+                            <input type="text" value={program} onChange={e => { setProgram(e.target.value); setProgramEdited(true); }} maxLength={100} className={inputClass} />
+                        </label>
+                        <label className="space-y-2 text-sm font-semibold">Educational Level
+                            <select value={education} onChange={e => setEducation(e.target.value)} className={inputClass}>
+                                {education && !EDUCATIONAL_LEVELS.includes(education) && <option value={education}>{education} (historical)</option>}
+                                {EDUCATIONAL_LEVELS.map(level => <option key={level}>{level}</option>)}
                             </select>
-                            <span className="text-xs text-slate-400 mt-1 block">Target grade or education level</span>
-                        </div>
-
-                        <div className="sm:col-span-2 lg:col-span-3">
-                            <label className="flex items-center space-x-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-colors">
-                                <input
-                                    type="checkbox"
-                                    checked={isSchoolBased}
-                                    onChange={(e) => setIsSchoolBased(e.target.checked)}
-                                    className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
-                                />
-                                <div>
-                                    <span className="text-sm font-semibold text-slate-800">School-Based Immunization Campaign</span>
-                                    <p className="text-xs text-slate-500">Vaccine was administered during an on-campus school health program</p>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Vaccines Administered */}
-                <div className={sectionClasses}>
-                    <h2 className={sectionTitleClasses}>
-                        <Syringe className="w-5 h-5 mr-2 text-rose-600" />
-                        Vaccines Administered
-                    </h2>
-                    <p className="text-xs text-slate-500 mb-4">
-                        Select all vaccine doses administered during this visit. At least one vaccine is required unless deferred or refused.
-                    </p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {/* Td1 */}
-                        <label className={cn(
-                            "flex items-start space-x-3 p-4 rounded-xl border transition-all cursor-pointer",
-                            vaccineTd1 ? "bg-rose-50/60 border-rose-300 shadow-xs" : "bg-white border-slate-200 hover:bg-slate-50"
-                        )}>
-                            <input
-                                type="checkbox"
-                                checked={vaccineTd1}
-                                onChange={(e) => setVaccineTd1(e.target.checked)}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-bold text-slate-900">Td Dose 1</span>
-                                <p className="text-xs text-slate-500">Tetanus, Diphtheria Toxoid (1st dose)</p>
-                            </div>
-                        </label>
-
-                        {/* MR1 */}
-                        <label className={cn(
-                            "flex items-start space-x-3 p-4 rounded-xl border transition-all cursor-pointer",
-                            vaccineMr1 ? "bg-rose-50/60 border-rose-300 shadow-xs" : "bg-white border-slate-200 hover:bg-slate-50"
-                        )}>
-                            <input
-                                type="checkbox"
-                                checked={vaccineMr1}
-                                onChange={(e) => setVaccineMr1(e.target.checked)}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-bold text-slate-900">MR Dose 1</span>
-                                <p className="text-xs text-slate-500">Measles, Rubella Vaccine (1st dose)</p>
-                            </div>
-                        </label>
-
-                        {/* HPV1 */}
-                        <label className={cn(
-                            "flex items-start space-x-3 p-4 rounded-xl border transition-all cursor-pointer",
-                            vaccineHpv1 ? "bg-rose-50/60 border-rose-300 shadow-xs" : "bg-white border-slate-200 hover:bg-slate-50"
-                        )}>
-                            <input
-                                type="checkbox"
-                                checked={vaccineHpv1}
-                                onChange={(e) => setVaccineHpv1(e.target.checked)}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-bold text-slate-900">HPV Dose 1</span>
-                                <p className="text-xs text-slate-500">Human Papillomavirus (Dose 1)</p>
-                            </div>
-                        </label>
-
-                        {/* Td2 */}
-                        <label className={cn(
-                            "flex items-start space-x-3 p-4 rounded-xl border transition-all cursor-pointer",
-                            vaccineTd2 ? "bg-rose-50/60 border-rose-300 shadow-xs" : "bg-white border-slate-200 hover:bg-slate-50"
-                        )}>
-                            <input
-                                type="checkbox"
-                                checked={vaccineTd2}
-                                onChange={(e) => setVaccineTd2(e.target.checked)}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-bold text-slate-900">Td Dose 2</span>
-                                <p className="text-xs text-slate-500">Tetanus, Diphtheria Toxoid (Booster / 2nd dose)</p>
-                            </div>
-                        </label>
-
-                        {/* MR2 */}
-                        <label className={cn(
-                            "flex items-start space-x-3 p-4 rounded-xl border transition-all cursor-pointer",
-                            vaccineMr2 ? "bg-rose-50/60 border-rose-300 shadow-xs" : "bg-white border-slate-200 hover:bg-slate-50"
-                        )}>
-                            <input
-                                type="checkbox"
-                                checked={vaccineMr2}
-                                onChange={(e) => setVaccineMr2(e.target.checked)}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-bold text-slate-900">MR Dose 2</span>
-                                <p className="text-xs text-slate-500">Measles, Rubella Vaccine (Booster / 2nd dose)</p>
-                            </div>
-                        </label>
-
-                        {/* HPV2 */}
-                        <label className={cn(
-                            "flex items-start space-x-3 p-4 rounded-xl border transition-all cursor-pointer",
-                            vaccineHpv2 ? "bg-rose-50/60 border-rose-300 shadow-xs" : "bg-white border-slate-200 hover:bg-slate-50"
-                        )}>
-                            <input
-                                type="checkbox"
-                                checked={vaccineHpv2}
-                                onChange={(e) => setVaccineHpv2(e.target.checked)}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-bold text-slate-900">HPV Dose 2</span>
-                                <p className="text-xs text-slate-500">Human Papillomavirus (Dose 2)</p>
-                            </div>
                         </label>
                     </div>
-                </div>
-
-                {/* Administration Details & Facility */}
-                <div className={sectionClasses}>
-                    <h2 className={sectionTitleClasses}>
-                        <Building2 className="w-5 h-5 mr-2 text-rose-600" />
-                        Administration & Facility Details
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {([
-                            { key: 'td1', label: 'Td1', selected: vaccineTd1 },
-                            { key: 'mr1', label: 'MR1', selected: vaccineMr1 },
-                            { key: 'hpv1', label: 'HPV1', selected: vaccineHpv1 },
-                            { key: 'hpv2', label: 'HPV2', selected: vaccineHpv2 },
-                            { key: 'td2', label: 'Td2', selected: vaccineTd2 },
-                            { key: 'mr2', label: 'MR2', selected: vaccineMr2 },
-                        ] as const).filter(item => item.selected).map(item => (
-                            <div key={item.key}>
-                                <label className={labelClasses} htmlFor={`lot-${item.key}`}>{item.label} lot / batch number</label>
-                                <input id={`lot-${item.key}`} type="text" value={vaccineLots[item.key]} onChange={event => setVaccineLots(current => ({ ...current, [item.key]: event.target.value }))} className={inputClasses} maxLength={100} />
-                            </div>
-                        ))}
-                        {lotBatchNo && <p className="sm:col-span-2 lg:col-span-3 text-xs text-slate-500">Historical shared lot/batch: {lotBatchNo}. This value is not assigned to any specific vaccine.</p>}
-
-                        <div>
-                            <label className={labelClasses}>Vaccinator Name</label>
-                            <input
-                                type="text"
-                                value={vaccinatorName}
-                                onChange={(e) => setVaccinatorName(e.target.value)}
-                                className={inputClasses}
-                                placeholder="e.g. Maria Santos, RN"
-                                maxLength={200}
-                            />
-                            <span className="text-xs text-slate-400 mt-1 block">Healthcare worker administering dose</span>
-                        </div>
-
-                        <div>
-                            <label className={labelClasses}>Supervisor Name</label>
-                            <input
-                                type="text"
-                                value={supervisorName}
-                                onChange={(e) => setSupervisorName(e.target.value)}
-                                className={inputClasses}
-                                placeholder="e.g. Dr. Jose Rizal, MD"
-                                maxLength={200}
-                            />
-                            <span className="text-xs text-slate-400 mt-1 block">Supervising medical officer</span>
-                        </div>
-
-                        <div className="sm:col-span-2 lg:col-span-3">
-                            <label className="flex items-center space-x-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-colors">
-                                <input
-                                    type="checkbox"
-                                    checked={isFromOtherFacility}
-                                    onChange={(e) => setIsFromOtherFacility(e.target.checked)}
-                                    className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
-                                />
-                                <div>
-                                    <span className="text-sm font-semibold text-slate-800">Administered at Another Facility</span>
-                                    <p className="text-xs text-slate-500">Check if vaccination occurred at an outside RHU, BHS, or private clinic</p>
-                                </div>
-                            </label>
-                        </div>
-
-                        {/* Conditional Other Facility Name */}
-                        {isFromOtherFacility && (
-                            <div className="sm:col-span-2 lg:col-span-3 bg-amber-50/70 border border-amber-200 p-4 rounded-xl space-y-2 animate-in fade-in">
-                                <label className="block text-xs font-bold uppercase tracking-wider text-amber-900">
-                                    Outside Facility Name *
+                    {record && <p className="text-xs text-slate-500">The historical school-based flag is preserved. The program type changes only if you edit it.</p>}
+                </section>
+                <section className={sectionClass}>
+                    <h2 className={titleClass}>Vaccines Administered</h2>
+                    <p className="text-sm text-slate-600">Select doses administered during this event. Lots are optional and stay separate for every dose.</p>
+                    {male && <p id="hpv-rule" className="text-sm text-amber-800">Under this school-based program’s eligibility rule, Male students cannot select HPV Dose 1 or Dose 2. This is a program rule, not a universal medical contraindication. Saved HPV selections are retained for review; explicitly remove them before saving a correction.</p>}
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3" data-testid="vaccine-grid">
+                        {(['mr', 'td', 'hpv'] as const).map(vaccine => <fieldset key={vaccine} className="min-w-0 space-y-4 rounded-xl border border-slate-200 p-4">
+                            <legend className="px-2 font-bold">{vaccine === 'mr' ? 'MR' : vaccine === 'td' ? 'Td' : 'HPV'}</legend>
+                            {DOSES.filter(key => key.startsWith(vaccine)).map(key => <div key={key} className="space-y-2">
+                                <label className="flex items-center gap-3 text-sm font-semibold">
+                                    <input type="checkbox" checked={doses[key]} disabled={male && vaccine === 'hpv' && !doses[key]} aria-describedby={male && vaccine === 'hpv' ? 'hpv-rule' : undefined} onChange={e => { setDoses(current => ({ ...current, [key]: e.target.checked })); setReviewedCorrections(false); }} />
+                                    {doseLabel(key)}
                                 </label>
-                                <input
-                                    type="text"
-                                    value={otherFacilityName}
-                                    onChange={(e) => setOtherFacilityName(e.target.value)}
-                                    className={cn(inputClasses, "border-amber-300 bg-white focus:ring-amber-500/20 focus:border-amber-600")}
-                                    placeholder="e.g. Kalibo Rural Health Unit, Aklan Provincial Hospital"
-                                    required={isFromOtherFacility}
-                                    maxLength={200}
-                                />
-                                <span className="text-xs text-amber-700 block">Name of the health facility or clinic where vaccination was completed</span>
-                            </div>
-                        )}
+                                {doses[key] && <label className="block space-y-1 text-xs font-semibold">{doseLabel(key)} Lot/Batch Number
+                                    <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={100} value={lots[key]} onChange={e => { setLots(current => ({ ...current, [key]: e.target.value })); setReviewedCorrections(false); }} className={inputClass} aria-invalid={!/^[0-9]*$/.test(lots[key])} aria-describedby={'lot-help-' + key} />
+                                    <span id={'lot-help-' + key} role={!/^[0-9]*$/.test(lots[key]) ? 'alert' : undefined} className={cn('block font-normal', !/^[0-9]*$/.test(lots[key]) ? 'text-rose-700' : 'text-slate-500')}>{!/^[0-9]*$/.test(lots[key]) ? 'Enter digits 0–9 only, or leave empty.' : 'Optional. Leading zeroes are preserved.'}</span>
+                                </label>}
+                            </div>)}
+                        </fieldset>)}
                     </div>
-                </div>
-
-                {/* Pre-Screening & Consent */}
-                <div className={sectionClasses}>
-                    <h2 className={sectionTitleClasses}>
-                        <AlertCircle className="w-5 h-5 mr-2 text-rose-600" />
-                        Pre-Screening & Consent
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <label className="space-y-1.5 text-sm font-semibold text-slate-800" htmlFor="immunization-consent">
-                            <span>Parent/guardian consent on file</span>
-                            <select id="immunization-consent" value={consentGiven === null ? '' : String(consentGiven)} onChange={(e) => setConsentGiven(e.target.value === '' ? null : e.target.value === 'true')} className={inputClasses}>
-                                <option value="">Not recorded</option>
-                                <option value="true">Yes</option>
-                                <option value="false">No</option>
-                            </select>
-                        </label>
-
-                        <label className="flex items-start space-x-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={isSickToday}
-                                onChange={(e) => setIsSickToday(e.target.checked)}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-semibold text-slate-800">Student is Currently Sick</span>
-                                <p className="text-xs text-slate-500">Fever, respiratory distress, or acute symptoms on day of visit</p>
-                            </div>
-                        </label>
-
-                        <div className="sm:col-span-2">
-                            <label className={labelClasses}>History of Allergies</label>
-                            <textarea
-                                rows={2}
-                                value={historyOfAllergies}
-                                onChange={(e) => setHistoryOfAllergies(e.target.value)}
-                                className={inputClasses}
-                                placeholder="Any known allergies to eggs, neomycin, gelatin, or past vaccines..."
-                                maxLength={500}
-                            />
+                </section>
+                <section className={sectionClass}>
+                    <h2 className={titleClass}>VACCINE PROVIDER</h2>
+                    {record && (record.is_from_other_facility || record.other_facility_name || record.lot_batch_no) && <p className="text-sm text-slate-600">Historical facility details and the shared lot/batch value are preserved on save.</p>}
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <label className="space-y-2 text-sm font-semibold">Vaccinator Name<input type="text" value={vaccinator} onChange={e => setVaccinator(e.target.value)} maxLength={200} className={inputClass} /></label>
+                        <label className="space-y-2 text-sm font-semibold">Supervisor Name<input type="text" value={supervisor} onChange={e => setSupervisor(e.target.value)} maxLength={200} className={inputClass} /></label>
+                    </div>
+                </section>
+                <section className={sectionClass}>
+                    <h2 className={titleClass}>Deferral &amp; Refusal</h2>
+                    <fieldset>
+                        <legend className="sr-only">Deferral or refusal status</legend>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            {(['neither', 'deferred', 'refused'] as const).map(value => <label key={value} className={cn('flex cursor-pointer items-center gap-3 rounded-xl border p-4 text-sm', disposition === value ? 'border-rose-500 bg-rose-50' : 'border-slate-300')}>
+                                <input type="radio" name="disposition" checked={disposition === value} onChange={() => { setDisposition(value); setReviewedCorrections(false); if (value !== 'deferred') setDeferredReason(''); if (value !== 'neither') setFullyImmunized(false); }} />
+                                {value === 'neither' ? 'Neither' : value === 'deferred' ? 'Vaccination Deferred' : 'Vaccination Refused'}
+                            </label>)}
                         </div>
-                    </div>
-                </div>
-
-                {/* Deferral & Refusal */}
-                <div className={sectionClasses}>
-                    <h2 className={sectionTitleClasses}>
-                        <ShieldAlert className="w-5 h-5 mr-2 text-rose-600" />
-                        Deferral & Refusal
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <label className="flex items-start space-x-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={isDeferred}
-                                onChange={(e) => {
-                                    setIsDeferred(e.target.checked);
-                                    if (e.target.checked) setIsFullyImmunized(false);
-                                }}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-semibold text-slate-800">Vaccination Deferred</span>
-                                <p className="text-xs text-slate-500">Postponed due to acute illness or temporary medical contraindication</p>
-                            </div>
+                    </fieldset>
+                    {disposition === 'conflict' && <p role="alert" className="text-sm text-rose-800">This historical record has both Deferred and Refused set. Choose one status explicitly before saving.</p>}
+                    {deferred && <div className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                        <label className="block space-y-2 text-sm font-semibold">Deferred Reason Explanation / Remarks *
+                            <textarea rows={3} value={deferredReason} onChange={e => { setDeferredReason(e.target.value); setReviewedCorrections(false); }} required maxLength={2000} aria-describedby="deferral-help" className={inputClass} />
                         </label>
-
-                        <label className="flex items-start space-x-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={isRefused}
-                                onChange={(e) => {
-                                    setIsRefused(e.target.checked);
-                                    if (e.target.checked) setIsFullyImmunized(false);
-                                }}
-                                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-semibold text-slate-800">Vaccination Refused</span>
-                                <p className="text-xs text-slate-500">Parent or guardian declined vaccination</p>
-                            </div>
-                        </label>
-
-                        {/* Conditional Refusal Fields */}
-                        {isRefused && (
-                            <div className="sm:col-span-2 bg-rose-50/70 border border-rose-200 p-5 rounded-xl space-y-4 animate-in fade-in">
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-rose-900 mb-1.5">
-                                        Refusal Reason Code *
-                                    </label>
-                                    <select
-                                        value={refusalReasonCode}
-                                        onChange={(e) => setRefusalReasonCode(e.target.value)}
-                                        className={cn(inputClasses, "border-rose-300 bg-white focus:ring-rose-500/20 focus:border-rose-600")}
-                                    >
-                                        <option value="">Select official refusal code (1-18)...</option>
-                                        {REFUSAL_REASONS.map((r) => (
-                                            <option key={r.code} value={r.code}>{r.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-rose-900 mb-1.5">
-                                        Refusal Reason Explanation / Remarks
-                                    </label>
-                                    <textarea
-                                        rows={2}
-                                        value={refusalReasonText}
-                                        onChange={(e) => setRefusalReasonText(e.target.value)}
-                                        className={cn(inputClasses, "border-rose-300 bg-white focus:ring-rose-500/20 focus:border-rose-600")}
-                                        placeholder="Specific reason stated by parent/guardian, counseling provided, or follow-up notes..."
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                        <p id="deferral-help" className="text-sm text-amber-900">Required when Deferred (maximum 2,000 characters). Saved separately from refusal explanations and general clinical remarks.</p>
+                    </div>}
+                    {refused && <label className="block space-y-2 text-sm font-semibold">Refusal Reason Code *
+                        <select value={refusalCode} onChange={e => setRefusalCode(e.target.value)} required className={inputClass}>
+                            <option value="">Select official refusal code (1–18)</option>
+                            {refusalCode && !/^(?:[1-9]|1[0-8])$/.test(refusalCode) && <option value={refusalCode}>{refusalCode} (historical)</option>}
+                            {REFUSAL_REASONS.map((reason, index) => <option key={index + 1} value={String(index + 1)}>{index + 1} - {reason}</option>)}
+                        </select>
+                    </label>}
+                    {refused && record?.refusal_reason_text && <p className="text-xs text-slate-500">The historical refusal explanation is retained while this record remains Refused.</p>}
+                </section>
+                <section className={sectionClass}>
+                    <h2 className={titleClass}>Completion Status &amp; Remarks</h2>
+                    <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={fullyImmunized} disabled={deferred || refused || disposition === 'conflict'} onChange={e => setFullyImmunized(e.target.checked)} />Student is Fully Immunized (FIC)</label>
+                    {record?.remarks && <p className="text-xs text-slate-500">Historical general clinical remarks are preserved; this form does not edit them.</p>}
+                </section>
+                {removingHistoricalValues && <label className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    <input type="checkbox" checked={reviewedCorrections} onChange={e => setReviewedCorrections(e.target.checked)} />
+                    I reviewed the correction: deselected doses and their saved lots, changed lot values, and refusal details when leaving Refused, and changed or removed deferral explanations will be cleared or replaced on save. Cancel keeps the saved record unchanged.
+                </label>}
+                {!canSave && <p className="text-sm text-amber-800">Read-only: your current access does not allow saving this record.</p>}
+                <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-6">
+                    <button type="button" onClick={() => { setError(''); setStep(1); }} className={buttonClass}>Back to screening</button>
+                    <Link to={basePath + '/students/' + id} className={buttonClass}>Cancel</Link>
+                    <button type="submit" disabled={saving || !canSave || disposition === 'conflict'} className={buttonClass + ' bg-rose-600 text-white disabled:opacity-50'}>{saving ? 'Saving…' : record ? 'Update Immunization Record' : 'Save Immunization Record'}</button>
                 </div>
-
-                {/* Overall Completion & Remarks */}
-                <div className={sectionClasses}>
-                    <h2 className={sectionTitleClasses}>
-                        <FileText className="w-5 h-5 mr-2 text-rose-600" />
-                        Completion Status & Remarks
-                    </h2>
-                    <div className="space-y-6">
-                        <label className={cn(
-                            "flex items-start space-x-3 p-4 rounded-xl border transition-all",
-                            (isRefused || isDeferred) ? "bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed" : "bg-emerald-50/60 border-emerald-200 cursor-pointer hover:bg-emerald-50"
-                        )}>
-                            <input
-                                type="checkbox"
-                                checked={isFullyImmunized}
-                                disabled={isRefused || isDeferred}
-                                onChange={(e) => setIsFullyImmunized(e.target.checked)}
-                                className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 mt-0.5"
-                            />
-                            <div>
-                                <span className="text-sm font-bold text-slate-900">Student is Fully Immunized (FIC)</span>
-                                <p className="text-xs text-slate-600">
-                                    {(isRefused || isDeferred)
-                                        ? 'Cannot be marked as fully immunized because vaccination was deferred or refused.'
-                                        : 'Check if student has completed all grade-appropriate vaccinations per Department of Health schedule.'}
-                                </p>
-                            </div>
-                        </label>
-
-                        <div>
-                            <label className={labelClasses}>General Clinical Remarks</label>
-                            <textarea
-                                rows={3}
-                                value={remarks}
-                                onChange={(e) => setRemarks(e.target.value)}
-                                className={inputClasses}
-                                placeholder="Any additional notes on post-vaccination observation, follow-up dates, or recommendations..."
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Footer Controls */}
-                <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
-                    {!canSave && <p className="text-xs text-amber-700">Read-only: your current access does not allow this record to be created or edited.</p>}
-                    <Link
-                        to={`${basePath}/students/${id}`}
-                        className="px-4 py-2.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-sm font-medium transition-colors cursor-pointer"
-                    >
-                        Cancel
-                    </Link>
-
-                    <button
-                        type="submit"
-                        disabled={isSaving || !canSave}
-                        className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-medium text-sm rounded-xl shadow-xs transition-all flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                        {isSaving ? (
-                            <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Saving Record...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Save className="w-4 h-4" />
-                                <span>{isCompleted ? 'Update Immunization Record' : 'Save Immunization Record'}</span>
-                            </>
-                        )}
-                    </button>
-                </div>
-            </form>
-        </div>
-    );
-};
-
-export default ImmunizationForm;
+            </>}
+        </form>
+    </div>;
+}

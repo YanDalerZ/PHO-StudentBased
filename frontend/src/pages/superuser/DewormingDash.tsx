@@ -428,7 +428,7 @@ export const DewormingDash: React.FC = () => {
                         {/* 2. Bar Chart: Deworming by Age Group */}
                         <div className="lg:col-span-2">
                             <BarChart
-                                title="Dewormed Students by Age Group (1-4, 5-9, 10-14, 15-19)"
+                                title="Dewormed Students by Age Group (5–14, 15–19, 20+; historical values shown separately)"
                                 data={ageGroupChartData}
                                 dataKey="Students"
                                 xAxisKey="name"

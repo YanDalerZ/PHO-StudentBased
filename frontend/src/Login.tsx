@@ -10,6 +10,7 @@ import { defaultPortalRoute } from './lib/access';
 const Login: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const sessionReason = new URLSearchParams(location.search).get('reason');
     const { login, isAuthenticated, user, effectiveAccess } = useAuth();
 
     // Remember Me States
@@ -167,6 +168,12 @@ const Login: React.FC = () => {
 
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="space-y-5">
+                        {(sessionReason === 'inactivity' || sessionReason === 'maximum' || sessionReason === 'signed-out' || sessionReason === 'invalid') &&
+                            <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                {sessionReason === 'inactivity' ? 'Your session expired after inactivity. Sign in again.' :
+                                    sessionReason === 'maximum' ? 'Your 8-hour session ended. Sign in again.' :
+                                    sessionReason === 'signed-out' ? 'You have been logged out.' : 'Your session is no longer valid. Sign in again.'}
+                            </p>}
                         {/* Email Field */}
                         <div className="space-y-1.5">
                             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider" htmlFor="email">

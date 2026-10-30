@@ -302,7 +302,12 @@ async function dewormingPreview(
     `, parts.params);
     const row = summaryResult.rows[0] ?? {};
     const [ageGroup, schoolType, schoolStatus, school] = await Promise.all([
-        grouped(executor, accomplishedParts, `COALESCE(NULLIF(BTRIM(d.age_group), ''), 'Unknown')`),
+        grouped(executor, accomplishedParts, `CASE
+            WHEN d.age_group IN ('5-14', '5-9', '10-14') THEN '5-14'
+            WHEN d.age_group IN ('15-19', '20+') THEN d.age_group
+            WHEN d.age_group IN ('<1', '1-4') THEN 'Historical under 5'
+            ELSE 'Historical/Unknown'
+        END`),
         grouped(executor, accomplishedParts, `COALESCE(d.school_type::text, 'unknown')`),
         grouped(executor, accomplishedParts, `CASE WHEN d.in_school THEN 'in_school' ELSE 'out_of_school' END`),
         grouped(executor, accomplishedParts, 'sc.id', { labelExpression: 'sc.name' }),

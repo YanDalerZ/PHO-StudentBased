@@ -703,13 +703,18 @@ export async function getDewormingDashboard(
   const ageGroupPromise = pool.query<{ age_group: string; count: number }>(
     `
     SELECT
-      COALESCE(d.age_group, 'Unknown') AS age_group,
+      CASE
+        WHEN d.age_group IN ('5-14', '5-9', '10-14') THEN '5-14'
+        WHEN d.age_group IN ('15-19', '20+') THEN d.age_group
+        WHEN d.age_group IN ('<1', '1-4') THEN 'Historical under 5'
+        ELSE 'Historical/Unknown'
+      END AS age_group,
       COUNT(DISTINCT d.student_id)::int AS count
     FROM "deworming" d
     ${geoJoins}
     ${extraAndDewormed}
-    GROUP BY d.age_group
-    ORDER BY d.age_group ASC
+    GROUP BY 1
+    ORDER BY 1
     `,
     params
   );

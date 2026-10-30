@@ -44,7 +44,11 @@ export interface DewormingResponse {
 
 const formatDate = (val: string | Date | null | undefined): string => {
     if (!val) return '';
-    if (val instanceof Date) return val.toISOString().split('T')[0] ?? '';
+    // pg parses SQL DATE at local midnight; toISOString() can shift it to the
+    // previous calendar day in positive UTC offsets.
+    if (val instanceof Date) {
+        return `${val.getFullYear()}-${String(val.getMonth() + 1).padStart(2, '0')}-${String(val.getDate()).padStart(2, '0')}`;
+    }
     const s = String(val).trim();
     if (s.includes('T')) return s.split('T')[0] ?? s;
     return s;
@@ -74,28 +78,29 @@ const mapDewormingRow = (row: DewormingDbRow): DewormingResponse => {
 export const calculateAgeGroup = (dobStr: string, dewormDateStr: string): string => {
     const birth = new Date(dobStr);
     const deworm = new Date(dewormDateStr);
+    if (Number.isNaN(birth.getTime()) || Number.isNaN(deworm.getTime()) || deworm < birth) return '';
 
-    let age = deworm.getFullYear() - birth.getFullYear();
-    const monthDiff = deworm.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && deworm.getDate() < birth.getDate())) {
+    let age = deworm.getUTCFullYear() - birth.getUTCFullYear();
+    const monthDiff = deworm.getUTCMonth() - birth.getUTCMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && deworm.getUTCDate() < birth.getUTCDate())) {
         age--;
     }
 
-    if (age >= 1 && age <= 4) return '1-4';
-    if (age >= 5 && age <= 9) return '5-9';
-    if (age >= 10 && age <= 14) return '10-14';
+    if (age >= 5 && age <= 14) return '5-14';
     if (age >= 15 && age <= 19) return '15-19';
-    if (age < 1) return '<1';
-    return '20+';
+    if (age >= 20) return '20+';
+    return '';
 };
 
 // Zod schemas
+const ageGroupSchema = z.enum(['5-14', '15-19', '20+']);
+const medicationSchema = z.enum(['Albendazole 400mg', 'Mebendazole 500mg']);
 const dewormingSchema = z.object({
     date_dewormed: z.string().min(1, 'Date dewormed is required'),
-    age_group: z.string().max(10).optional().nullable(),
-    medication_given: z.string().max(100).optional().nullable(),
+    age_group: ageGroupSchema.optional().nullable(),
+    medication_given: medicationSchema.optional().nullable(),
     is_dewormed: z.boolean().optional(),
-    school_type: z.enum(['public', 'private']).optional().nullable(),
+    school_type: z.literal('public').optional(),
     in_school: z.boolean().optional().default(true),
     school_id: z.number().int().positive().optional().nullable(),
     remarks: z.string().optional().nullable(),
@@ -105,6 +110,9 @@ const createDewormingSchema = dewormingSchema.extend({
     student_id: z.number().int().positive('Valid student ID is required'),
     is_dewormed: z.boolean(),
 }).superRefine((value, context) => {
+    if (value.is_dewormed && !value.medication_given) {
+        context.addIssue({ code: 'custom', path: ['medication_given'], message: 'Select a medication when deworming was administered.' });
+    }
     if (!value.is_dewormed && value.medication_given?.trim()) {
         context.addIssue({ code: 'custom', path: ['medication_given'], message: 'Medication Given must be blank when treatment was not administered.' });
     }
@@ -160,6 +168,10 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
         if (!ageGroup) {
             ageGroup = calculateAgeGroup(dobStr, dateDewormedStr);
         }
+        if (!calculateAgeGroup(dobStr, dateDewormedStr)) {
+            res.status(400).json({ message: 'Deworming records require a student aged at least 5 years on the record date.' });
+            return;
+        }
 
         // School scope validation: default to student's school if omitted
         let schoolId = validated.school_id ?? student.school_id ?? null;
@@ -205,7 +217,7 @@ export const createDeworming = async (req: Request, res: Response): Promise<void
                 ageGroup || null,
                 validated.medication_given ?? null,
                 validated.is_dewormed,
-                validated.school_type ?? null,
+                validated.school_type ?? 'public',
                 validated.in_school ?? true,
                 schoolId,
                 validated.remarks ?? null,
@@ -361,7 +373,8 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        // Determine age group
+        // Existing historical values stay intact on unrelated partial edits.
+        // An explicit age group must use the current three-value contract.
         let ageGroup: string;
         if (validated.age_group !== undefined) {
             if (validated.age_group && validated.age_group.trim()) {
@@ -369,10 +382,14 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
             } else {
                 ageGroup = calculateAgeGroup(dobStr, dateDewormed);
             }
-        } else if (validated.date_dewormed !== undefined && !existingRecord.age_group) {
+        } else if (validated.date_dewormed !== undefined) {
             ageGroup = calculateAgeGroup(dobStr, dateDewormed);
         } else {
             ageGroup = existingRecord.age_group ?? calculateAgeGroup(dobStr, dateDewormed);
+        }
+        if (!calculateAgeGroup(dobStr, dateDewormed)) {
+            res.status(400).json({ message: 'Deworming records require a student aged at least 5 years on the record date.' });
+            return;
         }
 
         // School scope validation
@@ -399,6 +416,14 @@ export const updateDeworming = async (req: Request, res: Response): Promise<void
         const isDewormed = validated.is_dewormed !== undefined ? validated.is_dewormed : existingRecord.is_dewormed;
         if (isDewormed === false && medicationGiven?.trim()) {
             res.status(400).json({ message: 'Medication Given must be blank when treatment was not administered.' });
+            return;
+        }
+        if (isDewormed === true && !medicationGiven) {
+            res.status(400).json({ message: 'Select a medication when deworming was administered.' });
+            return;
+        }
+        if (medicationGiven && !medicationSchema.safeParse(medicationGiven).success) {
+            res.status(400).json({ message: 'Select Albendazole 400mg or Mebendazole 500mg.' });
             return;
         }
         const schoolType = validated.school_type !== undefined ? validated.school_type : existingRecord.school_type;

@@ -23,30 +23,35 @@ import {
     createDeworming,
     updateDeworming,
 } from '../../services/api';
-import type { Deworming, CreateDewormingPayload } from '../../types';
+import type { Deworming, CreateDewormingPayload, DewormingAgeGroup, DewormingMedication } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { canWriteModuleRecord } from '../../lib/access';
 import { cn } from '../../lib/utils';
 
-const calculateDerivedAgeGroup = (dobStr: string, dewormDateStr: string): string => {
+const calculateDerivedAgeGroup = (dobStr: string, dewormDateStr: string): DewormingAgeGroup | '' => {
     if (!dobStr || !dewormDateStr) return '';
     const birth = new Date(dobStr);
     const deworm = new Date(dewormDateStr);
     if (isNaN(birth.getTime()) || isNaN(deworm.getTime())) return '';
     if (deworm < birth) return '';
 
-    let age = deworm.getFullYear() - birth.getFullYear();
-    const monthDiff = deworm.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && deworm.getDate() < birth.getDate())) {
+    let age = deworm.getUTCFullYear() - birth.getUTCFullYear();
+    const monthDiff = deworm.getUTCMonth() - birth.getUTCMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && deworm.getUTCDate() < birth.getUTCDate())) {
         age--;
     }
 
-    if (age >= 1 && age <= 4) return '1-4';
-    if (age >= 5 && age <= 9) return '5-9';
-    if (age >= 10 && age <= 14) return '10-14';
+    if (age >= 5 && age <= 14) return '5-14';
     if (age >= 15 && age <= 19) return '15-19';
-    if (age < 1) return '<1';
-    return '20+';
+    if (age >= 20) return '20+';
+    return '';
+};
+
+const medicationChoices = ['Albendazole 400mg', 'Mebendazole 500mg'] as const;
+const ageGroupChoices = ['5-14', '15-19', '20+'] as const;
+const localToday = (): string => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 };
 
 const DewormingForm: React.FC = () => {
@@ -67,11 +72,11 @@ const DewormingForm: React.FC = () => {
     const [existingRecord, setExistingRecord] = useState<Deworming | null>(null);
 
     // Form states
-    const [dateDewormed, setDateDewormed] = useState<string>(new Date().toISOString().split('T')[0] ?? '');
-    const [ageGroupOverride, setAgeGroupOverride] = useState<string>('');
-    const [medicationGiven, setMedicationGiven] = useState<string>('');
+    const [dateDewormed, setDateDewormed] = useState<string>(localToday);
+    const [ageGroupOverride, setAgeGroupOverride] = useState<DewormingAgeGroup | ''>('');
+    const [medicationGiven, setMedicationGiven] = useState<DewormingMedication | ''>('');
     const [isDewormed, setIsDewormed] = useState<boolean | null>(null);
-    const [schoolType, setSchoolType] = useState<'public' | 'private'>('public');
+    const [convertLegacySchoolType, setConvertLegacySchoolType] = useState(false);
     const [inSchool, setInSchool] = useState<boolean>(true);
     const [remarks, setRemarks] = useState<string>('');
 
@@ -97,10 +102,10 @@ const DewormingForm: React.FC = () => {
                 if (currentRecord) {
                     setExistingRecord(currentRecord);
                     setDateDewormed(currentRecord.date_dewormed || '');
-                    setAgeGroupOverride(currentRecord.age_group || '');
-                    setMedicationGiven(currentRecord.medication_given || '');
+                    setAgeGroupOverride(ageGroupChoices.find((choice) => choice === currentRecord.age_group) ?? '');
+                    setMedicationGiven(currentRecord.is_dewormed ? medicationChoices.find((choice) => choice === currentRecord.medication_given) ?? '' : '');
                     setIsDewormed(currentRecord.is_dewormed ?? null);
-                    setSchoolType(currentRecord.school_type || 'public');
+                    setConvertLegacySchoolType(false);
                     setInSchool(currentRecord.in_school ?? true);
                     setRemarks(currentRecord.remarks || '');
                 } else {
@@ -153,6 +158,14 @@ const DewormingForm: React.FC = () => {
             toast.error('Select whether deworming was administered.');
             return;
         }
+        if (!derivedAgeGroup) {
+            toast.error('Deworming records require a student aged at least 5 years on the record date.');
+            return;
+        }
+        if (isDewormed && !medicationGiven) {
+            toast.error('Select the medication given.');
+            return;
+        }
         if (!isDewormed && medicationGiven.trim()) {
             toast.error('Clear Medication Given when treatment was not administered.');
             return;
@@ -174,9 +187,9 @@ const DewormingForm: React.FC = () => {
                 student_id: Number(id),
                 date_dewormed: dateDewormed,
                 age_group: effectiveAgeGroup || null,
-                medication_given: medicationGiven.trim() || null,
+                medication_given: isDewormed ? medicationGiven || null : null,
                 is_dewormed: isDewormed,
-                school_type: schoolType,
+                school_type: existingRecord?.school_type === 'private' && !convertLegacySchoolType ? undefined : 'public',
                 in_school: inSchool,
                 school_id: student.school_id || null,
                 remarks: remarks.trim() || null,
@@ -291,12 +304,15 @@ const DewormingForm: React.FC = () => {
                         {student.first_name[0]}{student.last_name[0]}
                     </div>
                     <div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <h1 className="text-xl font-bold text-slate-900 tracking-tight">
                                 {student.first_name} {student.middle_name ? `${student.middle_name[0]}. ` : ''}{student.last_name} {student.suffix && student.suffix !== 'NOT APPLICABLE' ? student.suffix : ''}
                             </h1>
                             <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                                 LRN: {student.student_lrn}
+                            </span>
+                            <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                                Age (years): {student.age}
                             </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-slate-500">
@@ -323,7 +339,7 @@ const DewormingForm: React.FC = () => {
             </div>
 
             {/* Main Form */}
-            <StudentContextPanel student={student} />
+            <StudentContextPanel student={student} hideAge />
             <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-8">
                 {/* Administration Details */}
                 <div>
@@ -337,7 +353,7 @@ const DewormingForm: React.FC = () => {
                             <input
                                 type="date"
                                 value={dateDewormed}
-                                onChange={(e) => setDateDewormed(e.target.value)}
+                                onChange={(e) => { setDateDewormed(e.target.value); setAgeGroupOverride(''); }}
                                 className={inputClasses}
                                 required
                             />
@@ -354,39 +370,44 @@ const DewormingForm: React.FC = () => {
                                 )}
                             </label>
                             <select
-                                value={ageGroupOverride}
-                                onChange={(e) => setAgeGroupOverride(e.target.value)}
+                                value={effectiveAgeGroup}
+                                onChange={(e) => setAgeGroupOverride(e.target.value as DewormingAgeGroup)}
                                 className={inputClasses}
+                                aria-describedby="deworming-age-help"
                             >
-                                <option value="">Auto-calculate ({derivedAgeGroup || 'from DOB'})</option>
-                                <option value="1-4">1-4 years old</option>
-                                <option value="5-9">5-9 years old</option>
-                                <option value="10-14">10-14 years old</option>
-                                <option value="15-19">15-19 years old</option>
-                                <option value="<1">&lt;1 year old</option>
+                                <option value="" disabled>Select age group</option>
+                                <option value="5-14">5–14 years old</option>
+                                <option value="15-19">15–19 years old</option>
                                 <option value="20+">20+ years old</option>
                             </select>
-                            <span className="text-xs text-slate-400 mt-1 block">
-                                Effective: <strong className="text-slate-700">{effectiveAgeGroup || 'Pending Date/DOB'}</strong>
+                            <span id="deworming-age-help" className="text-xs text-slate-500 mt-1 block">
+                                {derivedAgeGroup ? `Automatically calculated from date of birth and record date: ${derivedAgeGroup}.` : 'Student must be at least 5 years old on the record date.'}
                             </span>
+                            {existingRecord?.age_group && !ageGroupChoices.some((choice) => choice === existingRecord.age_group) &&
+                                <p className="text-xs text-amber-700 mt-1">Historical age group: {existingRecord.age_group}. Saving this form records the current age band.</p>}
                         </div>
 
                         <div>
-                            <label className={labelClasses}>Medication Given</label>
-                            <input
-                                type="text"
+                            <label className={labelClasses} htmlFor="deworming-medication">Medication Given {isDewormed ? '*' : ''}</label>
+                            <select
+                                id="deworming-medication"
                                 value={medicationGiven}
-                                onChange={(e) => setMedicationGiven(e.target.value)}
+                                onChange={(e) => setMedicationGiven(e.target.value as DewormingMedication | '')}
                                 className={inputClasses}
-                                placeholder="e.g. Albendazole 400mg, Mebendazole 500mg"
-                                maxLength={100}
-                            />
-                            <span className="text-xs text-slate-400 mt-1 block">Drug name and dosage</span>
+                                disabled={isDewormed !== true}
+                                required={isDewormed === true}
+                            >
+                                <option value="">Select medication</option>
+                                <option value="Albendazole 400mg">Albendazole 400mg</option>
+                                <option value="Mebendazole 500mg">Mebendazole 500mg</option>
+                            </select>
+                            {existingRecord?.is_dewormed && existingRecord.medication_given && !medicationChoices.some((choice) => choice === existingRecord.medication_given) &&
+                                <p className="text-xs text-amber-700 mt-1">Historical medication: {existingRecord.medication_given}. Select an approved medication before saving.</p>}
                         </div>
 
                         <div className="sm:col-span-2 lg:col-span-3">
                             <label className={labelClasses} htmlFor="deworming-administered">Was deworming administered? *</label>
-                            <select id="deworming-administered" value={isDewormed === null ? '' : String(isDewormed)} onChange={(e) => setIsDewormed(e.target.value === '' ? null : e.target.value === 'true')} className={inputClasses} required>
+                            <select id="deworming-administered" value={isDewormed === null ? '' : String(isDewormed)} onChange={(e) => { const next = e.target.value === '' ? null : e.target.value === 'true'; setIsDewormed(next); if (next !== true) setMedicationGiven(''); }} className={inputClasses} required>
                                 <option value="">Select recorded outcome</option>
                                 <option value="true">Yes — treatment administered</option>
                                 <option value="false">No — treatment not administered</option>
@@ -404,15 +425,16 @@ const DewormingForm: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                             <label className={labelClasses}>School Type</label>
-                            <select
-                                value={schoolType}
-                                onChange={(e) => setSchoolType(e.target.value as 'public' | 'private')}
-                                className={inputClasses}
-                            >
+                            {existingRecord?.school_type === 'private' ? <>
+                                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">Historical Private record. Its classification is preserved unless you explicitly change it.</p>
+                                <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+                                    <input type="checkbox" checked={convertLegacySchoolType} onChange={(e) => setConvertLegacySchoolType(e.target.checked)} />
+                                    Change this record to Public
+                                </label>
+                            </> : <select value="public" className={inputClasses} aria-label="School Type" disabled>
                                 <option value="public">Public School</option>
-                                <option value="private">Private School</option>
-                            </select>
-                            <span className="text-xs text-slate-400 mt-1 block">Institution classification</span>
+                            </select>}
+                            <span className="text-xs text-slate-400 mt-1 block">New records are Public only.</span>
                         </div>
 
                         <div>
@@ -474,7 +496,7 @@ const DewormingForm: React.FC = () => {
 
                     <button
                         type="submit"
-                        disabled={isSaving || !canSave}
+                        disabled={isSaving || !canSave || !derivedAgeGroup}
                         className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm rounded-xl shadow-xs transition-all flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                     >
                         {isSaving ? (

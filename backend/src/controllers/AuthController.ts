@@ -5,6 +5,8 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { getEffectiveAccess } from '../services/admin.service.js';
 import { AuditService } from '../services/AuditService.js';
+import { randomUUID } from 'node:crypto';
+import { recordActivity, sessionStatus } from '../services/portalSession.js';
 
 const loginSchema = z.object({
     email: z.string().email(),
@@ -71,24 +73,36 @@ export const login = async (req: Request, res: Response) => {
 
         const effectiveAccess = await getEffectiveAccess(user.id);
 
+        const sessionId = randomUUID();
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query('INSERT INTO PORTAL_SESSIONS (id, user_id) VALUES ($1, $2)', [sessionId, user.id]);
+            await AuditService.logEvent({
+                actor_id: user.id, portal_role: user.portal_role, action: 'login',
+                entity_type: 'auth', ip_address: req.ip,
+            }, client);
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
         const token = jwt.sign(
             { 
                 id: user.id, 
+                sid: sessionId,
                 email: user.email, 
                 portal_role: user.portal_role, 
                 job_title: user.job_title 
             },
             process.env.JWT_SECRET!,
-            { expiresIn: '24h' }
+            // Database session check enforces 8 hours; the JWT envelope lasts
+            // slightly longer so the API can report the exact maximum reason.
+            { expiresIn: '9h' }
         );
-
-        await AuditService.logEvent({
-            actor_id: user.id,
-            portal_role: user.portal_role,
-            action: 'login',
-            entity_type: 'auth',
-            ip_address: req.ip
-        });
+        const session = await sessionStatus(sessionId, user.id);
 
         res.json({
             token,
@@ -100,7 +114,8 @@ export const login = async (req: Request, res: Response) => {
                 first_name: user.first_name,
                 last_name: user.last_name
             },
-            effectiveAccess
+            effectiveAccess,
+            session: session.status
         });
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -111,9 +126,27 @@ export const login = async (req: Request, res: Response) => {
     }
 };
 
-export const logout = (req: Request, res: Response) => {
-    // Client-side handles token clearing, server responds with success
+export const logout = async (req: Request, res: Response) => {
+    if (req.portalSessionId && req.user) {
+        await pool.query('UPDATE PORTAL_SESSIONS SET revoked_at = COALESCE(revoked_at, NOW()) WHERE id = $1 AND user_id = $2', [req.portalSessionId, req.user.id]);
+    }
     res.json({ message: 'Logged out successfully' });
+};
+
+export const getSession = async (req: Request, res: Response) => {
+    const result = await sessionStatus(req.portalSessionId!, req.user!.id);
+    res.set('Cache-Control', 'no-store').json({ session: result.status });
+};
+
+export const continueSession = async (req: Request, res: Response) => {
+    const result = await recordActivity(req.portalSessionId!, req.user!.id);
+    if (result.expired) {
+        const code = result.expired === 'maximum' ? 'SESSION_MAXIMUM_EXPIRED'
+            : result.expired === 'inactivity' ? 'SESSION_INACTIVE' : 'SESSION_REVOKED';
+        res.status(401).json({ code, message: 'Your session has ended. Please sign in again.' });
+        return;
+    }
+    res.set('Cache-Control', 'no-store').json({ session: result.status });
 };
 
 export const getMe = async (req: Request, res: Response) => {
