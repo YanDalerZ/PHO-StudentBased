@@ -1,12 +1,12 @@
 import React from 'react';
 import type { StudentModuleContext } from '../../types/moduleContext';
 
-export default function StudentContextPanel({ student }: { student: StudentModuleContext }): React.JSX.Element {
+export default function StudentContextPanel({ student, hideAge = false }: { student: StudentModuleContext; hideAge?: boolean }): React.JSX.Element {
     const name = [student.first_name, student.middle_name, student.last_name,
         student.suffix === 'NOT APPLICABLE' ? null : student.suffix].filter(Boolean).join(' ');
     const fields = [
         ['Student name', name], ['LRN', student.student_lrn],
-        ['Date of birth', student.date_of_birth], ['Age (years)', String(student.age)],
+        ['Date of birth', student.date_of_birth], ...(!hideAge ? [['Age (years)', String(student.age)]] : []),
         ['Sex', student.sex], ['School', student.school_name],
         ['Grade', student.grade_level], ['Section', student.section],
     ];

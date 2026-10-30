@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { inflateRawSync } from 'node:zlib';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 import pool from '../database/db.js';
 import { app } from '../index.js';
 import type { ModuleSlug, PortalRole } from '../types/auth.types.js';
@@ -23,7 +24,9 @@ async function actor(role: PortalRole, label: string): Promise<Actor> {
         VALUES ($1, 'test-only-hash', $2, $3, 'QA Fixture', 'Report', 'QA', TRUE) RETURNING id
     `, [email, role === 'school_staff' ? 'teacher' : role, role]);
     const id = result.rows[0]!.id;
-    return { id, token: jwt.sign({ id, email, portal_role: role }, secret!, { expiresIn: '20m' }) };
+    const sid = randomUUID();
+    await pool.query('INSERT INTO PORTAL_SESSIONS (id, user_id) VALUES ($1, $2)', [sid, id]);
+    return { id, token: jwt.sign({ id, sid, email, portal_role: role }, secret!, { expiresIn: '20m' }) };
 }
 async function request(base: string, route: string, user?: Actor, body?: unknown): Promise<Response> {
     return fetch(`${base}/api/v1${route}`, {
@@ -307,7 +310,7 @@ try {
     assert.equal(allMunicipalities.rows.length, municipalityCount + 1,
         'Province-wide summary has one row per municipality and one province total');
     const dewormInput = { student_id: first, date_dewormed: '2026-09-15',
-        medication_given: 'Albendazole', school_id: schoolIds[0] };
+        medication_given: 'Albendazole 400mg', school_id: schoolIds[0] };
     assert.equal((await request(base, '/modules/deworming', staff, dewormInput)).status, 400,
         'Deworming outcome must be explicit');
     assert.equal((await request(base, '/modules/deworming', staff,
@@ -320,9 +323,9 @@ try {
         WHERE student_id = $1 AND date_dewormed = '2026-09-15' ORDER BY id DESC LIMIT 1
     `, [first]);
     assert.equal(createdDeworming.rows[0]?.is_dewormed, true);
-    assert.equal(createdDeworming.rows[0]?.medication_given, 'Albendazole');
+    assert.equal(createdDeworming.rows[0]?.medication_given, 'Albendazole 400mg');
     const immunInput = { student_id: first, immunization_date: '2026-09-15',
-        vaccine_td1: true, lot_batch_td1: 'TD-NEW-LOT', consent_given: null,
+        vaccine_td1: true, lot_batch_td1: '000123456789', consent_given: null,
         school_id: schoolIds[0] };
     assert.equal((await request(base, '/modules/immunization', staff,
         { ...immunInput, vaccine_td1: false })).status, 400,
@@ -332,11 +335,11 @@ try {
         SELECT lot_batch_td1, consent_given FROM IMMUNIZATION
         WHERE student_id = $1 AND immunization_date = '2026-09-15' ORDER BY id DESC LIMIT 1
     `, [first]);
-    assert.equal(createdImmunization.rows[0]?.lot_batch_td1, 'TD-NEW-LOT');
+    assert.equal(createdImmunization.rows[0]?.lot_batch_td1, '000123456789');
     assert.equal(createdImmunization.rows[0]?.consent_given, null);
     const september = await document(base, 'immunization', 'masterlist', staff,
         `?period=2026-09&school_id=${schoolIds[0]}`);
-    assert.equal(september.rows.find(row => row.lrn === formulaLrn)?.td1_lot, 'TD-NEW-LOT');
+    assert.equal(september.rows.find(row => row.lrn === formulaLrn)?.td1_lot, '000123456789');
     assert.equal((await request(base, '/modules/immunization', staff,
         { ...immunInput, student_id: studentIds[6] })).status, 403);
     console.log('Deworming and Immunization staff entry validation/storage PASS');
@@ -346,8 +349,33 @@ try {
             'REPORT_EXPORT_REQUESTED', 'REPORT_EXPORT_COMPLETED', 'REPORT_EXPORT_DOWNLOADED')
     `, [superuser.id]);
     assert.ok((audit.rows[0]?.count ?? 0) >= 5);
-    console.log('Reporting redesign local integration PASS; fixtures remain only in disposable pho_test.');
+    console.log('Reporting redesign local integration PASS.');
 } finally {
     if (server) await new Promise<void>((resolve, reject) => server!.close(error => error ? reject(error) : resolve()));
+    const ownedUsers = await pool.query<{ id: number }>('SELECT id FROM USERS WHERE email = ANY($1::text[])',
+        [['admin', 'staff', 'export_only', 'denied', 'superuser'].map(label => `redesign_${label}_${stamp}@pho.test`)]);
+    const ownedIds = ownedUsers.rows.map(row => row.id);
+    if (ownedIds.length) {
+        const ownedStudents = await pool.query<{ id: number }>('SELECT id FROM STUDENTS WHERE registered_by = ANY($1::int[])', [ownedIds]);
+        const ids = ownedStudents.rows.map(row => row.id);
+        for (const table of ['PATIENT_INFO', 'ORAL_HEALTH', 'DEWORMING', 'IMMUNIZATION', 'VITAL_SIGNS']) {
+            await pool.query(`DELETE FROM ${table} WHERE student_id = ANY($1::int[])`, [ids]);
+        }
+        await pool.query('DELETE FROM REPORT_EXPORTS WHERE requested_by = ANY($1::int[])', [ownedIds]);
+        await pool.query('DELETE FROM REPORT_TARGET_REVISIONS WHERE changed_by = ANY($1::int[])', [ownedIds]);
+        await pool.query('DELETE FROM DEWORMING_TARGETS WHERE created_by = ANY($1::int[])', [ownedIds]);
+        await pool.query('DELETE FROM STUDENTS WHERE id = ANY($1::int[])', [ids]);
+        await pool.query('DELETE FROM AUDIT_EVENTS WHERE actor_id = ANY($1::int[])', [ownedIds]);
+        await pool.query('DELETE FROM PORTAL_SESSIONS WHERE user_id = ANY($1::int[])', [ownedIds]);
+        await pool.query('DELETE FROM USER_MODULE_PERMISSIONS WHERE user_id = ANY($1::int[])', [ownedIds]);
+        await pool.query('DELETE FROM USER_SCHOOL_ASSIGNMENTS WHERE user_id = ANY($1::int[])', [ownedIds]);
+        await pool.query('DELETE FROM USERS WHERE id = ANY($1::int[])', [ownedIds]);
+    }
+    const ownedGeography = await pool.query<{ id: number }>('SELECT id FROM MUNICIPALITIES WHERE name = ANY($1::text[])',
+        [[`Report QA Municipality ${stamp}`, `Report QA Small ${stamp}`]]);
+    const municipalityIds = ownedGeography.rows.map(row => row.id);
+    await pool.query('DELETE FROM SCHOOLS WHERE barangay_id IN (SELECT id FROM BARANGAYS WHERE municipality_id = ANY($1::int[]))', [municipalityIds]);
+    await pool.query('DELETE FROM BARANGAYS WHERE municipality_id = ANY($1::int[])', [municipalityIds]);
+    await pool.query('DELETE FROM MUNICIPALITIES WHERE id = ANY($1::int[])', [municipalityIds]);
     await pool.end();
 }

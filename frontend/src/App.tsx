@@ -178,6 +178,11 @@ const App: React.FC = () => {
                   <ImmunizationForm />
                 </ProtectedRoute>
               } />
+              <Route path="students/:id/immuniz" element={
+                <ProtectedRoute requiredModule="immunization" requiredAction="can_view">
+                  <ImmunizationForm />
+                </ProtectedRoute>
+              } />
               <Route path="students/:id/vital-signs" element={
                 <ProtectedRoute requiredModule="vital-signs" requiredAction="can_view">
                   <VitalSignsForm />
@@ -233,6 +238,11 @@ const App: React.FC = () => {
                 </ProtectedRoute>
               } />
               <Route path="students/:id/immunization" element={
+                <ProtectedRoute requiredModule="immunization" requiredAction="can_view">
+                  <ImmunizationForm />
+                </ProtectedRoute>
+              } />
+              <Route path="students/:id/immuniz" element={
                 <ProtectedRoute requiredModule="immunization" requiredAction="can_view">
                   <ImmunizationForm />
                 </ProtectedRoute>

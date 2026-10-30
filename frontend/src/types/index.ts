@@ -35,6 +35,7 @@ export interface AuthResponse {
   token: string;
   user: User;
   effectiveAccess: EffectiveAccess;
+  session: import('../lib/portalSession').PortalSessionStatus;
 }
 
 export interface Student {
@@ -369,13 +370,16 @@ export interface Deworming {
   updated_at?: string;
 }
 
+export type DewormingAgeGroup = '5-14' | '15-19' | '20+';
+export type DewormingMedication = 'Albendazole 400mg' | 'Mebendazole 500mg';
+
 export interface CreateDewormingPayload {
   student_id: number;
   date_dewormed: string;
-  age_group?: string | null;
-  medication_given?: string | null;
+  age_group?: DewormingAgeGroup | null;
+  medication_given?: DewormingMedication | null;
   is_dewormed?: boolean;
-  school_type?: 'public' | 'private' | null;
+  school_type?: 'public';
   in_school?: boolean;
   school_id?: number | null;
   remarks?: string | null;
@@ -414,6 +418,7 @@ export interface Immunization {
   is_sick_today: boolean;
   history_of_allergies?: string;
   is_deferred: boolean;
+  deferred_reason_text: string | null;
   is_refused: boolean;
   refusal_reason_code?: string;
   refusal_reason_text?: string;
@@ -452,6 +457,7 @@ export interface CreateImmunizationPayload {
   is_sick_today?: boolean;
   history_of_allergies?: string | null;
   is_deferred?: boolean;
+  deferred_reason_text?: string | null;
   is_refused?: boolean;
   refusal_reason_code?: string | null;
   refusal_reason_text?: string | null;

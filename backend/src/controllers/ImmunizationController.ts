@@ -35,6 +35,7 @@ export interface ImmunizationDbRow {
     is_sick_today: boolean | null;
     history_of_allergies: string | null;
     is_deferred: boolean | null;
+    deferred_reason_text: string | null;
     is_refused: boolean | null;
     refusal_reason_code: string | null;
     refusal_reason_text: string | null;
@@ -75,6 +76,7 @@ export interface ImmunizationResponse {
     is_sick_today: boolean;
     history_of_allergies?: string | undefined;
     is_deferred: boolean;
+    deferred_reason_text: string | null;
     is_refused: boolean;
     refusal_reason_code?: string | undefined;
     refusal_reason_text?: string | undefined;
@@ -90,7 +92,7 @@ export interface ImmunizationResponse {
 
 const formatDate = (val: string | Date | null | undefined): string => {
     if (!val) return '';
-    if (val instanceof Date) return val.toISOString().split('T')[0] ?? '';
+    if (val instanceof Date) return [val.getFullYear(), String(val.getMonth() + 1).padStart(2, '0'), String(val.getDate()).padStart(2, '0')].join('-');
     const s = String(val).trim();
     if (s.includes('T')) return s.split('T')[0] ?? s;
     return s;
@@ -112,6 +114,7 @@ const mapImmunizationRow = (row: ImmunizationDbRow): ImmunizationResponse => {
         is_from_other_facility: row.is_from_other_facility ?? false,
         is_sick_today: row.is_sick_today ?? false,
         is_deferred: row.is_deferred ?? false,
+        deferred_reason_text: row.deferred_reason_text ?? null,
         is_refused: row.is_refused ?? false,
         is_fully_immunized: row.is_fully_immunized ?? false,
         recorded_by: row.recorded_by,
@@ -141,6 +144,7 @@ const mapImmunizationRow = (row: ImmunizationDbRow): ImmunizationResponse => {
 };
 
 // Zod schemas
+const doseLotSchema = z.string().max(100).regex(/^[0-9]*$/, 'Lot/batch must contain digits only or be empty.').optional().nullable();
 const immunizationBaseSchema = z.object({
     immunization_date: z.string().min(1, 'Immunization date is required'),
     immunization_type: z.string().max(100).optional().nullable(),
@@ -155,16 +159,17 @@ const immunizationBaseSchema = z.object({
     is_from_other_facility: z.boolean().optional(),
     other_facility_name: z.string().max(200).optional().nullable(),
     lot_batch_no: z.string().max(100).optional().nullable(),
-    lot_batch_td1: z.string().max(100).optional().nullable(),
-    lot_batch_mr1: z.string().max(100).optional().nullable(),
-    lot_batch_hpv1: z.string().max(100).optional().nullable(),
-    lot_batch_hpv2: z.string().max(100).optional().nullable(),
-    lot_batch_td2: z.string().max(100).optional().nullable(),
-    lot_batch_mr2: z.string().max(100).optional().nullable(),
+    lot_batch_td1: doseLotSchema,
+    lot_batch_mr1: doseLotSchema,
+    lot_batch_hpv1: doseLotSchema,
+    lot_batch_hpv2: doseLotSchema,
+    lot_batch_td2: doseLotSchema,
+    lot_batch_mr2: doseLotSchema,
     consent_given: z.boolean().optional().nullable(),
     is_sick_today: z.boolean().optional(),
     history_of_allergies: z.string().max(500).optional().nullable(),
     is_deferred: z.boolean().optional(),
+    deferred_reason_text: z.string().trim().max(2000).optional().nullable(),
     is_refused: z.boolean().optional(),
     refusal_reason_code: z.string().max(10).optional().nullable(),
     refusal_reason_text: z.string().optional().nullable(),
@@ -187,6 +192,8 @@ const updateImmunizationSchema = immunizationBaseSchema.partial();
 const validateImmunizationLogic = (data: {
     is_refused?: boolean | undefined;
     is_deferred?: boolean | undefined;
+    deferred_reason_text?: string | null | undefined;
+    is_sick_today?: boolean | null | undefined;
     is_fully_immunized?: boolean | undefined;
     is_from_other_facility?: boolean | undefined;
     other_facility_name?: string | null | undefined;
@@ -208,6 +215,11 @@ const validateImmunizationLogic = (data: {
     const isRefused = Boolean(data.is_refused);
     const isDeferred = Boolean(data.is_deferred);
     const isFullyImmunized = Boolean(data.is_fully_immunized);
+    if (data.is_sick_today === true) return { isValid: false, message: 'The vaccination event cannot continue through this form when the child is sick today.' };
+    if (isDeferred && isRefused) return { isValid: false, message: 'Vaccination cannot be both Deferred and Refused.' };
+    if (isDeferred && !data.deferred_reason_text?.trim()) return { isValid: false, message: 'Deferred reason explanation is required.' };
+    if (!isDeferred && data.deferred_reason_text?.trim()) return { isValid: false, message: 'Deferred explanation must be empty unless vaccination is Deferred.' };
+
 
     // 1. If not refused and not deferred, at least one vaccine must be selected
     if (!isRefused && !isDeferred) {
@@ -266,6 +278,8 @@ const validateImmunizationLogic = (data: {
         [data.vaccine_mr2, data.lot_batch_mr2, 'MR2'],
     ];
     for (const [administered, lot, vaccine] of vaccineLots) {
+        if (lot && !/^[0-9]*$/.test(lot)) return { isValid: false, message: vaccine + ' lot/batch must contain digits only or be empty.' };
+
         if (!administered && lot?.trim()) {
             return { isValid: false, message: `${vaccine} lot/batch requires that vaccine to be marked administered.` };
         }
@@ -294,7 +308,7 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
 
         // Verify student existence and authorization
         const studentRes = await pool.query(
-            'SELECT id, registered_by, date_of_birth, school_id FROM STUDENTS WHERE id = $1',
+            'SELECT id, registered_by, date_of_birth, school_id, sex FROM STUDENTS WHERE id = $1',
             [validated.student_id]
         );
         if (studentRes.rows.length === 0) {
@@ -317,6 +331,10 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
             return;
         }
 
+        if (student.sex === 'Male' && (validated.vaccine_hpv1 || validated.vaccine_hpv2)) {
+            res.status(400).json({ message: 'HPV doses are not eligible for Male students under this school-based program rule.' });
+            return;
+        }
         // Cross-field logical validation
         const logicCheck = validateImmunizationLogic(validated);
         if (!logicCheck.isValid) {
@@ -370,12 +388,12 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
                 school_id,
                 recorded_by,
                 lot_batch_td1, lot_batch_mr1, lot_batch_hpv1,
-                lot_batch_hpv2, lot_batch_td2, lot_batch_mr2
+                lot_batch_hpv2, lot_batch_td2, lot_batch_mr2, deferred_reason_text
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                 $21, $22, $23, $24, $25, $26, $27,
-                $28, $29, $30, $31, $32, $33
+                $28, $29, $30, $31, $32, $33, $34
             ) RETURNING *
         `;
 
@@ -385,7 +403,7 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
             const insertResult = await client.query<ImmunizationDbRow>(insertSql, [
             validated.student_id,
             immunizationDateStr,
-            validated.immunization_type ?? 'SCHOOL & COMMUNITY BASED IMMUNIZATION',
+            validated.immunization_type ?? 'School-Based Immunization',
             validated.vaccine_td1 ?? false,
             validated.vaccine_mr1 ?? false,
             validated.vaccine_hpv1 ?? false,
@@ -416,6 +434,7 @@ export const createImmunization = async (req: Request, res: Response): Promise<v
             validated.lot_batch_hpv2?.trim() || null,
             validated.lot_batch_td2?.trim() || null,
             validated.lot_batch_mr2?.trim() || null,
+            validated.deferred_reason_text || null,
             ]);
 
             const createdRow = insertResult.rows[0];
@@ -528,7 +547,7 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
 
         // Verify record existence and check teacher ownership
         const checkSql = `
-            SELECT im.*, s.registered_by, s.date_of_birth, s.school_id AS student_school_id
+            SELECT im.*, s.registered_by, s.date_of_birth, s.sex AS student_sex, s.school_id AS student_school_id
             FROM IMMUNIZATION im
             JOIN STUDENTS s ON im.student_id = s.id
             WHERE im.id = $1
@@ -560,6 +579,8 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
 
         // Merge existing and validated fields for logical validation
         const merged = {
+            is_sick_today: validated.is_sick_today !== undefined ? validated.is_sick_today : existingRecord.is_sick_today,
+            deferred_reason_text: validated.deferred_reason_text !== undefined ? validated.deferred_reason_text : existingRecord.deferred_reason_text,
             is_refused: validated.is_refused !== undefined ? validated.is_refused : existingRecord.is_refused,
             is_deferred: validated.is_deferred !== undefined ? validated.is_deferred : existingRecord.is_deferred,
             is_fully_immunized: validated.is_fully_immunized !== undefined ? validated.is_fully_immunized : existingRecord.is_fully_immunized,
@@ -581,6 +602,16 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
             lot_batch_mr2: validated.lot_batch_mr2 !== undefined ? validated.lot_batch_mr2 : existingRecord.lot_batch_mr2,
         };
 
+        // Status transitions clear only their own explanation, never general remarks.
+        if (existingRecord.is_deferred && !merged.is_deferred) merged.deferred_reason_text = null;
+        if (existingRecord.is_refused && !merged.is_refused) {
+            merged.refusal_reason_code = null;
+            merged.refusal_reason_text = null;
+        }
+        if (existingRecord.student_sex === 'Male' && (merged.vaccine_hpv1 || merged.vaccine_hpv2)) {
+            res.status(400).json({ message: 'HPV doses are not eligible for Male students under this school-based program rule.' });
+            return;
+        }
         const logicCheck = validateImmunizationLogic(merged);
         if (!logicCheck.isValid) {
             res.status(400).json({ message: logicCheck.message });
@@ -652,6 +683,7 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
                 lot_batch_hpv2 = $30,
                 lot_batch_td2 = $31,
                 lot_batch_mr2 = $32,
+                deferred_reason_text = $33,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $26
             RETURNING *
@@ -693,6 +725,7 @@ export const updateImmunization = async (req: Request, res: Response): Promise<v
             validated.lot_batch_hpv2 !== undefined ? validated.lot_batch_hpv2?.trim() || null : existingRecord.lot_batch_hpv2,
             validated.lot_batch_td2 !== undefined ? validated.lot_batch_td2?.trim() || null : existingRecord.lot_batch_td2,
             validated.lot_batch_mr2 !== undefined ? validated.lot_batch_mr2?.trim() || null : existingRecord.lot_batch_mr2,
+            merged.deferred_reason_text || null,
             ]);
 
             const updatedRow = updateResult.rows[0];
