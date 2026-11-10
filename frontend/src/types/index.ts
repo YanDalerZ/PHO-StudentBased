@@ -770,6 +770,7 @@ export interface AdminUserSummary {
   last_name: string;
   contact_no: string | null;
   is_active: boolean;
+  password_setup_pending?: boolean;
   failed_login_attempts: number;
   created_at: string;
   updated_at: string;

@@ -39,7 +39,7 @@ const modulePermissionSchema = z.object({
   can_manage_targets: permission.can_manage_targets ?? false,
 }));
 
-const updateModulePermissionsSchema = z.array(modulePermissionSchema).max(5).superRefine((permissions, context) => {
+export const updateModulePermissionsSchema = z.array(modulePermissionSchema).max(5).superRefine((permissions, context) => {
   const seen = new Set<number>();
   permissions.forEach((permission, index) => {
     if (seen.has(permission.module_id)) {

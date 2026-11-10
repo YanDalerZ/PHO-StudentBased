@@ -37,11 +37,13 @@ const knownActions = new Set([
     'IMMUNIZATION_CREATED', 'IMMUNIZATION_UPDATED', 'VITAL_SIGNS_CREATED', 'VITAL_SIGNS_UPDATED',
     'REPORT_VIEWED', 'REPORT_PRINT_INITIATED', 'REPORT_EXPORT_REQUESTED',
     'REPORT_EXPORT_COMPLETED', 'REPORT_EXPORT_DOWNLOADED', 'REPORT_EXPORT_FAILED',
+    'SUPPORT_REPORT_UPDATED', 'SUPPORT_ACCOUNT_REQUEST_APPROVED', 'SUPPORT_ACCOUNT_REQUEST_REJECTED', 'ACCOUNT_SETUP_COMPLETED',
 ]);
 const knownEntities = new Set([
     ...governanceEntities, 'ACCESS_POLICY', 'AUTH', 'auth', 'REGISTRATION_SUBMISSION',
     'STUDENT', 'patient_info', 'animal_bite', 'oral_health', 'deworming', 'immunization',
     'vital_signs', 'CONSOLIDATED_REPORT', 'REPORT_EXPORT',
+    'SUPPORT_REPORT', 'SUPPORT_ACCOUNT_REQUEST',
 ]);
 const safeFieldNames = new Set([
     'portal_role', 'job_title', 'is_active', 'name', 'school_id', 'module_id',
@@ -52,7 +54,15 @@ export function presentAuditEvent(row: RawAuditRow) {
     const action = knownActions.has(row.action) ? row.action : 'OTHER_EVENT';
     const entity_type = knownEntities.has(row.entity_type) ? row.entity_type : 'OTHER_ENTITY';
     const role = row.portal_role;
-    const details: Record<string, boolean | number | string[]> = {};
+    const details: Record<string, boolean | number | string | string[]> = {};
+    const supportEvent = (entity_type === 'SUPPORT_REPORT' && action === 'SUPPORT_REPORT_UPDATED') ||
+        (entity_type === 'SUPPORT_ACCOUNT_REQUEST' && ['SUPPORT_ACCOUNT_REQUEST_APPROVED', 'SUPPORT_ACCOUNT_REQUEST_REJECTED'].includes(action));
+    if (supportEvent && row.details && typeof row.details === 'object') {
+        const status = Reflect.get(row.details, 'status');
+        if (typeof status === 'string' && ['open', 'in_review', 'resolved', 'approved', 'rejected'].includes(status)) details.status = status;
+        const userId = Reflect.get(row.details, 'user_id');
+        if (action === 'SUPPORT_ACCOUNT_REQUEST_APPROVED' && Number.isSafeInteger(userId) && userId > 0) details.user_id = userId;
+    }
     if (governanceActions.has(action) && governanceEntities.has(entity_type) &&
         row.details && typeof row.details === 'object' && !Array.isArray(row.details)) {
         const source = row.details as Record<string, unknown>;
@@ -75,8 +85,8 @@ export function presentAuditEvent(row: RawAuditRow) {
         portal_role: role === 'admin' || role === 'superuser' || role === 'school_staff' ? role : null,
         action,
         entity_type,
-        entity_id: governanceActions.has(action) && governanceEntities.has(entity_type) && row.entity_id && /^\d{1,15}$/.test(row.entity_id)
-            ? row.entity_id : null,
+        entity_id: row.entity_id && ((governanceActions.has(action) && governanceEntities.has(entity_type) && /^\d{1,15}$/.test(row.entity_id)) ||
+            (supportEvent && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(row.entity_id))) ? row.entity_id : null,
         details,
     };
 }
