@@ -18,6 +18,7 @@ import {
   QrCode,
   ClipboardCheck,
   BarChart3,
+  LifeBuoy,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ModuleSlug } from '../../types';
@@ -108,6 +109,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
         return [
           { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
           { name: 'Users', path: '/admin/users', icon: Users },
+          { name: 'Contact & Support', path: '/admin/support', icon: LifeBuoy },
           { name: 'Modules', path: '/admin/modules', icon: Settings },
           { name: 'Schools', path: '/admin/schools', icon: School },
           { name: 'QR invitations', path: '/admin/invitations', icon: QrCode },

@@ -31,6 +31,10 @@ import VitalSignsDash from './pages/superuser/VitalSignsDash';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UserManagement from './pages/admin/UserManagement';
+import ContactSupport from './pages/public/ContactSupport';
+import AccountSetup from './pages/public/AccountSetup';
+import SupportQueue from './pages/admin/SupportQueue';
+import ProvisionRequestedUser from './pages/admin/ProvisionRequestedUser';
 import ModuleManagement from './pages/admin/ModuleManagement';
 import SchoolManagement from './pages/admin/SchoolManagement';
 import SystemSettings from './pages/admin/SystemSettings';
@@ -111,6 +115,8 @@ const App: React.FC = () => {
             {/* Public Routes */}
             <Route path="/Login" element={<Login />} />
             <Route path="/register/:token" element={<PublicRegistration />} />
+            <Route path="/contact" element={<ContactSupport />} />
+            <Route path="/account-setup" element={<AccountSetup />} />
             <Route path="/forbidden" element={<ProtectedRoute><AccessDenied /></ProtectedRoute>} />
 
             {/* Student Registration Route (Teacher / SuperUser Staff Only) */}
@@ -289,6 +295,8 @@ const App: React.FC = () => {
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="users/from-request/:id" element={<ProvisionRequestedUser />} />
+              <Route path="support" element={<SupportQueue />} />
               <Route path="modules" element={<ModuleManagement />} />
               <Route path="schools" element={<SchoolManagement />} />
               <Route path="invitations" element={<InvitationGovernance />} />

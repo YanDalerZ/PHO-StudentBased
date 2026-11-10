@@ -261,8 +261,8 @@ const Login: React.FC = () => {
                     <div className="mt-8 pt-6 border-t border-slate-100 text-center">
                         <p className="text-xs text-slate-500">
                             Having trouble logging in?{' '}
-                            <a href="#support" className="font-semibold text-emerald-700 hover:underline">
-                                Contact IT Support
+                            <a href="/contact" className="font-semibold text-emerald-700 hover:underline">
+                                Contact &amp; Support
                             </a>
                         </p>
                     </div>

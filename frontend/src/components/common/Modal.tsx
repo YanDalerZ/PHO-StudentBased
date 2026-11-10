@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -11,6 +11,7 @@ interface ModalProps {
 }
 
 export const Modal = ({ isOpen, onClose, title, children, className }: ModalProps) => {
+  const titleId = useId();
   if (!isOpen) return null;
 
   return (
@@ -22,14 +23,15 @@ export const Modal = ({ isOpen, onClose, title, children, className }: ModalProp
       />
       
       {/* Modal Content */}
-      <div className={cn(
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className={cn(
         "relative w-full max-w-lg bg-white dark:bg-surface-card rounded-3xl shadow-xl dark:shadow-2xl border border-slate-200 dark:border-white/10 p-6 flex flex-col",
         className
       )}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{title}</h2>
+          <h2 id={titleId} className="text-xl font-bold text-slate-900 dark:text-white">{title}</h2>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 transition-colors"
           >
             <X className="w-5 h-5" />

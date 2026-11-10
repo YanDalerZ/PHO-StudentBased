@@ -16,7 +16,8 @@ interface AuthContextType {
   checkAuth: () => Promise<void>;
 }
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const isPortalPage = () => !/^\/(Login|register\/)/i.test(window.location.pathname);
+const isPublicIntake = () => /^\/(?:(?:contact|account-setup)\/?$|register\/)/i.test(window.location.pathname);
+const isPortalPage = () => !isPublicIntake() && !/^\/Login\/?$/i.test(window.location.pathname);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
@@ -91,15 +92,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return refreshPromise.current;
   }, [clearState, setCurrentSession]);
 
-  // The public QR form uses only publicApi. Never validate or transmit a
+  // Public intake uses only publicApi. Never validate or transmit a
   // signed-in portal token while rendering that route.
   useEffect(() => {
-    if (/^\/register\//i.test(window.location.pathname)) return;
+    if (isPublicIntake()) return;
     void checkAuth();
   }, [checkAuth]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
+      if (isPublicIntake()) { clearState(); return; }
       if (event.key === 'token') {
         if (!event.newValue) {
           clearState();

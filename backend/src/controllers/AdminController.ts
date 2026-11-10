@@ -92,7 +92,7 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-const createUserSchema = z.object({
+export const createUserSchema = z.object({
   email: z.string().trim().email('Valid email address is required.'),
   password: z.string().min(8, 'Password must be at least 8 characters long.'),
   portal_role: z.enum(['school_staff', 'superuser']),

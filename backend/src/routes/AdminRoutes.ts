@@ -6,12 +6,14 @@ import * as adminAccessController from '../controllers/AdminAccessController.js'
 import * as adminInvitationController from '../controllers/AdminInvitationController.js';
 import * as adminAuditController from '../controllers/AdminAuditController.js';
 import * as adminSessionController from '../controllers/AdminSessionController.js';
+import AdminSupportRoutes from './AdminSupportRoutes.js';
 
 const router = Router();
 
 // Apply authentication and admin role requirement to all /api/admin/* routes
 router.use(authenticate);
 router.use(requirePortalRole('admin'));
+router.use('/support', AdminSupportRoutes);
 
 // System Dashboard
 router.get('/dashboard', adminController.getDashboard);

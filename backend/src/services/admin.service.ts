@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import pool from '../database/db.js';
+import type { PoolClient } from 'pg';
 import { AuditService } from './AuditService.js';
 import { APPROVED_MODULE_SLUGS } from '../types/admin.types.js';
 import type {
@@ -40,6 +41,7 @@ function mapUserSummary(row: Record<string, unknown>): AdminUserSummary {
     last_name: row.last_name as string,
     contact_no: (row.contact_no as string) ?? null,
     is_active: Boolean(row.is_active),
+    password_setup_pending: Boolean(row.password_setup_pending),
     failed_login_attempts: Number(row.failed_login_attempts ?? 0),
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
@@ -169,7 +171,7 @@ export async function listUsers(filters: AdminUserFilters): Promise<PaginatedRes
 
   const dataParams = [...params, limit, offset];
   const dataQuery = `
-    SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+    SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, password_setup_pending, failed_login_attempts, created_at, updated_at
     FROM USERS
     WHERE ${whereClause}
     ORDER BY created_at DESC
@@ -197,7 +199,23 @@ export interface CreateUserInput {
   contact_no?: string | null | undefined;
 }
 
-export async function createUser(input: CreateUserInput, actorId: number, ipAddress?: string): Promise<AdminUserSummary> {
+export async function adminTransaction<T>(operation: (client: PoolClient) => Promise<T>, existing?: PoolClient): Promise<T> {
+  if (existing) return operation(existing);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await operation(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function createUser(input: CreateUserInput, actorId: number, ipAddress?: string, existing?: PoolClient, pendingSetup = false): Promise<AdminUserSummary> {
   // Prevent admin creation through API
   if (input.role !== 'school_staff' && input.role !== 'superuser') {
     throw new AdminServiceError(400, "Invalid portal role. Only 'school_staff' and 'superuser' accounts can be created via this API.");
@@ -209,34 +227,26 @@ export async function createUser(input: CreateUserInput, actorId: number, ipAddr
   const normalizedEmail = input.email.trim().toLowerCase();
 
   const passwordHash = await bcrypt.hash(input.password, 10);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return adminTransaction(async client => {
     const result = await client.query<Record<string, unknown>>(`
-      INSERT INTO USERS (email, password_hash, role, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 0)
-      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+      INSERT INTO USERS (email, password_hash, role, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, password_setup_pending)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOT $9::boolean, 0, $9)
+      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, password_setup_pending, failed_login_attempts, created_at, updated_at
     `, [
       normalizedEmail, passwordHash,
       input.role === 'school_staff' ? 'teacher' : input.role,
       input.role, input.job_title.trim(), input.first_name.trim(),
-      input.last_name.trim(), input.contact_no?.trim() || null,
+      input.last_name.trim(), input.contact_no?.trim() || null, pendingSetup,
     ]);
     const inserted = result.rows[0];
     if (!inserted) throw new AdminServiceError(500, 'Failed to create user record.');
     await AuditService.logEvent({
       actor_id: actorId, portal_role: 'admin', action: 'CREATE_USER',
       entity_type: 'USER', entity_id: String(inserted.id), ip_address: ipAddress,
-      details: { portal_role: input.role, changed_fields: ['email', 'password', 'portal_role', 'job_title', 'first_name', 'last_name', 'contact_no'] },
+      details: { portal_role: input.role, password_setup_pending: pendingSetup, changed_fields: ['email', 'portal_role', 'job_title', 'first_name', 'last_name', 'contact_no', ...(pendingSetup ? [] : ['password'])] },
     }, client);
-    await client.query('COMMIT');
     return mapUserSummary(inserted);
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  }, existing);
 }
 
 export interface UpdateUserInput {
@@ -258,12 +268,17 @@ export async function updateUser(id: number, input: UpdateUserInput, actorId: nu
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const existing = await client.query<{ portal_role: string }>(
-      'SELECT portal_role FROM USERS WHERE id = $1 FOR UPDATE', [id],
+    const existing = await client.query<{ portal_role: string; email: string; password_setup_pending: boolean }>(
+      'SELECT portal_role, email, password_setup_pending FROM USERS WHERE id = $1 FOR UPDATE', [id],
     );
-    const currentRole = existing.rows[0]?.portal_role;
+    const current = existing.rows[0];
+    const currentRole = current?.portal_role;
     if (!currentRole) throw new AdminServiceError(404, 'User not found.');
     if (currentRole === 'admin') throw new AdminServiceError(400, 'Administrator accounts cannot be edited through this endpoint.');
+    if (current.password_setup_pending && (input.is_active !== undefined || input.password !== undefined ||
+        (input.email !== undefined && input.email.trim().toLowerCase() !== current.email))) {
+      throw new AdminServiceError(409, 'The user must complete password setup before these settings can change.');
+    }
     if (input.role !== undefined && input.role !== currentRole && input.job_title === undefined) {
       throw new AdminServiceError(400, 'A job title is required when changing the portal role.');
     }
@@ -290,7 +305,7 @@ export async function updateUser(id: number, input: UpdateUserInput, actorId: nu
     if (input.is_active !== undefined) addField('is_active', input.is_active);
     if (updateFields.length === 0) {
       const fresh = await client.query<Record<string, unknown>>(
-        'SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at FROM USERS WHERE id = $1', [id],
+        'SELECT id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, password_setup_pending, failed_login_attempts, created_at, updated_at FROM USERS WHERE id = $1', [id],
       );
       await client.query('COMMIT');
       return mapUserSummary(fresh.rows[0]!);
@@ -299,7 +314,7 @@ export async function updateUser(id: number, input: UpdateUserInput, actorId: nu
     params.push(id);
     const result = await client.query<Record<string, unknown>>(`
       UPDATE USERS SET ${updateFields.join(', ')} WHERE id = $${params.length}
-      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, password_setup_pending, failed_login_attempts, created_at, updated_at
     `, params);
     const updated = result.rows[0];
     if (!updated) throw new AdminServiceError(404, 'User not found.');
@@ -349,8 +364,8 @@ export async function updateUserStatus(id: number, input: UpdateUserStatusInput,
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const existingResult = await client.query<{ portal_role: string; is_active: boolean; failed_login_attempts: number }>(
-      'SELECT portal_role, is_active, failed_login_attempts FROM USERS WHERE id = $1 FOR UPDATE', [id],
+    const existingResult = await client.query<{ portal_role: string; is_active: boolean; failed_login_attempts: number; password_setup_pending: boolean }>(
+      'SELECT portal_role, is_active, failed_login_attempts, password_setup_pending FROM USERS WHERE id = $1 FOR UPDATE', [id],
     );
     const currentUser = existingResult.rows[0];
     if (!currentUser) throw new AdminServiceError(404, 'User not found.');
@@ -379,11 +394,23 @@ export async function updateUserStatus(id: number, input: UpdateUserStatusInput,
       throw new AdminServiceError(400, 'Must provide is_active, action, or unlock flag.');
     }
 
+    if (currentUser.password_setup_pending && newActive) {
+      throw new AdminServiceError(409, 'The user must complete password setup before signing in.');
+    }
+    if (currentUser.password_setup_pending && !newActive) {
+      await client.query(`
+        UPDATE SUPPORT_ACCOUNT_NOTIFICATIONS n
+        SET setup_token_hash = NULL, setup_expires_at = NULL, status = 'failed', error_code = 'SETUP_CANCELLED',
+            send_generation = send_generation + 1
+        FROM SUPPORT_ACCOUNT_REQUESTS r
+        WHERE n.request_id = r.id AND r.created_user_id = $1 AND n.setup_required
+      `, [id]);
+    }
     const result = await client.query<Record<string, unknown>>(`
       UPDATE USERS
-      SET is_active = $1, failed_login_attempts = $2, updated_at = CURRENT_TIMESTAMP
+      SET is_active = $1, failed_login_attempts = $2, updated_at = CURRENT_TIMESTAMP, password_setup_pending = FALSE
       WHERE id = $3
-      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, failed_login_attempts, created_at, updated_at
+      RETURNING id, email, portal_role, job_title, first_name, last_name, contact_no, is_active, password_setup_pending, failed_login_attempts, created_at, updated_at
     `, [newActive, newAttempts, id]);
     const updated = result.rows[0];
     if (!updated) throw new AdminServiceError(404, 'User not found.');
@@ -789,10 +816,9 @@ export async function updateModulePermissions(
   userId: number,
   permissions: ModulePermissionReplacement[],
   grantedBy: number,
+  existing?: PoolClient,
 ): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return adminTransaction(async client => {
     const target = await lockAccessTarget(client, userId);
     if (target.portal_role === 'admin' && permissions.length > 0) {
       throw new AdminServiceError(400, 'Administrator accounts cannot receive clinical module permissions.');
@@ -880,13 +906,7 @@ export async function updateModulePermissions(
       }
     }, client);
 
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  }, existing);
 }
 
 export async function getSchoolAssignments(userId: number): Promise<AdminSchoolAssignment[]> {
@@ -901,10 +921,8 @@ export async function getSchoolAssignments(userId: number): Promise<AdminSchoolA
   return result.rows;
 }
 
-export async function updateSchoolAssignments(userId: number, schoolIds: number[], assignedBy: number): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+export async function updateSchoolAssignments(userId: number, schoolIds: number[], assignedBy: number, existing?: PoolClient): Promise<void> {
+  return adminTransaction(async client => {
     const target = await lockAccessTarget(client, userId);
     if (target.portal_role !== 'school_staff' && schoolIds.length > 0) {
       throw new AdminServiceError(400, 'School assignments may be granted only to school staff accounts.');
@@ -945,13 +963,7 @@ export async function updateSchoolAssignments(userId: number, schoolIds: number[
       }
     }, client);
 
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  }, existing);
 }
 
 export async function getEffectiveAccess(userId: number): Promise<EffectiveAccess> {

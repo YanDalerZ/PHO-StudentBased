@@ -18,12 +18,15 @@ import {
   KeyRound,
 } from 'lucide-react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { DataTable, type Column } from '../../components/common/DataTable';
 import { Modal } from '../../components/common/Modal';
 import { FormField } from '../../components/common/FormField';
 import { SchoolAssignmentDrawer } from '../../components/admin/SchoolAssignmentDrawer';
 import { PermissionMatrixModal } from '../../components/admin/PermissionMatrixModal';
+import { InitialUserAccess, type InitialAccess } from '../../components/admin/InitialUserAccess';
+import { provisionRequest, type AccountRequest } from '../../services/supportApi';
 import {
   getAdminUsers,
   createAdminUser,
@@ -68,7 +71,12 @@ const initialFormData: UserFormData = {
   password: '',
 };
 
-export const UserManagement: React.FC = () => {
+const emptyAccess: InitialAccess = { schools: [], permissions: [], confirmed: false };
+
+export const UserManagement: React.FC<{ accountRequest?: AccountRequest }> = ({ accountRequest }) => {
+  const navigate = useNavigate();
+  const [initialAccess, setInitialAccess] = useState(emptyAccess);
+  const [requestRoleChosen, setRequestRoleChosen] = useState(false);
   // Data state
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
   const [totalUsers, setTotalUsers] = useState<number>(0);
@@ -86,9 +94,16 @@ export const UserManagement: React.FC = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Modal & mutation state
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isModalOpen, setIsModalOpen] = useState(!!accountRequest);
   const [editingUser, setEditingUser] = useState<AdminUserSummary | null>(null);
-  const [formData, setFormData] = useState<UserFormData>(initialFormData);
+  const [formData, setFormData] = useState<UserFormData>(() => {
+    if (!accountRequest) return initialFormData;
+    const [first, ...last] = accountRequest.name.trim().split(/\s+/);
+    return {
+      ...initialFormData, first_name: first, last_name: last.join(' '),
+      email: accountRequest.work_email, contact_no: accountRequest.contact_no, job_title: accountRequest.job_title,
+    };
+  });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -190,6 +205,8 @@ export const UserManagement: React.FC = () => {
   }, []);
 
   const closeModal = () => {
+    if (isSubmitting) return;
+    if (accountRequest) { navigate('/admin/support'); return; }
     setIsModalOpen(false);
     setEditingUser(null);
     setFormErrors({});
@@ -219,14 +236,14 @@ export const UserManagement: React.FC = () => {
       errors.job_title = 'Job title must be 100 characters or fewer.';
     }
 
-    if (!editingUser) {
+    if (!editingUser && !accountRequest) {
       // Creation: password required >= 8 chars
       if (!formData.password) {
         errors.password = 'Password is required for new accounts.';
       } else if (formData.password.length < 8) {
         errors.password = 'Password must be at least 8 characters long.';
       }
-    } else {
+    } else if (editingUser) {
       // Edit: password optional, but if entered must be >= 8 chars
       if (formData.password && formData.password.length < 8) {
         errors.password = 'Replacement password must be at least 8 characters long.';
@@ -240,7 +257,12 @@ export const UserManagement: React.FC = () => {
   // Submit form (Create / Update)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!validateForm()) return;
+    if (accountRequest && !initialAccess.confirmed) {
+      setFormErrors({ general: 'Verify the requester and confirm the account access before saving.' });
+      return;
+    }
 
     setIsSubmitting(true);
     setFormErrors((prev) => ({ ...prev, general: undefined }));
@@ -270,17 +292,22 @@ export const UserManagement: React.FC = () => {
         toast.success(`User ${formData.first_name} ${formData.last_name} updated successfully.`);
       } else {
         // Create user
-        const payload: CreateAdminUserPayload = {
+        const payload: Omit<CreateAdminUserPayload, 'password'> = {
           first_name: formData.first_name.trim(),
           last_name: formData.last_name.trim(),
           email: formData.email.trim().toLowerCase(),
           contact_no: formData.contact_no.trim() || null,
           portal_role: formData.portal_role,
           job_title: formData.job_title.trim(),
-          password: formData.password,
         };
 
-        await createAdminUser(payload);
+        if (accountRequest) {
+          await provisionRequest(accountRequest.id, payload, initialAccess.schools.map(school => school.id), initialAccess.permissions);
+          toast.success('Account saved. Check the support queue for setup email status.');
+          navigate('/admin/support', { replace: true });
+          return;
+        }
+        await createAdminUser({ ...payload, password: formData.password });
         toast.success(`User ${formData.first_name} ${formData.last_name} created successfully.`);
       }
 
@@ -305,12 +332,16 @@ export const UserManagement: React.FC = () => {
         toast.error('System administrator status cannot be modified.');
         return;
       }
+      if (user.password_setup_pending && action === 'deactivate' &&
+          !window.confirm('Cancel password setup and revoke the current link?')) return;
 
       setUpdatingStatusId(user.id);
       try {
         await updateAdminUserStatus(user.id, { action });
         const actionLabel = action === 'unlock' ? 'unlocked' : action === 'activate' ? 'activated' : 'deactivated';
-        toast.success(`Account for ${user.first_name} ${user.last_name} has been ${actionLabel}.`);
+        toast.success(user.password_setup_pending && action === 'deactivate'
+          ? 'Password setup cancelled.'
+          : `Account for ${user.first_name} ${user.last_name} has been ${actionLabel}.`);
         refreshUsers();
       } catch (err: unknown) {
         const message = extractErrorMessage(err, `Failed to ${action} user account.`);
@@ -395,7 +426,7 @@ export const UserManagement: React.FC = () => {
               <div className="flex flex-col items-start gap-1">
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
                   <Lock className="w-3 h-3 mr-1" aria-hidden="true" />
-                  Locked / Inactive
+                  {user.password_setup_pending ? 'Pending password setup' : 'Locked / Inactive'}
                 </span>
                 {user.failed_login_attempts > 0 && (
                   <span className="text-[11px] text-rose-500 font-medium">
@@ -440,7 +471,7 @@ export const UserManagement: React.FC = () => {
           return (
             <div className="flex items-center justify-end space-x-1.5">
               {/* Unlock / Activate Action */}
-              {isLocked ? (
+              {isLocked && !user.password_setup_pending ? (
                 <button
                   onClick={() => handleToggleStatus(user, 'unlock')}
                   disabled={isBusy || user.portal_role === 'admin'}
@@ -456,11 +487,11 @@ export const UserManagement: React.FC = () => {
                   onClick={() => handleToggleStatus(user, 'deactivate')}
                   disabled={isBusy || user.portal_role === 'admin'}
                   className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors inline-flex items-center space-x-1 disabled:opacity-50"
-                  title="Deactivate account access"
-                  aria-label={`Deactivate account for ${user.first_name}`}
+                  title={user.password_setup_pending ? 'Cancel setup and revoke the link' : 'Deactivate account access'}
+                  aria-label={`${user.password_setup_pending ? 'Cancel setup' : 'Deactivate account'} for ${user.first_name}`}
                 >
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Deactivate</span>
+                  <span>{user.password_setup_pending ? 'Cancel setup' : 'Deactivate'}</span>
                 </button>
               )}
 
@@ -612,9 +643,14 @@ export const UserManagement: React.FC = () => {
         isOpen={isModalOpen}
         onClose={closeModal}
         title={editingUser ? `Edit User: ${editingUser.first_name} ${editingUser.last_name}` : 'Create New User Account'}
-        className="max-w-md"
+        className={accountRequest ? 'max-w-2xl max-h-[calc(100dvh-2rem)]' : 'max-w-md'}
       >
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {accountRequest && <div className="rounded-xl bg-teal-50 dark:bg-teal-950/50 p-3 text-sm space-y-1 break-words">
+            <p className="font-semibold">Account request from {accountRequest.name}</p>
+            <p>Requested school or office: {accountRequest.school_or_office}</p>
+            <p>Verify the requester before granting access. They will receive a link to set their own password before they can sign in.</p>
+          </div>}
           {/* General Server Error */}
           {formErrors.general && (
             <div
@@ -628,8 +664,9 @@ export const UserManagement: React.FC = () => {
 
           {/* Name Fields */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="First Name" error={formErrors.first_name}>
+            <FormField label="First Name" htmlFor="admin-user-first-name" error={formErrors.first_name}>
               <input
+                id="admin-user-first-name"
                 type="text"
                 value={formData.first_name}
                 onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
@@ -638,8 +675,9 @@ export const UserManagement: React.FC = () => {
               />
             </FormField>
 
-            <FormField label="Last Name" error={formErrors.last_name}>
+            <FormField label="Last Name" htmlFor="admin-user-last-name" error={formErrors.last_name}>
               <input
+                id="admin-user-last-name"
                 type="text"
                 value={formData.last_name}
                 onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
@@ -650,10 +688,12 @@ export const UserManagement: React.FC = () => {
           </div>
 
           {/* Email Address */}
-          <FormField label="Email Address" error={formErrors.email}>
+          <FormField label="Email Address" htmlFor="admin-user-email" error={formErrors.email}>
             <input
+              id="admin-user-email"
               type="email"
               value={formData.email}
+              readOnly={!!accountRequest}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="e.g. maria.santos@pho.gov.ph"
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-surface-input border border-slate-200 dark:border-teal-500/30 text-slate-900 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all"
@@ -661,8 +701,9 @@ export const UserManagement: React.FC = () => {
           </FormField>
 
           {/* Contact Number */}
-          <FormField label="Contact Number (Optional)" error={formErrors.contact_no}>
+          <FormField label="Contact Number (Optional)" htmlFor="admin-user-contact" error={formErrors.contact_no}>
             <input
+              id="admin-user-contact"
               type="tel"
               value={formData.contact_no}
               onChange={(e) => setFormData({ ...formData, contact_no: e.target.value })}
@@ -672,13 +713,19 @@ export const UserManagement: React.FC = () => {
           </FormField>
 
           {/* Role Selection (Restricted strictly to teacher or superuser) */}
-          <FormField label="System Role">
+          <FormField label="System Role" htmlFor="admin-user-role">
             <select
-              value={formData.portal_role}
-              onChange={(e) => setFormData({ ...formData, portal_role: e.target.value as CreatableAdminUserRole })}
+              id="admin-user-role"
+              value={accountRequest && !requestRoleChosen ? '' : formData.portal_role}
+              onChange={(e) => {
+                setFormData({ ...formData, portal_role: e.target.value as CreatableAdminUserRole });
+                setInitialAccess(emptyAccess);
+                setRequestRoleChosen(true);
+              }}
               disabled={editingUser?.portal_role === 'admin'}
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-surface-input border border-slate-200 dark:border-teal-500/30 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all"
             >
+              {accountRequest && <option value="" disabled>Select portal role</option>}
               <option value="school_staff">School Staff (School Data Encoder)</option>
               <option value="superuser">Superuser (PHO Public Health Officer)</option>
             </select>
@@ -687,11 +734,15 @@ export const UserManagement: React.FC = () => {
             </p>
           </FormField>
 
-          <FormField label="Job Title" error={formErrors.job_title}>
+          <FormField label="Job Title" htmlFor="admin-user-title" error={formErrors.job_title}>
             <input
+              id="admin-user-title"
               type="text"
               value={formData.job_title}
-              onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, job_title: e.target.value });
+                setInitialAccess(previous => ({ ...previous, confirmed: false }));
+              }}
               maxLength={100}
               required
               list="job-title-examples"
@@ -714,13 +765,16 @@ export const UserManagement: React.FC = () => {
           )}
 
           {/* Password Field */}
-          <FormField
+          {!accountRequest && <FormField
             label={editingUser ? 'Replacement Password (Optional)' : 'Account Password'}
+            htmlFor="admin-user-password"
             error={formErrors.password}
           >
             <div className="relative">
               <input
+                id="admin-user-password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder={editingUser ? 'Leave blank to keep unchanged' : 'Minimum 8 characters'}
@@ -740,7 +794,9 @@ export const UserManagement: React.FC = () => {
                 Existing passwords are never displayed. Entering a value here resets their login password.
               </p>
             )}
-          </FormField>
+          </FormField>}
+
+          {accountRequest && requestRoleChosen && <InitialUserAccess role={formData.portal_role} access={initialAccess} setAccess={setInitialAccess} />}
 
           {/* Modal Actions */}
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-800">
@@ -754,7 +810,7 @@ export const UserManagement: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (!!accountRequest && !initialAccess.confirmed)}
               className="px-5 py-2 rounded-xl bg-primary-action hover:bg-teal-500 dark:bg-teal-500 dark:hover:bg-teal-600 text-white text-sm font-semibold shadow-md shadow-teal-500/20 transition-all flex items-center space-x-1.5 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
@@ -765,7 +821,7 @@ export const UserManagement: React.FC = () => {
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>{editingUser ? 'Save Changes' : 'Create Account'}</span>
+                  <span>{editingUser ? 'Save Changes' : accountRequest ? 'Confirm and create account' : 'Create Account'}</span>
                 </>
               )}
             </button>

@@ -9,6 +9,8 @@ import pool from './database/db.js';
 import AllRoutes from './routes/AllRoutes.js';
 import { publicRegistrationPageHeaders } from './middleware/publicRegistrationSecurity.js';
 import { approvedRegistrationOrigins } from './config/publicRegistration.js';
+import PublicSupportRoutes from './routes/PublicSupportRoutes.js';
+import AccountSetupRoutes from './routes/AccountSetupRoutes.js';
 
 const app: Application = express();
 
@@ -61,6 +63,8 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(['/api/v1/contact', '/api/contact'], PublicSupportRoutes);
+app.use(['/api/v1/auth/account-setup', '/api/auth/account-setup'], AccountSetupRoutes);
 app.use(express.json({ limit: '256kb' }));
 
 // Render may use this path as its health check. Do not expose database details.
@@ -100,6 +104,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Serving frontend static files
 const frontendPath = path.resolve(__dirname, '../../frontend/dist');
 app.use(/^\/register\/[a-f0-9]{32}\/?$/i, publicRegistrationPageHeaders);
+app.use(/^\/(?:contact|account-setup)\/?$/i, publicRegistrationPageHeaders);
 app.use(express.static(frontendPath));
 
 app.get(/^((?!\/api).)*$/, (req, res) => {
