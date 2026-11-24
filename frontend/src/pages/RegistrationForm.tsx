@@ -25,6 +25,7 @@ import {
 import type { Student, Municipality, Barangay, School } from '../types';
 import { cn } from '../lib/utils';
 import { hasModulePermission } from '../lib/access';
+import { changeStudentAddress, normalizeStudentAddress, studentAddressPayload } from '../lib/studentAddress';
 import { useAuth } from '../contexts/AuthContext';
 import logo from '../assets/images/logo.jpg';
 import RegistrationPaperPacket, { type PaperSection } from './RegistrationPaperPacket';
@@ -247,12 +248,7 @@ const normalizeStudentData = (data?: Partial<Student> | null): StudentFormData =
         mother_last_name: data.mother_last_name ?? '',
         mother_middle_name: data.mother_middle_name ?? '',
         mother_birthdate: data.mother_birthdate ?? '',
-        address: data.address ?? data.street_address ?? '',
-        street_address: data.street_address ?? data.address ?? '',
-        barangay: data.barangay_id ? String(data.barangay_id) : (data.barangay ? String(data.barangay) : ''),
-        barangay_id: data.barangay_id,
-        municipality: data.municipality_id ? String(data.municipality_id) : (data.municipality ? String(data.municipality) : ''),
-        municipality_id: data.municipality_id,
+        ...normalizeStudentAddress(data),
         province: data.province ?? 'Aklan',
         contact_no: data.contact_no ?? data.mobile ?? '',
         mobile: data.mobile ?? data.contact_no ?? '',
@@ -489,11 +485,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => {
-            if (name === 'municipality') {
-                return { ...prev, municipality: value, barangay: '' };
-            }
-            if (name === 'barangay') {
-                return { ...prev, barangay: value };
+            if (name === 'municipality' || name === 'barangay' || name === 'address') {
+                return changeStudentAddress(prev, name, value);
             }
             return {
                 ...prev,
@@ -583,6 +576,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
             const targetId = studentId || formData.id || initialData?.id;
             const payload = {
                 ...formData,
+                ...studentAddressPayload(formData),
                 indigenous: formData.indigenous,
                 is_indigenous: formData.indigenous === 'Yes',
                 indigenous_group: formData.indigenous === 'Yes' ? formData.indigenous_group || null : null,

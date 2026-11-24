@@ -38,7 +38,7 @@ const commonSelect = (datePosition: number) => `
     TO_CHAR(s.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
     EXTRACT(YEAR FROM AGE($${datePosition}::date, s.date_of_birth))::int AS age,
     s.sex::text AS sex, s.grade_level, s.section,
-    sc.name AS school, m.name AS municipality, b.name AS barangay`;
+    sc.name AS school, COALESCE(m.name, 'Unassigned municipality') AS municipality, b.name AS barangay`;
 
 const detailDefinitions: Record<ModuleSlug, { alias: string; date: string; columns: ReportColumn[]; select: string }> = {
     'patient-info': {
@@ -203,8 +203,15 @@ async function visibleSchools(executor: ReportDocumentExecutor, filters: Normali
 
 async function visibleMunicipalities(executor: ReportDocumentExecutor,
     filters: NormalizedReportFilters, scope: ReportSchoolScope,
-    schools: Array<{ municipality_id: number; municipality: string }>) {
+    schools: Array<{ municipality_id: number; municipality: string }>,
+    grouped: Map<number | null, Record<string, unknown>>) {
     if (scope.mode === 'restricted' || filters.barangay_id !== undefined || filters.school_id !== undefined) {
+        if (filters.geography_basis === 'residence') {
+            return [...grouped.entries()]
+                .filter((entry): entry is [number, Record<string, unknown>] => entry[0] !== null)
+                .map(([id, row]) => [id, String(row.municipality)] as [number, string])
+                .sort((left, right) => left[1].localeCompare(right[1]));
+        }
         return [...new Map(schools.map(row => [row.municipality_id, row.municipality])).entries()];
     }
     const result = await executor.query<{ id: number; name: string }>(`
@@ -217,7 +224,8 @@ async function visibleMunicipalities(executor: ReportDocumentExecutor,
 
 async function municipalityDocument(executor: ReportDocumentExecutor, module: ModuleSlug,
     filters: NormalizedReportFilters, scope: ReportSchoolScope): Promise<ReportDocument> {
-    const schools = await visibleSchools(executor, filters, scope);
+    const residence = filters.geography_basis === 'residence';
+    const schools = residence ? [] : await visibleSchools(executor, filters, scope);
     const definition = summaryDefinitions[module];
     const parts = buildReportQueryParts(module, filters, scope);
     const accomplishedWhen = definition.accomplishedWhen;
@@ -246,8 +254,10 @@ async function municipalityDocument(executor: ReportDocumentExecutor, module: Mo
         ${parts.fromSql} ${parts.whereSql}
         GROUP BY m.id, m.name
     `, summaryParams);
-    const grouped = new Map<number, Record<string, unknown>>(result.rows.map(row => [Number(row.municipality_id), row]));
-    const targetResult = await executor.query<{ school_id: number; indicator: string; target_count: number }>(`
+    const grouped = new Map<number | null, Record<string, unknown>>(result.rows.map(row => [
+        row.municipality_id === null ? null : Number(row.municipality_id), row,
+    ]));
+    const targetResult = residence ? { rows: [] } : await executor.query<{ school_id: number; indicator: string; target_count: number }>(`
         SELECT DISTINCT ON (school_id, indicator) school_id, indicator, target_count
         FROM REPORT_TARGET_REVISIONS
         WHERE module_slug = $1 AND date_from = $2::date AND date_to = $3::date
@@ -255,7 +265,8 @@ async function municipalityDocument(executor: ReportDocumentExecutor, module: Mo
         ORDER BY school_id, indicator, id DESC
     `, [module, filters.date_from, filters.date_to, schools.map(row => row.school_id)]);
     const targets = new Map(targetResult.rows.map(row => [`${row.school_id}:${row.indicator}`, rawNumber(row.target_count)]));
-    const municipalities = await visibleMunicipalities(executor, filters, scope, schools);
+    const municipalities: Array<[number | null, string]> = await visibleMunicipalities(executor, filters, scope, schools, grouped);
+    if (grouped.has(null)) municipalities.push([null, 'Unassigned municipality']);
     const keys = ['accomplished', 'male', 'female', 'other_sex', ...extraDefinitions.map(extra => extra.key)];
     const rawRows = municipalities.map(([id, name]) => {
         const schoolRows = schools.filter(school => school.municipality_id === id);
@@ -265,18 +276,19 @@ async function municipalityDocument(executor: ReportDocumentExecutor, module: Mo
         if (module === 'immunization') {
             for (const indicator of REPORT_TARGET_INDICATORS.immunization) {
                 const values = schoolRows.map(school => targets.get(`${school.school_id}:${indicator}`));
-                row[indicator] = schoolRows.length > 0 && values.every(value => value !== undefined)
+                row[indicator] = !residence && schoolRows.length > 0 && values.every(value => value !== undefined)
                     ? values.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null;
             }
         }
         const targetKey = REPORT_TARGET_INDICATORS[module][0]!;
         const targetValues = schoolRows.map(school => targets.get(`${school.school_id}:${targetKey}`));
-        const complete = module !== 'immunization' && schoolRows.length > 0
+        const complete = !residence && module !== 'immunization' && schoolRows.length > 0
             && targetValues.every(value => value !== undefined);
         row.target = complete ? targetValues.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null;
         row.percentage = complete && Number(row.target) > 0
             ? Math.round((Number(row.accomplished) / Number(row.target)) * 1000) / 10 : null;
-        row.target_status = schoolRows.length === 0 ? 'No schools'
+        row.target_status = residence ? 'Not defined for residence'
+            : id === null ? 'Unassigned geography' : schoolRows.length === 0 ? 'No schools'
             : module === 'immunization' ? 'No percentage defined' : complete ? 'Complete' : 'Incomplete';
         return row;
     });
@@ -284,23 +296,26 @@ async function municipalityDocument(executor: ReportDocumentExecutor, module: Mo
     for (const key of keys) province[key] = rawRows.reduce((sum, row) => sum + Number(row[key] ?? 0), 0);
     if (module === 'immunization') {
         for (const indicator of REPORT_TARGET_INDICATORS.immunization) {
-            province[indicator] = rawRows.length > 0 && rawRows.every(row => row[indicator] !== null)
+            province[indicator] = !residence && rawRows.length > 0 && rawRows.every(row => row[indicator] !== null)
                 ? rawRows.reduce((sum, row) => sum + Number(row[indicator] ?? 0), 0) : null;
         }
     }
-    const targetsComplete = module !== 'immunization' && schools.length > 0
+    const targetsComplete = !residence && module !== 'immunization' && schools.length > 0
         && rawRows.every(row => row.target_status === 'Complete' || row.target_status === 'No schools');
     province.target = targetsComplete ? rawRows.reduce((sum, row) => sum + Number(row.target ?? 0), 0) : null;
     province.percentage = targetsComplete && Number(province.target) > 0
         ? Math.round((Number(province.accomplished) / Number(province.target)) * 1000) / 10 : null;
-    province.target_status = module === 'immunization' ? 'No percentage defined' : targetsComplete ? 'Complete' : 'Incomplete';
+    province.target_status = residence ? 'Not defined for residence'
+        : module === 'immunization' ? 'No percentage defined' : targetsComplete ? 'Complete' : 'Incomplete';
 
     // Suppress a whole municipality row when any positive count is below five.
     // Suppress province numbers too if a hidden municipality could be recovered
     // by subtraction. Apply once here so all four report outputs agree.
-    const numericKeys = ['target', 'percentage', ...keys,
-        ...(module === 'immunization' ? REPORT_TARGET_INDICATORS.immunization : [])];
-    const suppressed = rawRows.map(row => numericKeys.some(key => {
+    const countKeys = [...keys, ...(!residence ? ['target',
+        ...(module === 'immunization' ? REPORT_TARGET_INDICATORS.immunization : [])] : [])];
+    const numericKeys = [...countKeys, ...(!residence ? ['percentage'] : [])];
+    // A percentage below five is not a count of fewer than five people.
+    const suppressed = rawRows.map(row => countKeys.some(key => {
         const value = row[key];
         return typeof value === 'number' && value > 0 && value < 5;
     }));
@@ -312,7 +327,7 @@ async function municipalityDocument(executor: ReportDocumentExecutor, module: Mo
         ? { ...province, ...Object.fromEntries(numericKeys.map(key => [key, 'Suppressed'])) }
         : province);
     const columns: ReportColumn[] = [
-        { key: 'municipality', label: 'Municipality' }, { key: 'target', label: 'Target' },
+        { key: 'municipality', label: residence ? 'Residence municipality' : 'School municipality' }, { key: 'target', label: 'Target' },
         ...(module === 'immunization' ? [
             { key: 'mr_td_grade1', label: 'MR/Td Grade 1 target' },
             { key: 'mr_td_grade7', label: 'MR/Td Grade 7 target' },
@@ -324,12 +339,15 @@ async function municipalityDocument(executor: ReportDocumentExecutor, module: Mo
         ...extraDefinitions.map(({ key, label }) => ({ key, label })),
         { key: 'target_status', label: 'Target status' },
     ];
-    return { module, view: 'municipality', title: `${moduleNames[module]} municipality accomplishment summary`,
+    const basisName = residence ? 'student residence' : 'school location';
+    const targetNote = residence ? 'School targets and coverage percentages are not defined for residence and remain blank.'
+        : module === 'immunization' ? 'Dose-to-cohort coverage percentages are undefined and remain blank.'
+            : 'A percentage is blank until every school in the selected scope has a target for the exact period.';
+    return { module, view: 'municipality', title: `${moduleNames[module]} municipality accomplishment summary by ${basisName}`,
         filters, scope: scopeMeta(scope), columns, rows,
         total_students: suppressed.some(Boolean) ? null : Number(province.accomplished),
         empty: Number(province.accomplished) === 0,
-        note: module === 'immunization' ? 'Dose-to-cohort coverage percentages are undefined and remain blank.'
-            : 'A percentage is blank until every school in the selected scope has a target for the exact period.' };
+        note: `Grouped by ${basisName}. ${targetNote} Positive counts below five are suppressed, along with the municipality row and province total. Records without a municipality appear under Unassigned municipality.` };
 }
 
 async function masterlistDocument(executor: ReportDocumentExecutor, module: ModuleSlug,
@@ -338,7 +356,11 @@ async function masterlistDocument(executor: ReportDocumentExecutor, module: Modu
     const parts = buildReportQueryParts(module, filters, scope);
     const datePosition = parts.params.length + 1;
     const limitPosition = parts.params.length + 2;
-    const columns = [...commonColumns, ...definition.columns];
+    const residence = filters.geography_basis === 'residence';
+    const columns = [...commonColumns.map(column => column.key === 'municipality'
+        ? { ...column, label: residence ? 'Residence municipality' : 'School municipality' }
+        : column.key === 'barangay' ? { ...column, label: residence ? 'Residence barangay' : 'School barangay' } : column),
+        ...definition.columns];
     const dataKeys = columns.filter(column => column.key !== 'row_no').map(column => column.key);
     const result = await executor.query<Record<string, unknown>>(`
         SELECT ${dataKeys.join(', ')} FROM (
@@ -366,10 +388,10 @@ async function masterlistDocument(executor: ReportDocumentExecutor, module: Modu
         }
         return resultRow;
     });
-    return { module, view: 'masterlist', title: `${moduleNames[module]} school and section student masterlist`,
+    return { module, view: 'masterlist', title: `${moduleNames[module]} school and section student masterlist by ${residence ? 'student residence' : 'school location'}`,
         filters, scope: scopeMeta(scope), columns, rows,
         total_students: rows.length, empty: rows.length === 0,
-        note: 'One row per student shows the latest module record within the selected period. Blank values were not recorded.' };
+        note: `One row per student shows the latest module record within the selected period. Municipality and barangay refer to ${residence ? 'the student\'s residence' : 'the school location'}. Blank values were not recorded.` };
 }
 
 export async function getReportDocument(executor: ReportDocumentExecutor, module: ModuleSlug,
@@ -377,4 +399,23 @@ export async function getReportDocument(executor: ReportDocumentExecutor, module
     return view === 'municipality'
         ? municipalityDocument(executor, module, filters, scope)
         : masterlistDocument(executor, module, filters, scope);
+}
+
+/** Keep school lists, clinical counts and targets on the same database snapshot. */
+export async function getConsistentReportDocument(pool: {
+    connect: () => Promise<ReportDocumentExecutor & { release: () => void }>;
+}, module: ModuleSlug, view: ReportView, filters: NormalizedReportFilters,
+scope: ReportSchoolScope): Promise<ReportDocument> {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+        const document = await getReportDocument(client, module, view, filters, scope);
+        await client.query('COMMIT');
+        return document;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
 }

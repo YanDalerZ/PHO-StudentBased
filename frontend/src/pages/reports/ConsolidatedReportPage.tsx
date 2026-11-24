@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FileDown, FileSpreadsheet, Filter, Loader2, Printer, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { hasModulePermission } from '../../lib/access';
 import { downloadReportExport, getBarangays, getConsolidatedReport, getMunicipalities, getSchools, recordReportPrint } from '../../services/api';
 import type { Barangay, ModuleSlug, Municipality, School } from '../../types';
-import type { ReportDocument, ReportRequestFilters, ReportView } from '../../types/reports';
+import type { ReportDocument, ReportGeographyBasis, ReportRequestFilters, ReportView } from '../../types/reports';
 
 const names: Record<ModuleSlug, string> = {
   'patient-info': 'Patient Information', 'oral-health': 'Oral Health',
@@ -33,6 +33,7 @@ export default function ConsolidatedReportPage({ moduleSlug }: { moduleSlug: Mod
   const canReport = hasModulePermission(effectiveAccess, moduleSlug, 'can_report');
   const canManageTargets = hasModulePermission(effectiveAccess, moduleSlug, 'can_manage_targets');
   const [view, setView] = useState<ReportView>(canReport ? 'municipality' : 'masterlist');
+  const [geographyBasis, setGeographyBasis] = useState<ReportGeographyBasis>('school');
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [barangays, setBarangays] = useState<Barangay[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
@@ -49,48 +50,78 @@ export default function ConsolidatedReportPage({ moduleSlug }: { moduleSlug: Mod
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reportRequest = useRef(0);
+  const geographyRequest = useRef(0);
 
   const filters = useMemo<ReportRequestFilters>(() => ({
+    geography_basis: geographyBasis,
     ...(municipalityId ? { municipality_id: Number(municipalityId) } : {}),
     ...(barangayId ? { barangay_id: Number(barangayId) } : {}),
     ...(schoolId ? { school_id: Number(schoolId) } : {}),
     ...(periodMode === 'named' ? { period } : { date_from: dateFrom, date_to: dateTo }),
-  }), [municipalityId, barangayId, schoolId, periodMode, period, dateFrom, dateTo]);
+  }), [geographyBasis, municipalityId, barangayId, schoolId, periodMode, period, dateFrom, dateTo]);
 
   useEffect(() => {
-    getMunicipalities().then(setMunicipalities).catch(() => toast.error('Municipalities could not be loaded.'));
+    let active = true;
+    getMunicipalities().then(items => { if (active) setMunicipalities(items); })
+      .catch(() => { if (active) toast.error('Municipalities could not be loaded.'); });
+    return () => { active = false; reportRequest.current++; geographyRequest.current++; };
   }, []);
 
+  const invalidateReport = () => {
+    reportRequest.current++;
+    setDocument(null); setAppliedFilters(null); setError(null); setBusy(false);
+  };
+  const changeGeographyBasis = (value: ReportGeographyBasis) => {
+    invalidateReport(); geographyRequest.current++;
+    setGeographyBasis(value); setMunicipalityId(''); setBarangayId(''); setSchoolId('');
+    setBarangays([]); setSchools([]);
+  };
   const loadBarangays = async (value: string) => {
+    invalidateReport();
+    const request = ++geographyRequest.current;
     setMunicipalityId(value); setBarangayId(''); setSchoolId(''); setBarangays([]); setSchools([]);
-    if (value) try { setBarangays(await getBarangays(value)); }
-    catch { toast.error('Barangays could not be loaded.'); }
+    if (value) try {
+      const found = await getBarangays(value);
+      if (request === geographyRequest.current) setBarangays(found);
+    } catch { if (request === geographyRequest.current) toast.error('Barangays could not be loaded.'); }
   };
   const loadSchools = async (value: string) => {
+    invalidateReport();
+    const request = ++geographyRequest.current;
     setBarangayId(value); setSchoolId(''); setSchools([]);
-    if (value) try {
+    if (value && geographyBasis === 'school') try {
       const found = await getSchools(value);
+      if (request !== geographyRequest.current) return;
       setSchools(user?.portal_role === 'school_staff'
         ? found.filter(item => effectiveAccess?.assignedSchoolIds.includes(Number(item.id))) : found);
-    } catch { toast.error('Schools could not be loaded.'); }
+    } catch { if (request === geographyRequest.current) toast.error('Schools could not be loaded.'); }
   };
   const apply = async () => {
     if (periodMode === 'range' && (!dateFrom || !dateTo)) { setError('Select both dates.'); return; }
+    const request = ++reportRequest.current;
     setBusy(true); setError(null);
     try {
       const result = await getConsolidatedReport(moduleSlug, filters, view);
+      if (request !== reportRequest.current) return;
       setDocument(result); setAppliedFilters(filters);
       setAppliedScope([
+        geographyBasis === 'school' ? 'School location' : 'Student residence',
         municipalities.find(item => String(item.id) === municipalityId)?.name ?? 'All municipalities',
         barangays.find(item => String(item.id) === barangayId)?.name ?? 'All barangays',
         schools.find(item => String(item.id) === schoolId)?.name ?? 'All authorized schools',
       ].join(' · '));
-    } catch (cause) { setDocument(null); setError(message(cause)); }
-    finally { setBusy(false); }
+    } catch (cause) {
+      if (request === reportRequest.current) { setDocument(null); setError(message(cause)); }
+    } finally { if (request === reportRequest.current) setBusy(false); }
   };
   const print = async () => {
     if (!document || !appliedFilters) return;
-    try { await recordReportPrint(moduleSlug, appliedFilters, document.view); window.print(); }
+    const request = reportRequest.current;
+    try {
+      await recordReportPrint(moduleSlug, appliedFilters, document.view);
+      if (request === reportRequest.current) window.print();
+    }
     catch (cause) { toast.error(message(cause)); }
   };
   const download = async (format: 'csv' | 'xlsx') => {
@@ -105,28 +136,35 @@ export default function ConsolidatedReportPage({ moduleSlug }: { moduleSlug: Mod
     <header className="report-controls rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-7">
       <p className="text-xs font-bold uppercase tracking-widest text-teal-600">Consolidated reporting</p>
       <h1 className="mt-1 text-2xl font-bold">{names[moduleSlug]}</h1>
-      <p className="mt-2 text-sm text-slate-500">Municipality accomplishment and school and section student masterlist.</p>
-      {canManageTargets && <Link to={`${user?.portal_role === 'superuser' ? '/superuser' : '/teacher'}/report-targets/${moduleSlug}`}
+      <p className="mt-2 text-sm text-slate-500">View municipality totals by school location or student residence, with the matching student masterlist.</p>
+      {canManageTargets && geographyBasis === 'school' && <Link to={`${user?.portal_role === 'superuser' ? '/superuser' : '/teacher'}/report-targets/${moduleSlug}`}
         className="mt-3 inline-block text-sm font-semibold text-teal-700 underline">Manage targets</Link>}
     </header>
     <section className="report-controls rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <h2 className="mb-4 flex items-center gap-2 text-sm font-bold"><Filter size={16} /> Report filters</h2>
-      <div className="grid gap-4 md:grid-cols-4">
-        <label className="text-xs font-semibold">Report view<select value={view} onChange={event => { setView(event.target.value as ReportView); setDocument(null); }} className={input}>
+      <div className="grid gap-4 md:grid-cols-3">
+        <label className="text-xs font-semibold">Municipality basis<select value={geographyBasis} onChange={event => changeGeographyBasis(event.target.value as ReportGeographyBasis)} className={input}>
+          <option value="school">School location</option><option value="residence">Student residence</option>
+        </select></label>
+        <label className="text-xs font-semibold">Report view<select value={view} onChange={event => { invalidateReport(); setView(event.target.value as ReportView); }} className={input}>
           {canReport && <option value="municipality">Municipality summary</option>}{canExport && <option value="masterlist">Student masterlist</option>}
         </select></label>
-        <label className="text-xs font-semibold">Municipality<select value={municipalityId} onChange={event => void loadBarangays(event.target.value)} className={input}><option value="">All municipalities</option>{municipalities.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label className="text-xs font-semibold">Barangay<select value={barangayId} onChange={event => void loadSchools(event.target.value)} disabled={!municipalityId} className={input}><option value="">All barangays</option>{barangays.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label className="text-xs font-semibold">School<select value={schoolId} onChange={event => setSchoolId(event.target.value)} disabled={!barangayId} className={input}><option value="">All authorized schools</option>{schools.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className="text-xs font-semibold">{geographyBasis === 'school' ? 'School municipality' : 'Home municipality'}<select value={municipalityId} onChange={event => void loadBarangays(event.target.value)} className={input}><option value="">All municipalities</option>{municipalities.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className="text-xs font-semibold">{geographyBasis === 'school' ? 'School barangay' : 'Home barangay'}<select value={barangayId} onChange={event => void loadSchools(event.target.value)} disabled={!municipalityId} className={input}><option value="">All barangays</option>{barangays.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        {geographyBasis === 'school' && <label className="text-xs font-semibold">School<select value={schoolId} onChange={event => { invalidateReport(); setSchoolId(event.target.value); }} disabled={!barangayId} className={input}><option value="">All authorized schools</option>{schools.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
       </div>
+      <p className="mt-3 text-xs text-slate-500">{geographyBasis === 'school'
+        ? 'Groups students by their current school address. Targets belong to schools and the exact reporting period.'
+        : 'Groups students by their saved home address across all authorized schools. School targets and accomplishment percentages do not apply to residence totals.'}</p>
       <div className="mt-4 grid gap-4 md:grid-cols-[12rem_1fr_1fr_auto] md:items-end">
-        <label className="text-xs font-semibold">Period type<select value={periodMode} onChange={event => setPeriodMode(event.target.value as 'named' | 'range')} className={input}><option value="named">Named period</option><option value="range">Custom date range</option></select></label>
-        {periodMode === 'named' ? <label className="text-xs font-semibold md:col-span-2">Period<input value={period} onChange={event => setPeriod(event.target.value.toUpperCase())} placeholder="2026-10, 2026-Q4, or 2026-SY-R1" className={input} /></label>
-          : <><label className="text-xs font-semibold">From<input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} className={input} /></label><label className="text-xs font-semibold">To<input type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} className={input} /></label></>}
+        <label className="text-xs font-semibold">Period type<select value={periodMode} onChange={event => { invalidateReport(); setPeriodMode(event.target.value as 'named' | 'range'); }} className={input}><option value="named">Named period</option><option value="range">Custom date range</option></select></label>
+        {periodMode === 'named' ? <label className="text-xs font-semibold md:col-span-2">Period<input value={period} onChange={event => { invalidateReport(); setPeriod(event.target.value.toUpperCase()); }} placeholder="2026-10, 2026-Q4, or 2026-SY-R1" className={input} /></label>
+          : <><label className="text-xs font-semibold">From<input type="date" value={dateFrom} onChange={event => { invalidateReport(); setDateFrom(event.target.value); }} className={input} /></label><label className="text-xs font-semibold">To<input type="date" value={dateTo} onChange={event => { invalidateReport(); setDateTo(event.target.value); }} className={input} /></label></>}
         <button type="button" onClick={() => void apply()} disabled={busy} className={`${button} bg-slate-900 text-white`}>
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Apply
+          {busy ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Apply / Refresh
         </button>
       </div>
+      <p className="mt-3 text-xs text-slate-500">Dates refer to the examination, treatment, immunization or screening date; Patient Information uses its registration date. Click Apply / Refresh after saving or correcting records.</p>
     </section>
     {error && <p role="alert" className="report-controls rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{error}</p>}
     {document && <div className="report-controls flex flex-wrap gap-2">

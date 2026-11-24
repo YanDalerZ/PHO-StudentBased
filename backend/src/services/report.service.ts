@@ -10,8 +10,10 @@ export const REPORT_EXPORT_MAX_DATE_SPAN_DAYS = 365;
 
 export type ReportPurpose = 'preview' | 'export';
 export type ReportPeriodSource = 'default' | 'named' | 'explicit';
+export type ReportGeographyBasis = 'school' | 'residence';
 
 export interface NormalizedReportFilters {
+    geography_basis?: ReportGeographyBasis;
     municipality_id?: number;
     barangay_id?: number;
     school_id?: number;
@@ -70,6 +72,7 @@ const positiveIntegerParam = z.union([
 ]);
 
 export const reportFiltersSchema = z.object({
+    geography_basis: z.enum(['school', 'residence']).optional(),
     municipality_id: positiveIntegerParam.optional(),
     barangay_id: positiveIntegerParam.optional(),
     school_id: positiveIntegerParam.optional(),
@@ -220,6 +223,7 @@ export function normalizeReportFilters(
     }
 
     return {
+        ...(parsed.data.geography_basis === undefined ? {} : { geography_basis: parsed.data.geography_basis }),
         ...(parsed.data.municipality_id === undefined ? {} : { municipality_id: parsed.data.municipality_id }),
         ...(parsed.data.barangay_id === undefined ? {} : { barangay_id: parsed.data.barangay_id }),
         ...(parsed.data.school_id === undefined ? {} : { school_id: parsed.data.school_id }),
@@ -263,23 +267,23 @@ export function resolveReportSchoolScope(
 
 const reportFromSql: Record<ModuleSlug, { fromSql: string; dateColumn: string }> = {
     'patient-info': {
-        fromSql: 'FROM PATIENT_INFO pi JOIN STUDENTS s ON pi.student_id = s.id JOIN SCHOOLS sc ON s.school_id = sc.id JOIN BARANGAYS b ON sc.barangay_id = b.id JOIN MUNICIPALITIES m ON b.municipality_id = m.id',
+        fromSql: 'FROM PATIENT_INFO pi JOIN STUDENTS s ON pi.student_id = s.id',
         dateColumn: 'pi.created_at::date',
     },
     'oral-health': {
-        fromSql: 'FROM ORAL_HEALTH oh JOIN STUDENTS s ON oh.student_id = s.id JOIN SCHOOLS sc ON s.school_id = sc.id JOIN BARANGAYS b ON sc.barangay_id = b.id JOIN MUNICIPALITIES m ON b.municipality_id = m.id',
+        fromSql: 'FROM ORAL_HEALTH oh JOIN STUDENTS s ON oh.student_id = s.id',
         dateColumn: 'oh.date_examined',
     },
     deworming: {
-        fromSql: 'FROM DEWORMING d JOIN STUDENTS s ON d.student_id = s.id JOIN SCHOOLS sc ON s.school_id = sc.id JOIN BARANGAYS b ON sc.barangay_id = b.id JOIN MUNICIPALITIES m ON b.municipality_id = m.id',
+        fromSql: 'FROM DEWORMING d JOIN STUDENTS s ON d.student_id = s.id',
         dateColumn: 'd.date_dewormed',
     },
     immunization: {
-        fromSql: 'FROM IMMUNIZATION imm JOIN STUDENTS s ON imm.student_id = s.id JOIN SCHOOLS sc ON s.school_id = sc.id JOIN BARANGAYS b ON sc.barangay_id = b.id JOIN MUNICIPALITIES m ON b.municipality_id = m.id',
+        fromSql: 'FROM IMMUNIZATION imm JOIN STUDENTS s ON imm.student_id = s.id',
         dateColumn: 'imm.immunization_date',
     },
     'vital-signs': {
-        fromSql: 'FROM VITAL_SIGNS vs JOIN STUDENTS s ON vs.student_id = s.id JOIN SCHOOLS sc ON s.school_id = sc.id JOIN BARANGAYS b ON sc.barangay_id = b.id JOIN MUNICIPALITIES m ON b.municipality_id = m.id',
+        fromSql: 'FROM VITAL_SIGNS vs JOIN STUDENTS s ON vs.student_id = s.id',
         dateColumn: 'vs.date_checked',
     },
 };
@@ -290,6 +294,11 @@ export function buildReportQueryParts(
     scope: ReportSchoolScope,
 ): ReportQueryParts {
     const config = reportFromSql[moduleSlug];
+    // School assignments remain the authorization boundary in both views.
+    // A student's residence is independent of the location of their school.
+    const geographyJoin = filters.geography_basis === 'residence'
+        ? 'LEFT JOIN SCHOOLS sc ON s.school_id = sc.id LEFT JOIN MUNICIPALITIES m ON s.municipality_id = m.id LEFT JOIN BARANGAYS b ON s.barangay_id = b.id AND b.municipality_id = m.id'
+        : 'LEFT JOIN SCHOOLS sc ON s.school_id = sc.id LEFT JOIN BARANGAYS b ON sc.barangay_id = b.id LEFT JOIN MUNICIPALITIES m ON b.municipality_id = m.id';
     const conditions: string[] = [];
     const params: unknown[] = [];
     const add = (condition: (position: number) => string, value: unknown): void => {
@@ -312,7 +321,7 @@ export function buildReportQueryParts(
     }
 
     return {
-        fromSql: config.fromSql,
+        fromSql: `${config.fromSql} ${geographyJoin}`,
         whereSql: `WHERE ${conditions.join(' AND ')}`,
         params,
     };
@@ -324,16 +333,27 @@ interface ReportQueryExecutor {
 
 export async function validateReportGeography(
     executor: ReportQueryExecutor,
-    filters: Pick<NormalizedReportFilters, 'municipality_id' | 'barangay_id' | 'school_id'>,
+    filters: Pick<NormalizedReportFilters, 'municipality_id' | 'barangay_id' | 'school_id' | 'geography_basis'>,
 ): Promise<void> {
+    if (filters.geography_basis === 'residence' && filters.school_id !== undefined) {
+        const school = await executor.query('SELECT id FROM SCHOOLS WHERE id = $1', [filters.school_id]);
+        if (school.rows.length === 0) {
+            throw new ReportContractError('VALIDATION_ERROR', 400, 'The selected school does not exist.');
+        }
+        // A school may be in a different municipality from its students' homes.
+        return validateReportGeography(executor, {
+            ...(filters.municipality_id === undefined ? {} : { municipality_id: filters.municipality_id }),
+            ...(filters.barangay_id === undefined ? {} : { barangay_id: filters.barangay_id }),
+        });
+    }
     let sql: string | undefined;
     let params: unknown[] = [];
     if (filters.school_id !== undefined) {
         sql = `
             SELECT sc.id
             FROM SCHOOLS sc
-            JOIN BARANGAYS b ON sc.barangay_id = b.id
-            JOIN MUNICIPALITIES m ON b.municipality_id = m.id
+            LEFT JOIN BARANGAYS b ON sc.barangay_id = b.id
+            LEFT JOIN MUNICIPALITIES m ON b.municipality_id = m.id
             WHERE sc.id = $1
               AND ($2::int IS NULL OR b.id = $2)
               AND ($3::int IS NULL OR m.id = $3)

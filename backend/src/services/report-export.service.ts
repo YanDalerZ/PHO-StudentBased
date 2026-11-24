@@ -1,6 +1,6 @@
 import pool from '../database/db.js';
 import type { ModuleSlug } from '../types/auth.types.js';
-import { getReportDocument, type ReportDocument, type ReportView } from './report-document.service.js';
+import { getConsistentReportDocument, type ReportDocument, type ReportView } from './report-document.service.js';
 import type { NormalizedReportFilters, ReportSchoolScope } from './report.service.js';
 import { createXlsxWorkbook } from './xlsx-writer.service.js';
 
@@ -34,6 +34,7 @@ function documentRows(document: ReportDocument): Array<Array<string | number | b
         ['Report', document.title],
         ['Reporting period', `${document.filters.date_from} to ${document.filters.date_to}`],
         ['Geographic scope', document.scope.mode === 'province' ? 'Province' : 'Authorized schools'],
+        ['Municipality and barangay basis', document.filters.geography_basis === 'residence' ? 'Student residence' : 'School location'],
         ['Municipality filter', document.filters.municipality_id ?? 'All'],
         ['Barangay filter', document.filters.barangay_id ?? 'All'],
         ['School filter', document.filters.school_id ?? 'All authorized'],
@@ -55,14 +56,14 @@ export async function generateDirectReportExport(input: {
     if (!moduleResult.rows[0]?.is_active) {
         throw new ReportExportError('MODULE_DISABLED', 422, 'The selected module is unavailable.');
     }
-    const document = await getReportDocument(pool, input.moduleSlug, input.view, input.filters, input.scope);
+    const document = await getConsistentReportDocument(pool, input.moduleSlug, input.view, input.filters, input.scope);
     const rows = documentRows(document);
     const data = input.format === 'csv'
         ? Buffer.from(`\ufeff${rows.map(row => row.map(csvCell).join(',')).join('\r\n')}\r\n`, 'utf8')
         : createXlsxWorkbook([{ name: 'Report', rows }]);
     return {
         data,
-        filename: `${input.moduleSlug}-${input.view}-${input.filters.date_from}-to-${input.filters.date_to}.${input.format}`,
+        filename: `${input.moduleSlug}-${input.view}-${input.filters.geography_basis ?? 'school'}-${input.filters.date_from}-to-${input.filters.date_to}.${input.format}`,
         contentType: input.format === 'csv' ? 'text/csv; charset=utf-8'
             : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         rowCount: document.rows.length,

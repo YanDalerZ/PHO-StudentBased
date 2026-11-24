@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import pool from '../database/db.js';
 import { z } from 'zod';
 import { AuditService } from '../services/AuditService.js';
+import { resolveStudentResidence, validateStudentResidence } from '../services/student-residence.service.js';
 
 export const studentPayloadSchema = z.object({
     // I. Personal Information
@@ -432,13 +433,9 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
         const dobStr = formatDate(validatedData.date_of_birth);
         const motherDobStr = validatedData.mother_birthdate ? formatDate(validatedData.mother_birthdate) : null;
 
-        const municipalityId = validatedData.municipality_id
-            ? Number(validatedData.municipality_id)
-            : validatedData.municipality ? Number(validatedData.municipality) || null : null;
-
-        const barangayId = validatedData.barangay_id
-            ? Number(validatedData.barangay_id)
-            : validatedData.barangay ? Number(validatedData.barangay) || null : null;
+        const residence = resolveStudentResidence(validatedData);
+        const municipalityId = residence.municipality_id;
+        const barangayId = residence.barangay_id;
 
         const schoolId = validatedData.school_id ? Number(validatedData.school_id) || null : null;
         if (schoolId) {
@@ -491,6 +488,7 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+            await validateStudentResidence(client, residence);
             const result = await client.query(studentQuery, [
                 validatedData.student_lrn,
                 validatedData.first_name,
@@ -721,17 +719,12 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
             ? (validatedData.mother_birthdate ? formatDate(validatedData.mother_birthdate) : null)
             : existing.mother_birthdate;
 
-        const municipalityId = validatedData.municipality_id !== undefined
-            ? (validatedData.municipality_id ? Number(validatedData.municipality_id) : null)
-            : validatedData.municipality !== undefined
-                ? (validatedData.municipality ? Number(validatedData.municipality) || null : null)
-                : existing.municipality_id;
-
-        const barangayId = validatedData.barangay_id !== undefined
-            ? (validatedData.barangay_id ? Number(validatedData.barangay_id) : null)
-            : validatedData.barangay !== undefined
-                ? (validatedData.barangay ? Number(validatedData.barangay) || null : null)
-                : existing.barangay_id;
+        const residence = resolveStudentResidence(validatedData, {
+            municipality_id: existing.municipality_id ?? null,
+            barangay_id: existing.barangay_id ?? null,
+        });
+        const municipalityId = residence.municipality_id;
+        const barangayId = residence.barangay_id;
 
         const schoolId = validatedData.school_id !== undefined
             ? (validatedData.school_id ? Number(validatedData.school_id) : null)
@@ -827,6 +820,7 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+            await validateStudentResidence(client, residence);
             const result = await client.query(updateQuery, [
                 validatedData.student_lrn ?? existing.student_lrn,
                 validatedData.first_name ?? existing.first_name,
