@@ -1,6 +1,9 @@
 import type { ModuleSlug } from './index';
 
+export type ReportGeographyBasis = 'school' | 'residence';
+
 export interface ReportRequestFilters {
+  geography_basis?: ReportGeographyBasis;
   municipality_id?: number;
   barangay_id?: number;
   school_id?: number;
@@ -22,6 +25,7 @@ export type ReportBreakdownRow = Record<string, string | number | boolean | null
 export interface ConsolidatedReportPreview {
   module: ModuleSlug;
   filters: {
+    geography_basis?: ReportGeographyBasis;
     municipality_id?: number;
     barangay_id?: number;
     school_id?: number;

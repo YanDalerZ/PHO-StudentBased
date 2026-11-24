@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import pool from '../database/db.js';
 import { AuditService } from '../services/AuditService.js';
-import { getReportDocument, type ReportView } from '../services/report-document.service.js';
+import { getConsistentReportDocument, type ReportView } from '../services/report-document.service.js';
 import {
     normalizeReportFilters,
     ReportContractError,
@@ -41,7 +41,7 @@ async function getDocumentPreview(req: Request, res: Response, view: ReportView)
             filters.school_id,
         );
         await validateReportGeography(pool, filters);
-        const preview = await getReportDocument(pool, moduleSlug, view, filters, scope);
+        const preview = await getConsistentReportDocument(pool, moduleSlug, view, filters, scope);
 
         await AuditService.logEvent({
             actor_id: user.id,
