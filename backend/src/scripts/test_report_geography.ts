@@ -46,7 +46,7 @@ await assert.rejects(validateReportGeography({ query: async () => ({ rows: [] })
 
 class MemoryReportExecutor implements ReportDocumentExecutor {
     readonly calls: string[] = [];
-    constructor(readonly residence = false, readonly small = false) {}
+    constructor(readonly residence = false, readonly count = 20) {}
     async query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string): Promise<{ rows: T[] }> {
         this.calls.push(sql);
         let rows: Array<Record<string, unknown>>;
@@ -54,10 +54,10 @@ class MemoryReportExecutor implements ReportDocumentExecutor {
         else if (sql.includes('SELECT sc.id AS school_id')) rows = [{ school_id: 11, municipality_id: 1, municipality: 'School town' }];
         else if (sql.includes('COUNT(DISTINCT s.id) FILTER')) {
             assert.equal(sql.includes('s.municipality_id = m.id'), this.residence);
-            const count = this.small ? 2 : 20;
+            const count = this.count;
             rows = [{ municipality_id: this.residence ? 2 : 1,
                 municipality: this.residence ? 'Home town' : 'School town',
-                accomplished: count, male: count / 2, female: count / 2, other_sex: 0,
+                accomplished: count, male: Math.floor(count / 2), female: Math.ceil(count / 2), other_sex: 0,
                 examinations: count, rpoc_complete: count, oral_screening: count,
                 dmft_known: count, dmft_tooth_total: count },
             { municipality_id: null, municipality: null, accomplished: 10, male: 5, female: 5,
@@ -111,11 +111,24 @@ const restrictedResidence = await getReportDocument(new MemoryReportExecutor(tru
     residenceFilters, { mode: 'restricted', schoolIds: [11] });
 assert.equal(restrictedResidence.rows[0]?.municipality, 'Home town', 'Residence rows must not use the school municipality list.');
 
-const smallResidence = await getReportDocument(new MemoryReportExecutor(true, true), 'oral-health', 'municipality',
-    residenceFilters, { mode: 'restricted', schoolIds: [11] });
-assert.equal(smallResidence.rows[0]?.accomplished, 'Suppressed');
-assert.equal(smallResidence.rows.at(-1)?.accomplished, 'Suppressed', 'Province totals must protect true small counts.');
-assert.equal(smallResidence.rows[0]?.target, null, 'Undefined residence targets remain undefined when counts are suppressed.');
+for (const module of modules) {
+    for (const isResidence of [false, true]) {
+        const filters = isResidence ? residenceFilters : schoolFilters;
+        for (const count of [1, 2, 3, 4]) {
+            const summary = await getReportDocument(new MemoryReportExecutor(isResidence, count), module, 'municipality',
+                filters, { mode: 'restricted', schoolIds: [11] });
+            const town = summary.rows.find(row => row.municipality === (isResidence ? 'Home town' : 'School town'));
+            assert.equal(town?.accomplished, count);
+            assert.equal(town?.male, Math.floor(count / 2));
+            assert.equal(town?.female, Math.ceil(count / 2));
+            if (isResidence) assert.equal(town?.target, null);
+            assert.equal(summary.rows.at(-1)?.accomplished, count + 10);
+            assert.equal(summary.total_students, count + 10);
+            assert.equal(summary.empty, false);
+            assert.equal(summary.rows.some(row => Object.values(row).includes('Suppressed')), false);
+        }
+    }
+}
 
 for (const module of modules) {
     const summary = await getReportDocument(new MemoryReportExecutor(true), module, 'municipality',
@@ -156,4 +169,4 @@ await assert.rejects(getConsistentReportDocument({ connect: async () => ({
 assert.equal(failedCalls.at(-1), 'ROLLBACK');
 assert.equal(released, true);
 
-console.log('Report geography, school scope, unassigned totals, suppression and snapshot checks passed (no database).');
+console.log('Report geography, school scope, unassigned totals, small counts and snapshot checks passed (no database).');

@@ -229,12 +229,17 @@ try {
                 const file = Buffer.from(await response.arrayBuffer());
                 if (format === 'csv') {
                     const lines = file.toString('utf8').replace(/^\ufeff/, '').trimEnd().split('\r\n');
-                    assert.equal(lines.length - 9, targetDocument.rows.length, `${module} ${view} CSV row parity`);
-                    assert.ok(lines[8]?.includes(targetDocument.columns[0]!.label), `${module} CSV column parity`);
+                    const header = targetDocument.columns.map(column => `"${column.label.replaceAll('"', '""')}"`).join(',');
+                    const headerIndex = lines.indexOf(header);
+                    assert.ok(headerIndex >= 0, `${module} CSV column parity`);
+                    assert.equal(lines.length - headerIndex - 1, targetDocument.rows.length, `${module} ${view} CSV row parity`);
                     if (view === 'masterlist') assert.match(file.toString('utf8'), /'=PHO_FORMULA/);
                 } else {
                     const sheet = zipEntry(file, 'xl/worksheets/sheet1.xml');
-                    assert.equal((sheet.match(/<row r="\d+">/g) ?? []).length - 9,
+                    const sheetRows = sheet.match(/<row r="\d+">[\s\S]*?<\/row>/g) ?? [];
+                    const headerIndex = sheetRows.findIndex(row => row.includes(`>${targetDocument.columns[0]!.label}</t>`));
+                    assert.ok(headerIndex >= 0, `${module} XLSX column parity`);
+                    assert.equal(sheetRows.length - headerIndex - 1,
                         targetDocument.rows.length, `${module} ${view} XLSX row parity`);
                     assert.ok(sheet.includes(targetDocument.columns[0]!.label));
                     if (view === 'masterlist') assert.match(sheet, /&apos;=PHO_FORMULA/);
@@ -298,11 +303,11 @@ try {
     `, [`QA-small-${stamp}`, smallSchool, admin.id, smallMunicipality, smallBarangay])).rows[0]!.id;
     await pool.query("INSERT INTO PATIENT_INFO (student_id, recorded_by, created_at) VALUES ($1, $2, '2026-08-10')",
         [smallStudent, admin.id]);
-    const suppressed = await document(base, 'patient-info', 'municipality', superuser,
+    const smallSummary = await document(base, 'patient-info', 'municipality', superuser,
         `?period=2026-08&municipality_id=${smallMunicipality}`);
-    assert.equal(suppressed.rows[0]?.accomplished, 'Suppressed');
-    assert.equal(suppressed.rows[1]?.accomplished, 'Suppressed');
-    assert.equal(suppressed.total_students, null);
+    assert.equal(smallSummary.rows[0]?.accomplished, 1);
+    assert.equal(smallSummary.rows.at(-1)?.accomplished, 1);
+    assert.equal(smallSummary.total_students, 1);
     const allMunicipalities = await document(base, 'patient-info', 'municipality', superuser,
         '?period=2026-08');
     const municipalityCount = (await pool.query<{ count: number }>(
