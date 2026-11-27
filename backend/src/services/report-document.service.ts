@@ -308,24 +308,7 @@ async function municipalityDocument(executor: ReportDocumentExecutor, module: Mo
     province.target_status = residence ? 'Not defined for residence'
         : module === 'immunization' ? 'No percentage defined' : targetsComplete ? 'Complete' : 'Incomplete';
 
-    // Suppress a whole municipality row when any positive count is below five.
-    // Suppress province numbers too if a hidden municipality could be recovered
-    // by subtraction. Apply once here so all four report outputs agree.
-    const countKeys = [...keys, ...(!residence ? ['target',
-        ...(module === 'immunization' ? REPORT_TARGET_INDICATORS.immunization : [])] : [])];
-    const numericKeys = [...countKeys, ...(!residence ? ['percentage'] : [])];
-    // A percentage below five is not a count of fewer than five people.
-    const suppressed = rawRows.map(row => countKeys.some(key => {
-        const value = row[key];
-        return typeof value === 'number' && value > 0 && value < 5;
-    }));
-    const rows: Array<Record<string, string | number | null>> = rawRows.map((row, index) => {
-        if (!suppressed[index]) return row;
-        return { ...row, ...Object.fromEntries(numericKeys.map(key => [key, 'Suppressed'])) };
-    });
-    rows.push(suppressed.some(Boolean)
-        ? { ...province, ...Object.fromEntries(numericKeys.map(key => [key, 'Suppressed'])) }
-        : province);
+    const rows: Array<Record<string, string | number | null>> = [...rawRows, province];
     const columns: ReportColumn[] = [
         { key: 'municipality', label: residence ? 'Residence municipality' : 'School municipality' }, { key: 'target', label: 'Target' },
         ...(module === 'immunization' ? [
@@ -345,9 +328,9 @@ async function municipalityDocument(executor: ReportDocumentExecutor, module: Mo
             : 'A percentage is blank until every school in the selected scope has a target for the exact period.';
     return { module, view: 'municipality', title: `${moduleNames[module]} municipality accomplishment summary by ${basisName}`,
         filters, scope: scopeMeta(scope), columns, rows,
-        total_students: suppressed.some(Boolean) ? null : Number(province.accomplished),
+        total_students: Number(province.accomplished),
         empty: Number(province.accomplished) === 0,
-        note: `Grouped by ${basisName}. ${targetNote} Positive counts below five are suppressed, along with the municipality row and province total. Records without a municipality appear under Unassigned municipality.` };
+        note: `Grouped by ${basisName}. ${targetNote} Records without a municipality appear under Unassigned municipality.` };
 }
 
 async function masterlistDocument(executor: ReportDocumentExecutor, module: ModuleSlug,
