@@ -10,10 +10,14 @@ import { authenticate } from '../middleware/auth.js';
 import { requirePortalRole, requirePermission, requireSchoolScope } from '../middleware/rbac.js';
 import { resolveSchoolScope } from '../middleware/resolveScope.js';
 import { requireActiveModule } from '../middleware/activeModule.js';
+import { getStudentDashboard, requireDashboardView } from '../controllers/StudentDashboardController.js';
 
 import { getStudentModuleContext, requireContextPermission } from '../controllers/ModuleContextController.js';
 
 const router = Router();
+
+router.get('/dashboard-summary', authenticate, requirePortalRole('school_staff', 'superuser'),
+    requireDashboardView, getStudentDashboard);
 
 router.get(
     '/:id/module-context',

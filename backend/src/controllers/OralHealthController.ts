@@ -3,6 +3,13 @@ import { z } from 'zod';
 import pool from '../database/db.js';
 import { AuditService } from '../services/AuditService.js';
 import {
+    dietarySocialHabitsSchema,
+    medicalHistorySchema,
+    validatePregnancyTrimester,
+    type OralHealthDietarySocialHabits,
+    type OralHealthMedicalHistory,
+} from '../types/oralHealthQuestionnaire.js';
+import {
     dashboardFiltersSchema,
     validateGeographyHierarchy,
     getOralHealthDashboard as fetchOralHealthDashboard,
@@ -14,6 +21,9 @@ export interface OralHealthDbRow {
     student_id: number;
     date_examined: string | Date;
     is_pregnant: boolean | null;
+    pregnancy_answer_recorded: boolean;
+    medical_history: OralHealthMedicalHistory | null;
+    dietary_social_habits: OralHealthDietarySocialHabits | null;
     has_oral_screening: boolean | null;
     has_risk_assessment: boolean | null;
     has_oral_prophylaxis: boolean | null;
@@ -54,7 +64,9 @@ export interface OralHealthResponse {
     id: number;
     student_id: number;
     date_examined: string;
-    is_pregnant: boolean;
+    is_pregnant: boolean | null;
+    medical_history: OralHealthMedicalHistory | null;
+    dietary_social_habits: OralHealthDietarySocialHabits | null;
     has_oral_screening: boolean;
     has_risk_assessment: boolean;
     has_oral_prophylaxis: boolean;
@@ -103,7 +115,10 @@ const mapOralHealthRow = (row: OralHealthDbRow): OralHealthResponse => {
         id: row.id,
         student_id: row.student_id,
         date_examined: formatDate(row.date_examined),
-        is_pregnant: Boolean(row.is_pregnant),
+        // A checked legacy box is meaningful. An unchecked one was also the default.
+        is_pregnant: row.is_pregnant === true || row.pregnancy_answer_recorded ? row.is_pregnant : null,
+        medical_history: row.medical_history ?? null,
+        dietary_social_habits: row.dietary_social_habits ?? null,
         has_oral_screening: Boolean(row.has_oral_screening),
         has_risk_assessment: Boolean(row.has_risk_assessment),
         has_oral_prophylaxis: Boolean(row.has_oral_prophylaxis),
@@ -143,7 +158,9 @@ const mapOralHealthRow = (row: OralHealthDbRow): OralHealthResponse => {
 const oralHealthSchema = z.object({
     student_id: z.number().int().positive().optional(),
     date_examined: z.string().min(1, 'Date examined is required'),
-    is_pregnant: z.boolean().optional(),
+    is_pregnant: z.boolean().nullish(),
+    medical_history: medicalHistorySchema.nullish(),
+    dietary_social_habits: dietarySocialHabitsSchema.nullish(),
     has_oral_screening: z.boolean().optional(),
     has_risk_assessment: z.boolean().optional(),
     has_oral_prophylaxis: z.boolean().optional(),
@@ -199,6 +216,7 @@ export const createOralHealth = async (req: Request, res: Response): Promise<voi
         }
 
         const validated = createOralHealthSchema.parse(req.body);
+        validatePregnancyTrimester(validated.is_pregnant, validated.medical_history);
 
         // Verify student existence
         const studentRes = await pool.query('SELECT id, school_id FROM STUDENTS WHERE id = $1', [validated.student_id]);
@@ -253,12 +271,15 @@ export const createOralHealth = async (req: Request, res: Response): Promise<voi
                 recommended_treatment,
                 treatment_type,
                 consent_given,
-                consent_notes
+                consent_notes,
+                medical_history,
+                dietary_social_habits,
+                pregnancy_answer_recorded
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                 $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                $31, $32, $33, $34
+                $31, $32, $33, $34, $35, $36, $37
             )
             RETURNING *
         `;
@@ -269,7 +290,7 @@ export const createOralHealth = async (req: Request, res: Response): Promise<voi
             const result = await client.query<OralHealthDbRow>(insertSql, [
                 validated.student_id,
                 formatDate(validated.date_examined),
-                validated.is_pregnant ?? false,
+                validated.is_pregnant ?? null,
                 validated.has_oral_screening ?? false,
                 validated.has_risk_assessment ?? false,
                 validated.has_oral_prophylaxis ?? false,
@@ -301,6 +322,9 @@ export const createOralHealth = async (req: Request, res: Response): Promise<voi
                 validated.treatment_type || null,
                 validated.consent_given ?? false,
                 validated.consent_notes || null,
+                validated.medical_history ?? null,
+                validated.dietary_social_habits ?? null,
+                typeof validated.is_pregnant === 'boolean',
             ]);
 
             const createdRow = result.rows[0];
@@ -413,113 +437,127 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        // Verify record existence
-        const checkSql = `
-            SELECT oh.*
-            FROM ORAL_HEALTH oh
-            JOIN STUDENTS s ON oh.student_id = s.id
-            WHERE oh.id = $1
-        `;
-        const existingRes = await pool.query(checkSql, [id]);
-        if (existingRes.rows.length === 0) {
-            res.status(404).json({ message: 'Oral health record not found' });
-            return;
-        }
-
-        const existingRecord = existingRes.rows[0];
-
         const validated = updateOralHealthSchema.parse(req.body);
-
-        const dateExamined = validated.date_examined !== undefined ? formatDate(validated.date_examined) : existingRecord.date_examined;
-        const isPregnant = validated.is_pregnant !== undefined ? validated.is_pregnant : existingRecord.is_pregnant;
-        const hasOralScreening = validated.has_oral_screening !== undefined ? validated.has_oral_screening : existingRecord.has_oral_screening;
-        const hasRiskAssessment = validated.has_risk_assessment !== undefined ? validated.has_risk_assessment : existingRecord.has_risk_assessment;
-        const hasOralProphylaxis = validated.has_oral_prophylaxis !== undefined ? validated.has_oral_prophylaxis : existingRecord.has_oral_prophylaxis;
-        const hasCounseling = validated.has_counseling !== undefined ? validated.has_counseling : existingRecord.has_counseling;
-        const hasFluorideVarnish = validated.has_fluoride_varnish !== undefined ? validated.has_fluoride_varnish : existingRecord.has_fluoride_varnish;
-        const isRpocComplete = validated.is_rpoc_complete !== undefined ? validated.is_rpoc_complete : existingRecord.is_rpoc_complete;
-        const serviceLocation = validated.service_location !== undefined ? validated.service_location : existingRecord.service_location;
-        const visitType = validated.visit_type !== undefined ? validated.visit_type : existingRecord.visit_type;
-        const administeredBy = validated.administered_by !== undefined ? validated.administered_by : existingRecord.administered_by;
-        const remarks = validated.remarks !== undefined ? validated.remarks : existingRecord.remarks;
-
-        const toothChartUpper = validated.tooth_chart_upper !== undefined
-            ? (validated.tooth_chart_upper ? JSON.stringify(validated.tooth_chart_upper) : null)
-            : (existingRecord.tooth_chart_upper ? JSON.stringify(existingRecord.tooth_chart_upper) : null);
-
-        const toothChartLower = validated.tooth_chart_lower !== undefined
-            ? (validated.tooth_chart_lower ? JSON.stringify(validated.tooth_chart_lower) : null)
-            : (existingRecord.tooth_chart_lower ? JSON.stringify(existingRecord.tooth_chart_lower) : null);
-
-        const oralHealthCondition = validated.oral_health_condition !== undefined ? validated.oral_health_condition : existingRecord.oral_health_condition;
-        const noOfPermTeeth = validated.no_of_perm_teeth !== undefined ? validated.no_of_perm_teeth : existingRecord.no_of_perm_teeth;
-        const noOfPermSoundTeeth = validated.no_of_perm_sound_teeth !== undefined ? validated.no_of_perm_sound_teeth : existingRecord.no_of_perm_sound_teeth;
-        const noOfDecayedTeeth = validated.no_of_decayed_teeth !== undefined ? validated.no_of_decayed_teeth : existingRecord.no_of_decayed_teeth;
-        const noOfMissingTeeth = validated.no_of_missing_teeth !== undefined ? validated.no_of_missing_teeth : existingRecord.no_of_missing_teeth;
-        const noOfFilledTeeth = validated.no_of_filled_teeth !== undefined ? validated.no_of_filled_teeth : existingRecord.no_of_filled_teeth;
-
-        const totalDmft = validated.total_dmft !== undefined && validated.total_dmft !== null
-            ? validated.total_dmft
-            : (noOfDecayedTeeth || 0) + (noOfMissingTeeth || 0) + (noOfFilledTeeth || 0);
-
-        const noOfPrimaryTeeth = validated.no_of_primary_teeth !== undefined ? validated.no_of_primary_teeth : existingRecord.no_of_primary_teeth;
-        const noOfPrimarySoundTeeth = validated.no_of_primary_sound_teeth !== undefined ? validated.no_of_primary_sound_teeth : existingRecord.no_of_primary_sound_teeth;
-        const noOfPrimaryDecayed = validated.no_of_primary_decayed !== undefined ? validated.no_of_primary_decayed : existingRecord.no_of_primary_decayed;
-        const noOfPrimaryMissing = validated.no_of_primary_missing !== undefined ? validated.no_of_primary_missing : existingRecord.no_of_primary_missing;
-        const noOfPrimaryFilled = validated.no_of_primary_filled !== undefined ? validated.no_of_primary_filled : existingRecord.no_of_primary_filled;
-
-        const totalDmftPrimary = validated.total_dmft_primary !== undefined && validated.total_dmft_primary !== null
-            ? validated.total_dmft_primary
-            : (noOfPrimaryDecayed || 0) + (noOfPrimaryMissing || 0) + (noOfPrimaryFilled || 0);
-
-        const remarksDiagnosis = validated.remarks_diagnosis !== undefined ? validated.remarks_diagnosis : existingRecord.remarks_diagnosis;
-        const recommendedTreatment = validated.recommended_treatment !== undefined ? validated.recommended_treatment : existingRecord.recommended_treatment;
-        const treatmentType = validated.treatment_type !== undefined ? validated.treatment_type : existingRecord.treatment_type;
-        const consentGiven = validated.consent_given !== undefined ? validated.consent_given : existingRecord.consent_given;
-        const consentNotes = validated.consent_notes !== undefined ? validated.consent_notes : existingRecord.consent_notes;
-
-        const updateSql = `
-            UPDATE ORAL_HEALTH SET
-                date_examined = $1,
-                is_pregnant = $2,
-                has_oral_screening = $3,
-                has_risk_assessment = $4,
-                has_oral_prophylaxis = $5,
-                has_counseling = $6,
-                has_fluoride_varnish = $7,
-                is_rpoc_complete = $8,
-                service_location = $9,
-                visit_type = $10,
-                administered_by = $11,
-                remarks = $12,
-                tooth_chart_upper = $13,
-                tooth_chart_lower = $14,
-                oral_health_condition = $15,
-                no_of_perm_teeth = $16,
-                no_of_perm_sound_teeth = $17,
-                no_of_decayed_teeth = $18,
-                no_of_missing_teeth = $19,
-                no_of_filled_teeth = $20,
-                total_dmft = $21,
-                no_of_primary_teeth = $22,
-                no_of_primary_sound_teeth = $23,
-                no_of_primary_decayed = $24,
-                no_of_primary_missing = $25,
-                no_of_primary_filled = $26,
-                total_dmft_primary = $27,
-                remarks_diagnosis = $28,
-                recommended_treatment = $29,
-                treatment_type = $30,
-                consent_given = $31,
-                consent_notes = $32,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $33
-            RETURNING *
-        `;
 
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+            // Lock the record before combining stored values with this partial update.
+            const checkSql = `
+                SELECT oh.*, s.school_id AS student_school_id
+                FROM ORAL_HEALTH oh
+                JOIN STUDENTS s ON oh.student_id = s.id
+                WHERE oh.id = $1
+                FOR UPDATE OF oh
+            `;
+            const existingRecord = (await client.query<OralHealthDbRow & { student_school_id: number | null }>(checkSql, [id])).rows[0];
+            if (!existingRecord) {
+                await client.query('ROLLBACK');
+                res.status(404).json({ message: 'Oral health record not found' });
+                return;
+            }
+
+            const dateExamined = validated.date_examined !== undefined ? formatDate(validated.date_examined) : existingRecord.date_examined;
+            const isPregnant = validated.is_pregnant !== undefined ? validated.is_pregnant : existingRecord.is_pregnant;
+            const pregnancyAnswerRecorded = validated.is_pregnant === undefined
+                ? existingRecord.pregnancy_answer_recorded : validated.is_pregnant !== null;
+            const medicalHistory = validated.medical_history !== undefined ? validated.medical_history : existingRecord.medical_history;
+            const dietarySocialHabits = validated.dietary_social_habits !== undefined ? validated.dietary_social_habits : existingRecord.dietary_social_habits;
+            validatePregnancyTrimester(isPregnant, medicalHistory);
+            const hasOralScreening = validated.has_oral_screening !== undefined ? validated.has_oral_screening : existingRecord.has_oral_screening;
+            const hasRiskAssessment = validated.has_risk_assessment !== undefined ? validated.has_risk_assessment : existingRecord.has_risk_assessment;
+            const hasOralProphylaxis = validated.has_oral_prophylaxis !== undefined ? validated.has_oral_prophylaxis : existingRecord.has_oral_prophylaxis;
+            const hasCounseling = validated.has_counseling !== undefined ? validated.has_counseling : existingRecord.has_counseling;
+            const hasFluorideVarnish = validated.has_fluoride_varnish !== undefined ? validated.has_fluoride_varnish : existingRecord.has_fluoride_varnish;
+            const isRpocComplete = validated.is_rpoc_complete !== undefined ? validated.is_rpoc_complete : existingRecord.is_rpoc_complete;
+            const serviceLocation = validated.service_location !== undefined ? validated.service_location : existingRecord.service_location;
+            const visitType = validated.visit_type !== undefined ? validated.visit_type : existingRecord.visit_type;
+            const administeredBy = validated.administered_by !== undefined ? validated.administered_by : existingRecord.administered_by;
+            const remarks = validated.remarks !== undefined ? validated.remarks : existingRecord.remarks;
+
+            const toothChartUpper = validated.tooth_chart_upper !== undefined
+                ? (validated.tooth_chart_upper ? JSON.stringify(validated.tooth_chart_upper) : null)
+                : (existingRecord.tooth_chart_upper ? JSON.stringify(existingRecord.tooth_chart_upper) : null);
+
+            const toothChartLower = validated.tooth_chart_lower !== undefined
+                ? (validated.tooth_chart_lower ? JSON.stringify(validated.tooth_chart_lower) : null)
+                : (existingRecord.tooth_chart_lower ? JSON.stringify(existingRecord.tooth_chart_lower) : null);
+
+            const oralHealthCondition = validated.oral_health_condition !== undefined ? validated.oral_health_condition : existingRecord.oral_health_condition;
+            const noOfPermTeeth = validated.no_of_perm_teeth !== undefined ? validated.no_of_perm_teeth : existingRecord.no_of_perm_teeth;
+            const noOfPermSoundTeeth = validated.no_of_perm_sound_teeth !== undefined ? validated.no_of_perm_sound_teeth : existingRecord.no_of_perm_sound_teeth;
+            const noOfDecayedTeeth = validated.no_of_decayed_teeth !== undefined ? validated.no_of_decayed_teeth : existingRecord.no_of_decayed_teeth;
+            const noOfMissingTeeth = validated.no_of_missing_teeth !== undefined ? validated.no_of_missing_teeth : existingRecord.no_of_missing_teeth;
+            const noOfFilledTeeth = validated.no_of_filled_teeth !== undefined ? validated.no_of_filled_teeth : existingRecord.no_of_filled_teeth;
+
+            const totalDmft = validated.total_dmft !== undefined && validated.total_dmft !== null
+                ? validated.total_dmft
+                : validated.total_dmft !== undefined || validated.no_of_decayed_teeth !== undefined
+                    || validated.no_of_missing_teeth !== undefined || validated.no_of_filled_teeth !== undefined
+                    ? (noOfDecayedTeeth || 0) + (noOfMissingTeeth || 0) + (noOfFilledTeeth || 0)
+                    : existingRecord.total_dmft;
+
+            const noOfPrimaryTeeth = validated.no_of_primary_teeth !== undefined ? validated.no_of_primary_teeth : existingRecord.no_of_primary_teeth;
+            const noOfPrimarySoundTeeth = validated.no_of_primary_sound_teeth !== undefined ? validated.no_of_primary_sound_teeth : existingRecord.no_of_primary_sound_teeth;
+            const noOfPrimaryDecayed = validated.no_of_primary_decayed !== undefined ? validated.no_of_primary_decayed : existingRecord.no_of_primary_decayed;
+            const noOfPrimaryMissing = validated.no_of_primary_missing !== undefined ? validated.no_of_primary_missing : existingRecord.no_of_primary_missing;
+            const noOfPrimaryFilled = validated.no_of_primary_filled !== undefined ? validated.no_of_primary_filled : existingRecord.no_of_primary_filled;
+
+            const totalDmftPrimary = validated.total_dmft_primary !== undefined && validated.total_dmft_primary !== null
+                ? validated.total_dmft_primary
+                : validated.total_dmft_primary !== undefined || validated.no_of_primary_decayed !== undefined
+                    || validated.no_of_primary_missing !== undefined || validated.no_of_primary_filled !== undefined
+                    ? (noOfPrimaryDecayed || 0) + (noOfPrimaryMissing || 0) + (noOfPrimaryFilled || 0)
+                    : existingRecord.total_dmft_primary;
+
+            const remarksDiagnosis = validated.remarks_diagnosis !== undefined ? validated.remarks_diagnosis : existingRecord.remarks_diagnosis;
+            const recommendedTreatment = validated.recommended_treatment !== undefined ? validated.recommended_treatment : existingRecord.recommended_treatment;
+            const treatmentType = validated.treatment_type !== undefined ? validated.treatment_type : existingRecord.treatment_type;
+            const consentGiven = validated.consent_given !== undefined ? validated.consent_given : existingRecord.consent_given;
+            const consentNotes = validated.consent_notes !== undefined ? validated.consent_notes : existingRecord.consent_notes;
+
+            const updateSql = `
+                UPDATE ORAL_HEALTH SET
+                    date_examined = $1,
+                    is_pregnant = $2,
+                    has_oral_screening = $3,
+                    has_risk_assessment = $4,
+                    has_oral_prophylaxis = $5,
+                    has_counseling = $6,
+                    has_fluoride_varnish = $7,
+                    is_rpoc_complete = $8,
+                    service_location = $9,
+                    visit_type = $10,
+                    administered_by = $11,
+                    remarks = $12,
+                    tooth_chart_upper = $13,
+                    tooth_chart_lower = $14,
+                    oral_health_condition = $15,
+                    no_of_perm_teeth = $16,
+                    no_of_perm_sound_teeth = $17,
+                    no_of_decayed_teeth = $18,
+                    no_of_missing_teeth = $19,
+                    no_of_filled_teeth = $20,
+                    total_dmft = $21,
+                    no_of_primary_teeth = $22,
+                    no_of_primary_sound_teeth = $23,
+                    no_of_primary_decayed = $24,
+                    no_of_primary_missing = $25,
+                    no_of_primary_filled = $26,
+                    total_dmft_primary = $27,
+                    remarks_diagnosis = $28,
+                    recommended_treatment = $29,
+                    treatment_type = $30,
+                    consent_given = $31,
+                    consent_notes = $32,
+                    medical_history = $33,
+                    dietary_social_habits = $34,
+                    pregnancy_answer_recorded = $35,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $36
+                RETURNING *
+            `;
+
             const result = await client.query<OralHealthDbRow>(updateSql, [
                 dateExamined,
                 isPregnant,
@@ -553,6 +591,9 @@ export const updateOralHealth = async (req: Request, res: Response): Promise<voi
                 treatmentType,
                 consentGiven,
                 consentNotes,
+                medicalHistory,
+                dietarySocialHabits,
+                pregnancyAnswerRecorded,
                 id,
             ]);
 

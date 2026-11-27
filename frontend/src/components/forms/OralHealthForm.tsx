@@ -1,5 +1,7 @@
 import StudentContextPanel from '../common/StudentContextPanel';
+import OralHealthQuestionnaire from './OralHealthQuestionnaire';
 import type { StudentModuleContext } from '../../types/moduleContext';
+import type { OralHealthDietarySocialHabits, OralHealthMedicalHistory } from '../../types/oralHealthQuestionnaire';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -21,7 +23,7 @@ import {
     createOralHealth,
     updateOralHealth,
 } from '../../services/api';
-import type { OralHealth } from '../../types';
+import type { CreateOralHealthPayload, OralHealth } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { canWriteModuleRecord } from '../../lib/access';
 
@@ -53,9 +55,25 @@ const permTeethLower = ['48', '47', '46', '45', '44', '43', '42', '41', '31', '3
 const priTeethUpper = ['55', '54', '53', '52', '51', '61', '62', '63', '64', '65'];
 const priTeethLower = ['85', '84', '83', '82', '81', '71', '72', '73', '74', '75'];
 
+// Treat whitespace-only questionnaire details as unanswered, including when
+// someone submits by keyboard without first leaving the input.
+function withoutBlankDetails<T extends object>(section: T): T {
+    const result = { ...section };
+    for (const key in result) {
+        const value = result[key];
+        if (typeof value === 'string' && !value.trim()) delete result[key];
+        else if (typeof value === 'object' && value !== null) result[key] = withoutBlankDetails(value);
+    }
+    return result;
+}
+
 const OralHealthForm: React.FC = () => {
-    const { effectiveAccess } = useAuth();
     const { id } = useParams<{ id: string }>();
+    return <OralHealthExamination key={id} id={id} />;
+};
+
+const OralHealthExamination = ({ id }: { id: string | undefined }) => {
+    const { effectiveAccess } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -72,10 +90,12 @@ const OralHealthForm: React.FC = () => {
 
     // Examination Metadata
     const [dateExamined, setDateExamined] = useState<string>(new Date().toISOString().split('T')[0] ?? '');
-    const [isPregnant, setIsPregnant] = useState<boolean>(false);
+    const [isPregnant, setIsPregnant] = useState<boolean | null>(null);
     const [serviceLocation, setServiceLocation] = useState<'FACILITY' | 'NON-FACILITY'>('FACILITY');
     const [visitType, setVisitType] = useState<'1ST VISIT' | '2ND VISIT'>('1ST VISIT');
     const [administeredBy, setAdministeredBy] = useState<string>('');
+    const [medicalHistory, setMedicalHistory] = useState<OralHealthMedicalHistory>({});
+    const [dietaryHabits, setDietaryHabits] = useState<OralHealthDietarySocialHabits>({});
 
     // Routine Preventive Oral Care (RPOC)
     const [hasOralScreening, setHasOralScreening] = useState<boolean>(false);
@@ -137,10 +157,12 @@ const OralHealthForm: React.FC = () => {
                 setStudent(st);
 
                 const oh = oralHealthRes.data?.oral_health;
+                setExistingRecord(oh ?? null);
+                setIsPregnant(oh?.is_pregnant ?? null);
+                setMedicalHistory(oh?.medical_history ?? {});
+                setDietaryHabits(oh?.dietary_social_habits ?? {});
                 if (oh) {
-                    setExistingRecord(oh);
                     setDateExamined(oh.date_examined || (new Date().toISOString().split('T')[0] ?? ''));
-                    setIsPregnant(Boolean(oh.is_pregnant));
                     setServiceLocation(oh.service_location || 'FACILITY');
                     setVisitType(oh.visit_type || '1ST VISIT');
                     setAdministeredBy(oh.administered_by || '');
@@ -212,11 +234,11 @@ const OralHealthForm: React.FC = () => {
                 setErrorStatus(null);
                 setErrorMessage(null);
             } catch (err: unknown) {
-                console.error('Failed to load oral health record:', err);
                 let status = 500;
                 if (axios.isAxiosError(err) && err.response?.status) {
                     status = err.response.status;
                 }
+                console.error('Failed to load oral health record:', status);
                 setErrorStatus(status);
                 if (status === 403) {
                     setErrorMessage('You do not have permission to view or manage oral health records for this student.');
@@ -269,10 +291,12 @@ const OralHealthForm: React.FC = () => {
                 return acc;
             }, {} as Record<string, string>);
 
-            const payload = {
+            const payload: CreateOralHealthPayload = {
                 student_id: Number(id),
                 date_examined: dateExamined,
-                is_pregnant: isPregnant,
+                ...(!existingRecord || isPregnant !== (existingRecord.is_pregnant ?? null) ? { is_pregnant: isPregnant } : {}),
+                medical_history: Object.keys(medicalHistory).length > 0 ? withoutBlankDetails(medicalHistory) : null,
+                dietary_social_habits: Object.keys(dietaryHabits).length > 0 ? withoutBlankDetails(dietaryHabits) : null,
                 has_oral_screening: hasOralScreening,
                 has_risk_assessment: hasRiskAssessment,
                 has_oral_prophylaxis: hasOralProphylaxis,
@@ -314,7 +338,7 @@ const OralHealthForm: React.FC = () => {
             toast.success('Oral health examination record saved successfully');
             navigate(`${basePath}/students/${id}`);
         } catch (err: unknown) {
-            console.error('Failed to save oral health record:', err);
+            console.error('Failed to save oral health record:', axios.isAxiosError(err) ? err.response?.status : undefined);
             if (axios.isAxiosError(err) && err.response?.data?.message) {
                 toast.error(err.response.data.message);
             } else {
@@ -488,22 +512,20 @@ const OralHealthForm: React.FC = () => {
                                 className={inputClasses}
                             />
                         </div>
-                        {student.sex === 'Female' && (
-                            <div className="flex items-center space-x-3 p-3.5 border border-slate-200 rounded-xl bg-slate-50 sm:col-span-2">
-                                <input
-                                    type="checkbox"
-                                    id="is_pregnant"
-                                    checked={isPregnant}
-                                    onChange={e => setIsPregnant(e.target.checked)}
-                                    className="w-4 h-4 text-teal-600 rounded-sm border-slate-300 focus:ring-teal-500 cursor-pointer"
-                                />
-                                <label htmlFor="is_pregnant" className="text-xs font-semibold text-slate-800 cursor-pointer">
-                                    Patient is currently pregnant
-                                </label>
-                            </div>
-                        )}
                     </div>
                 </div>
+
+                <OralHealthQuestionnaire
+                    medicalHistory={medicalHistory}
+                    dietaryHabits={dietaryHabits}
+                    pregnancy={isPregnant}
+                    showReproductiveHistory={student.sex === 'Female' || existingRecord?.is_pregnant === true ||
+                        Boolean(existingRecord?.medical_history?.last_menstrual_period || existingRecord?.medical_history?.pregnancy_trimester)}
+                    disabled={!canSave || isSaving}
+                    onMedicalHistoryChange={setMedicalHistory}
+                    onDietaryHabitsChange={setDietaryHabits}
+                    onPregnancyChange={setIsPregnant}
+                />
 
                 {/* Section 2: Routine Preventive Oral Care (RPOC) */}
                 <div className={sectionClasses}>

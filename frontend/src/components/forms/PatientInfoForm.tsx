@@ -357,8 +357,8 @@ const PatientInfoForm: React.FC = () => {
         );
     }
 
-    const isRecordCompleted = Boolean(existingPatientInfo);
-    const canSave = canWriteModuleRecord(effectiveAccess, 'patient-info', isRecordCompleted);
+    const isRecordCompleted = existingPatientInfo?.form_saved === true;
+    const canSave = canWriteModuleRecord(effectiveAccess, 'patient-info', Boolean(existingPatientInfo));
 
     const tabs = [
         { id: 'basic', label: 'Patient Info & Demographics', icon: User },
