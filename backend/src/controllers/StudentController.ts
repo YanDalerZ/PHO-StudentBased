@@ -642,7 +642,7 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
         // Query module completion summary only for authorized modules (skip unauthorized queries)
         const perms = req.effectiveAccess?.modulePermissions;
         const checks: string[] = [];
-        if (perms?.['patient-info']?.can_view) checks.push('EXISTS(SELECT 1 FROM PATIENT_INFO WHERE student_id = $1) AS has_patient_info');
+        if (perms?.['patient-info']?.can_view) checks.push('EXISTS(SELECT 1 FROM PATIENT_INFO WHERE student_id = $1 AND form_saved) AS has_patient_info');
         if (perms?.['oral-health']?.can_view) checks.push('EXISTS(SELECT 1 FROM ORAL_HEALTH WHERE student_id = $1) AS has_oral_health');
         if (perms?.['deworming']?.can_view) checks.push('EXISTS(SELECT 1 FROM DEWORMING WHERE student_id = $1) AS has_deworming');
         if (perms?.['immunization']?.can_view) checks.push('EXISTS(SELECT 1 FROM IMMUNIZATION WHERE student_id = $1) AS has_immunization');
@@ -979,7 +979,7 @@ export const getStudentProfile = async (req: Request, res: Response): Promise<vo
             immunizationRes,
             vitalSignsRes
         ] = await Promise.all([
-            canViewPI ? pool.query('SELECT * FROM PATIENT_INFO WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
+            canViewPI ? pool.query<{ form_saved: boolean }>('SELECT * FROM PATIENT_INFO WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
             canViewPI ? pool.query('SELECT * FROM ANIMAL_BITES WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
             canViewOH ? pool.query('SELECT * FROM ORAL_HEALTH WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
             canViewDW ? pool.query('SELECT * FROM DEWORMING WHERE student_id = $1 ORDER BY created_at DESC', [studentId]) : Promise.resolve({ rows: [] }),
@@ -999,7 +999,7 @@ export const getStudentProfile = async (req: Request, res: Response): Promise<vo
         };
 
         const moduleSummaryOutput: Record<string, boolean> = {};
-        if (canViewPI) moduleSummaryOutput.patient_info = patientInfoRes.rows.length > 0;
+        if (canViewPI) moduleSummaryOutput.patient_info = patientInfoRes.rows.some(record => record.form_saved);
         if (canViewOH) moduleSummaryOutput.oral_health = oralHealthRes.rows.length > 0;
         if (canViewDW) moduleSummaryOutput.deworming = dewormingRes.rows.length > 0;
         if (canViewIM) moduleSummaryOutput.immunization = immunizationRes.rows.length > 0;

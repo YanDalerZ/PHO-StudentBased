@@ -19,6 +19,7 @@ import type {
     Barangay,
     School,
     StudentListResponse,
+    StudentDashboardSummary,
     StudentDetailResponse,
     StudentProfileResponse,
     PatientInfo,
@@ -112,7 +113,15 @@ api.interceptors.request.use(
 // Authentication failures end the session. Authorization failures invalidate
 // the cached access snapshot so the provider can reload current grants/role.
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        if (/^(post|put|patch|delete)$/i.test(response.config.method ?? '') &&
+            /^\/?(?:students|modules)(?:\/|$)/.test(response.config.url ?? '')) {
+            window.dispatchEvent(new Event('pho:student-records-changed'));
+            // Notify other dashboard tabs without storing any clinical data.
+            try { localStorage.setItem('pho:student-records-changed', String(Date.now())); } catch { /* storage may be disabled */ }
+        }
+        return response;
+    },
     (error) => {
         if (error.response?.status === 401) {
             // A failed login has no portal token to invalidate.
@@ -230,6 +239,19 @@ export const downloadReportExport = async (
 };
 
 // Students CRUD
+export const getStudentDashboard = async (): Promise<StudentDashboardSummary> => {
+    const { data: response } = await api.get<{ data?: StudentDashboardSummary }>('/students/dashboard-summary');
+    const summary = response?.data;
+    if (!summary || !Array.isArray(summary.recent_students) || !Array.isArray(summary.applicable_modules) ||
+        ![summary.total_students, summary.completed, summary.pending, summary.applicable_pairs]
+            .every(count => Number.isSafeInteger(count) && count >= 0) ||
+        summary.completed + summary.pending !== summary.applicable_pairs ||
+        summary.total_students * summary.applicable_modules.length !== summary.applicable_pairs) {
+        throw new Error('Invalid student dashboard summary.');
+    }
+    return summary;
+};
+
 export interface GetStudentsParams {
     search?: string;
     school_id?: string | number;

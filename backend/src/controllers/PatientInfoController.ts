@@ -13,6 +13,7 @@ export interface PatientInfoDbRow {
     id: number;
     student_id: number;
     file_no: string | null;
+    form_saved: boolean;
     recorded_by: number;
     created_at: string | Date;
     updated_at: string | Date;
@@ -49,6 +50,7 @@ export interface PatientInfoResponse {
     id: number;
     student_id: number;
     file_no?: string | undefined;
+    form_saved: boolean;
     recorded_by: number;
     created_at: string;
     updated_at: string;
@@ -91,6 +93,7 @@ const mapPatientInfoRow = (row: PatientInfoDbRow): PatientInfoResponse => ({
     id: row.id,
     student_id: row.student_id,
     file_no: row.file_no ?? undefined,
+    form_saved: row.form_saved === true,
     recorded_by: row.recorded_by,
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
@@ -200,8 +203,8 @@ export const createPatientInfo = async (req: Request, res: Response): Promise<vo
             await client.query('BEGIN');
 
             const insertPatientInfoSql = `
-                INSERT INTO PATIENT_INFO (student_id, file_no, recorded_by)
-                VALUES ($1, $2, $3)
+                INSERT INTO PATIENT_INFO (student_id, file_no, recorded_by, form_saved)
+                VALUES ($1, $2, $3, TRUE)
                 RETURNING *
             `;
             const patientInfoResult = await client.query<PatientInfoDbRow>(insertPatientInfoSql, [
@@ -404,6 +407,7 @@ export const updatePatientInfo = async (req: Request, res: Response): Promise<vo
             const updateSql = `
                 UPDATE PATIENT_INFO
                 SET file_no = COALESCE($1, file_no),
+                    form_saved = TRUE,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $2
                 RETURNING *

@@ -1,18 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { StatCard } from '../../components/common/StatCard';
 import {
     Users,
     CheckCircle2,
     Clock,
-    AlertCircle,
     ChevronRight,
     UserPlus,
     X,
     Loader2
 } from 'lucide-react';
-import { getStudents } from '../../services/api';
-import type { Student } from '../../types';
+import { getStudentDashboard } from '../../services/api';
+import type { StudentDashboardSummary } from '../../types';
 import RegistrationForm from '../RegistrationForm';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasModulePermission } from '../../lib/access';
@@ -20,77 +19,55 @@ import { hasModulePermission } from '../../lib/access';
 const TeacherDashboard: React.FC = () => {
     const { effectiveAccess } = useAuth();
     const canCreateStudent = hasModulePermission(effectiveAccess, 'patient-info', 'can_create');
-    const [students, setStudents] = useState<Student[]>([]);
+    const [summary, setSummary] = useState<StudentDashboardSummary | null>(null);
+    const requests = useRef({ version: 0 });
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
 
     const fetchDashboardData = useCallback(async () => {
+        const version = ++requests.current.version;
+        setLoading(true);
         try {
-            const res = await getStudents();
-            setStudents(res.data || []);
+            const data = await getStudentDashboard();
+            if (version !== requests.current.version) return;
+            setSummary(data);
             setError(null);
         } catch (err: unknown) {
+            if (version !== requests.current.version) return;
             console.error('Failed to load teacher dashboard students:', err);
+            setSummary(null);
             setError('Unable to load student data. Please check your connection.');
         } finally {
-            setLoading(false);
+            if (version === requests.current.version) setLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        let isMounted = true;
-        getStudents()
-            .then((res) => {
-                if (isMounted) {
-                    setStudents(res.data || []);
-                    setError(null);
-                    setLoading(false);
-                }
-            })
-            .catch((err: unknown) => {
-                if (isMounted) {
-                    console.error('Failed to load teacher dashboard students:', err);
-                    setError('Unable to load student data. Please check your connection.');
-                    setLoading(false);
-                }
-            });
+        const requestState = requests.current;
+        const refresh = () => { if (!document.hidden) void fetchDashboardData(); };
+        const storage = (event: StorageEvent) => {
+            if (event.key === 'pho:student-records-changed') refresh();
+        };
+        const initialRefresh = window.setTimeout(() => void fetchDashboardData(), 0);
+        window.addEventListener('focus', refresh);
+        document.addEventListener('visibilitychange', refresh);
+        window.addEventListener('pho:student-records-changed', refresh);
+        window.addEventListener('storage', storage);
         return () => {
-            isMounted = false;
+            window.clearTimeout(initialRefresh);
+            requestState.version++;
+            window.removeEventListener('focus', refresh);
+            document.removeEventListener('visibilitychange', refresh);
+            window.removeEventListener('pho:student-records-changed', refresh);
+            window.removeEventListener('storage', storage);
         };
-    }, []);
+    }, [fetchDashboardData, effectiveAccess]);
 
-
-    // Metric calculations from real student data
-    const { totalStudents, totalModulesCompleted, pendingModules } = useMemo(() => {
-        let completed = 0;
-        let pending = 0;
-
-        students.forEach(student => {
-            const mods = student.modules;
-            if (mods) {
-                const keys = ['patient_info', 'oral_health', 'deworming', 'immunization', 'vital_signs'];
-                keys.forEach(k => {
-                    if (mods[k]) completed++;
-                    else pending++;
-                });
-            } else {
-                // By default 5 health modules are pending until recorded
-                pending += 5;
-            }
-        });
-
-        return {
-            totalStudents: students.length,
-            totalModulesCompleted: completed,
-            pendingModules: pending
-        };
-    }, [students]);
-
-    // 4 most recent students
-    const recentStudents = useMemo(() => {
-        return students.slice(0, 4);
-    }, [students]);
+    const totalStudents = summary?.total_students ?? 0;
+    const totalModulesCompleted = summary?.completed ?? 0;
+    const pendingModules = summary?.pending ?? 0;
+    const recentStudents = summary?.recent_students ?? [];
 
     const stats = useMemo(() => [
         {
@@ -130,7 +107,7 @@ const TeacherDashboard: React.FC = () => {
             {/* Welcome Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
                 <div>
-                    <h1 className="text-2xl font-bold text-black tracking-tight">Teacher Dashboard</h1>
+                    <h1 className="text-2xl font-bold text-black tracking-tight">School Nurse Dashboard</h1>
                     <p className="text-sm text-slate-600">Overview of student registrations and module completion.</p>
                 </div>
                 {canCreateStudent && <button
@@ -156,111 +133,82 @@ const TeacherDashboard: React.FC = () => {
             )}
 
             {/* Quick Metrics Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-busy={loading}>
                 {stats.map((stat) => (
                     <StatCard
                         key={stat.id}
                         title={stat.label}
-                        value={stat.value}
+                        value={loading ? 'Loading…' : error ? 'Unavailable' : stat.value}
                         icon={stat.icon}
-                        trend={{
-                            value: parseInt(stat.change.replace(/[^0-9]/g, '')) || 0,
-                            label: stat.change.replace(/[0-9+]/g, '').trim(),
-                            isPositive: stat.isPositive
-                        }}
+                        subtitle={loading ? 'Loading saved form counts' : error ? 'Please retry' : stat.change}
                         iconBgClass={stat.iconBg}
                         iconColorClass={stat.iconColor}
                     />
                 ))}
             </div>
+            {!loading && !error && <p className="text-xs text-slate-600">
+                {summary?.applicable_modules.length ?? 0} enabled modules you can view · {summary?.applicable_pairs ?? 0} applicable student–module pairs.
+                {' '}Disabled modules are excluded.
+            </p>}
 
-            {/* Activity & Quick Actions Split */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Recent Registrations Table */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs lg:col-span-2">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-bold text-black">Recent Registrations</h2>
-                        <Link to="/teacher/students" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800 flex items-center space-x-1">
-                            <span>View all</span>
-                            <ChevronRight className="w-4 h-4" />
-                        </Link>
-                    </div>
+            <section aria-labelledby="recent-registrations-heading" className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 id="recent-registrations-heading" className="text-lg font-bold text-black">Recent Registrations</h2>
+                    <Link to="/teacher/students" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800 flex items-center space-x-1">
+                        <span>View all</span>
+                        <ChevronRight className="w-4 h-4" />
+                    </Link>
+                </div>
 
-                    <div className="overflow-x-auto">
-                        {loading ? (
-                            <div className="py-12 flex flex-col items-center justify-center space-y-2">
-                                <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
-                                <span className="text-xs text-slate-500">Loading student records...</span>
-                            </div>
-                        ) : (
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr>
-                                        <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Name</th>
-                                        <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">LRN</th>
-                                        <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Grade & Section</th>
-                                        <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Action</th>
+                <div className="overflow-x-auto">
+                    {loading ? (
+                        <div className="py-12 flex flex-col items-center justify-center space-y-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                            <span className="text-xs text-slate-500">Loading student records...</span>
+                        </div>
+                    ) : error ? <p className="py-8 text-sm text-slate-600">Student records are unavailable.</p> : (
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr>
+                                    <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Name</th>
+                                    <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">LRN</th>
+                                    <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Grade & Section</th>
+                                    <th className="py-3 px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/50">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {recentStudents.length > 0 ? recentStudents.map((student) => (
+                                    <tr key={student.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                                        <td className="py-3.5 px-4 text-sm font-semibold text-black">
+                                            {student.first_name} {student.last_name}
+                                        </td>
+                                        <td className="py-3.5 px-4 text-sm text-slate-800 font-mono">{student.student_lrn}</td>
+                                        <td className="py-3.5 px-4 text-sm text-slate-800">
+                                            {student.grade_level} {student.section ? `- ${student.section}` : ''}
+                                        </td>
+                                        <td className="py-3.5 px-4 text-sm">
+                                            <Link
+                                                to={`/teacher/students/${student.id}`}
+                                                className="text-emerald-800 hover:text-emerald-900 font-medium text-xs border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors inline-block"
+                                            >
+                                                View Profile
+                                            </Link>
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {recentStudents.length > 0 ? recentStudents.map((student) => (
-                                        <tr key={student.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
-                                            <td className="py-3.5 px-4 text-sm font-semibold text-black">
-                                                {student.first_name} {student.last_name}
-                                            </td>
-                                            <td className="py-3.5 px-4 text-sm text-slate-800 font-mono">{student.student_lrn}</td>
-                                            <td className="py-3.5 px-4 text-sm text-slate-800">
-                                                {student.grade_level} {student.section ? `- ${student.section}` : ''}
-                                            </td>
-                                            <td className="py-3.5 px-4 text-sm">
-                                                <Link
-                                                    to={`/teacher/students/${student.id}`}
-                                                    className="text-emerald-800 hover:text-emerald-900 font-medium text-xs border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors inline-block"
-                                                >
-                                                    View Profile
-                                                </Link>
-                                            </td>
-                                        </tr>
-                                    )) : (
-                                        <tr>
-                                            <td colSpan={4} className="py-8 text-center text-slate-600 text-sm">
-                                                {canCreateStudent
-                                                    ? 'No students registered yet. Click "Register Student" to begin.'
-                                                    : 'No students are available in your current scope.'}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={4} className="py-8 text-center text-slate-600 text-sm">
+                                            {canCreateStudent
+                                                ? 'No students registered yet. Click "Register Student" to begin.'
+                                                : 'No students are available in your current scope.'}
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
-
-                {/* Notifications / Alerts Panel */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-                    <h2 className="text-lg font-bold text-black">Action Needed</h2>
-
-                    <div className="space-y-3">
-                        {pendingModules > 0 ? (
-                            <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-xl flex items-start space-x-3">
-                                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                                <div>
-                                    <h3 className="text-sm font-bold text-black">Pending Forms</h3>
-                                    <p className="text-xs text-slate-700 mt-1">You have {pendingModules} module health forms pending completion.</p>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-xl flex items-start space-x-3">
-                                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                                <div>
-                                    <h3 className="text-sm font-bold text-black">All Caught Up!</h3>
-                                    <p className="text-xs text-slate-700 mt-1">No pending forms at the moment.</p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+            </section>
 
             {/* Registration Form Modal */}
             {canCreateStudent && isRegisterModalOpen && (

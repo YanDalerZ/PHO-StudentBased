@@ -1,4 +1,5 @@
 // Type definitions for the application
+import type { OralHealthDietarySocialHabits, OralHealthMedicalHistory } from './oralHealthQuestionnaire';
 
 export interface User {
   id: number;
@@ -129,6 +130,15 @@ export interface StudentListResponse {
   total: number;
 }
 
+export interface StudentDashboardSummary {
+  total_students: number;
+  completed: number;
+  pending: number;
+  applicable_pairs: number;
+  applicable_modules: ModuleSlug[];
+  recent_students: Pick<Student, 'id' | 'student_lrn' | 'first_name' | 'last_name' | 'grade_level' | 'section'>[];
+}
+
 export interface StudentDetailResponse {
   data: Student;
 }
@@ -218,6 +228,7 @@ export interface PatientInfo {
   id: number;
   student_id: number;
   file_no?: string;
+  form_saved: boolean;
   recorded_by: number;
   created_at: string;
   updated_at?: string;
@@ -274,7 +285,9 @@ export interface OralHealth {
   id: number;
   student_id: number;
   date_examined: string;
-  is_pregnant: boolean;
+  is_pregnant: boolean | null;
+  medical_history?: OralHealthMedicalHistory | null;
+  dietary_social_habits?: OralHealthDietarySocialHabits | null;
   has_oral_screening: boolean;
   has_risk_assessment: boolean;
   has_oral_prophylaxis: boolean;
@@ -313,7 +326,9 @@ export interface OralHealth {
 export interface CreateOralHealthPayload {
   student_id: number;
   date_examined: string;
-  is_pregnant?: boolean;
+  is_pregnant?: boolean | null;
+  medical_history?: OralHealthMedicalHistory | null;
+  dietary_social_habits?: OralHealthDietarySocialHabits | null;
   has_oral_screening?: boolean;
   has_risk_assessment?: boolean;
   has_oral_prophylaxis?: boolean;

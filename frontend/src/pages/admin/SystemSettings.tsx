@@ -1,16 +1,6 @@
-import { Link } from 'react-router-dom';
-import { ArrowRight, ClipboardCheck, QrCode, School, Settings, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
-
-const governanceLinks = [
-    { title: 'User access', description: 'Manage account roles, job titles, school assignments, and module permissions.', path: '/admin/users', icon: Users },
-    { title: 'School directory', description: 'Maintain school records and their geographic assignments.', path: '/admin/schools', icon: School },
-    { title: 'Module availability', description: 'Review the active state of the approved health modules.', path: '/admin/modules', icon: Settings },
-    { title: 'QR invitation policy', description: 'Manage approved public registration settings and invitation metadata.', path: '/admin/invitations', icon: QrCode },
-    { title: 'Audit log', description: 'Browse recorded governance and access events using safe filters.', path: '/admin/audit-logs', icon: ClipboardCheck },
-];
 
 export default function SystemSettings() {
     const [minutes, setMinutes] = useState<5 | 10 | 15>(15);
@@ -39,20 +29,9 @@ export default function SystemSettings() {
             <p className="text-sm font-semibold text-teal-600 dark:text-teal-400">Admin governance</p>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white mt-1">System settings</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                Manage portal session security and open the other administration areas below.
+                Manage portal session security.
             </p>
         </header>
-        <div className="grid gap-4 md:grid-cols-2">
-            {governanceLinks.map(({ title, description, path, icon: Icon }) =>
-                <Link key={path} to={path}
-                    className="group flex items-start gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-colors hover:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:bg-surface-card dark:hover:border-teal-500">
-                    <span className="rounded-xl bg-teal-50 p-3 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400"><Icon className="h-5 w-5" aria-hidden="true" /></span>
-                    <span className="flex-1"><span className="block font-semibold text-slate-900 dark:text-white">{title}</span>
-                        <span className="mt-1 block text-sm text-slate-600 dark:text-slate-400">{description}</span></span>
-                    <ArrowRight className="h-5 w-5 text-slate-400 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-                </Link>,
-            )}
-        </div>
         <section aria-labelledby="session-timeout-heading" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-surface-card">
             <h2 id="session-timeout-heading" className="text-xl font-bold text-slate-900 dark:text-white">Session Timeout</h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Choose how long admin, superuser, and school staff sessions can remain inactive. Activity means interaction with the portal; background requests do not extend a session. Every session also ends after 8 hours.</p>
